@@ -12,13 +12,13 @@ internal static partial class HighPerformanceLogging
     public static partial void ProcessingJobs(this ILogger logger);
 
     [LoggerMessage(
-        EventId = 0,
+        EventId = 1,
         Level = LogLevel.Trace,
         Message = "Done processing")]
     public static partial void DoneProcessing(this ILogger logger);
 
     [LoggerMessage(
-        EventId = 0,
+        EventId = 2,
         Level = LogLevel.Trace,
         Message = "Sending {bytes} byte message to queue {queue}")]
     public static partial void SendingByteMessageToQueue(

@@ -57,7 +57,6 @@ public class Cyberpunk2077Game : IGame, IGameData<Cyberpunk2077Game>
 
         DiagnosticEmitters =
         [
-            new NoWayToSourceFilesOnDisk(),
             new UndeployableLoadoutDueToMissingGameFiles(provider),
             new PatternBasedDependencyEmitter(PatternDefinitions.Definitions, provider),
             new MissingProtontricksForRedModEmitter(provider),

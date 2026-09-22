@@ -27,7 +27,9 @@ dotnet build -p:UseSystemExtractor=true  # Use system 7z for extraction
 cd src/NexusMods.App && pupnet -y -k AppImage -p DefineConstants=INSTALLATION_METHOD_APPIMAGE   # output: Deploy/OUT/
 ```
 
-There is no lint/format step in CI; `.globalconfig` analyzer errors (below) are the only enforced gate.
+There is no lint/format step in CI; `.globalconfig` analyzer errors (below) are the only enforced gate. A full build currently produces **0 compiler warnings**; keep it that way (only `NU19xx` NuGet audit warnings from transitive packages remain).
+
+Building on macOS: the StrawberryShake code generator ships as a net9 tool, so run `DOTNET_ROLL_FORWARD=Major dotnet build` if only the net10 runtime is installed. Most tests require Linux (`LinuxInterop` asserts `IsLinux`); on macOS only the pure-logic test projects pass. Real test verification happens in CI (ubuntu) or on a Linux box.
 
 Test traits used for filtering: `RequiresNetworking`, `FlakeyTest`, `RequiresApiKey`.
 
@@ -37,7 +39,7 @@ Pending work, technical debt, and known-error status live in `TODO.md`. Update i
 
 ## Architecture
 
-### Solution Structure (81 projects: 51 src + 29 test + 1 benchmarks)
+### Solution Structure (78 projects: 47 src + 30 test + 1 benchmarks)
 
 The solution (`NexusMods.App.sln`) is organized into layers:
 
@@ -80,7 +82,7 @@ These are custom features not present in upstream:
 
 5. **MD5 rescan + collection resilience** (`CollectionDownloader.cs`, `NexusMods.Collections`): Scans downloads folder to match existing files by MD5 hash, avoiding re-downloads. If the MD5 does not match (mod updated), falls back to relative-path mapping. Missing collection archives on disk are re-downloaded; missing `.nx` entries (after Deep Clean / GC) are detected across all archive children and re-extracted from the parent archive. Apply works with partial installs. Warns before installing a collection when another is already installed.
 
-6. **Telemetry removal**: Matomo, Mixpanel, and OpenTelemetry completely removed. Empty project stubs remain in directory but have no implementation.
+6. **Telemetry removal**: Matomo, Mixpanel, and OpenTelemetry completely removed (no stubs remain).
 
 7. **App isolation**: Custom app ID, independent data directory, independent NXM protocol handler. Shared downloads folder.
 

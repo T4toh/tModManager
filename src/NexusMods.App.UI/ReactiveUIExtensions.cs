@@ -39,7 +39,6 @@ public static class ReactiveUiExtensions
         return observable.ObserveOn(RxApp.TaskpoolScheduler);
     }
 
-    [Obsolete("This should not be used anymore. See UI Coding Conventions for more details.")]
     public static IDisposable BindToUi<TValue, TTarget, TTValue>(
         this IObservable<TValue> @this,
         TTarget? target,

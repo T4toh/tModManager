@@ -19,7 +19,6 @@ public interface ILoadoutDiagnosticEmitter : IDiagnosticEmitter
     /// <summary>
     /// Diagnoses a loadout and creates instances of <see cref="Diagnostic"/>.
     /// </summary>
-    [Obsolete("To be replaced with the overload that takes in the sync tree")]
     IAsyncEnumerable<Diagnostic> Diagnose(Loadout.ReadOnly loadout, CancellationToken cancellationToken);
 
     /// <summary>

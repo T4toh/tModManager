@@ -65,7 +65,6 @@ public partial class NexusModsLibrary
         using var tx = _connection.BeginTransaction();
 
         var modResult = await _graphQlClient.QueryMod(uid.ModId, uid.GameId, cancellationToken);
-        // TODO: handle errors
         var mod = modResult.AssertHasData();
 
         var modEntityId = mod.Resolve(_connection.Db, tx, setFilesTimestamp: true);
@@ -85,7 +84,6 @@ public partial class NexusModsLibrary
         // mod page, this is somewhat undesireable.
         var result = await _graphQlClient.QueryModFiles(modUid.ModId, modUid.GameId, cancellationToken: cancellationToken);
 
-        // TODO: handle errors
         var modFiles = result.AssertHasData();
 
         foreach (var modFile in modFiles)
@@ -105,7 +103,6 @@ public partial class NexusModsLibrary
             return file;
 
         var modFileResult = await _graphQlClient.QueryModFile(fileId, modPage.Uid.GameId, cancellationToken);
-        // TODO: handle errors
         var modFile = modFileResult.AssertHasData();
 
         using var tx = _connection.BeginTransaction();

@@ -871,8 +871,8 @@ public class LoadoutViewModel : APageViewModel<ILoadoutViewModel>, ILoadoutViewM
     {
         var graphQlResult = await _nexusModsLibrary.GetLastPublishedRevisionNumber(managedCollectionLoadoutGroup.Collection, cancellationToken);
 
-        // TODO: handle errors
-        var lastPublishedRevisionNumber = graphQlResult.AssertHasData();
+        // Non-critical: if the API call fails we just don't know about newer revisions.
+        if (!graphQlResult.TryGetData(out var lastPublishedRevisionNumber)) return;
 
         using var tx = _connection.BeginTransaction();
         if (lastPublishedRevisionNumber.HasValue)

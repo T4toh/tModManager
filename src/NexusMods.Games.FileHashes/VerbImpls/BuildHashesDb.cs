@@ -160,7 +160,7 @@ public class BuildHashesDb : IAsyncDisposable
                         .Single();
                     tx.Add(versionDef, VersionDefinition.SteamManifestsIds, manifest.Id);
                 }
-                catch (InvalidOperationException _)
+                catch (InvalidOperationException)
                 {
                     await _renderer.TextLine("Failed to anchor Steam manifest {0} to {1} for {2}", id, definition.Name, gameName);
                 }

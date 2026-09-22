@@ -7,7 +7,7 @@ namespace NexusMods.App.UI.Overlays.Generic.MessageBox.Ok;
 
 public class MessageBoxOkDesignViewModel: IMessageBoxOkViewModel
 {
-    public event PropertyChangedEventHandler? PropertyChanged;
+    public event PropertyChangedEventHandler? PropertyChanged { add { } remove { } }
     public ViewModelActivator Activator { get; } = null!;
     public IOverlayController Controller { get; set; } = null!;
     public Status Status { get; set; }

@@ -94,7 +94,6 @@ public static class FileTreeNodeIconTypeHelpers
     /// Provides the XAML class to be used with <see cref="UnifiedIcon"/> for the given icon type.
     /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    [Obsolete("To be removed with migration to new ViewModFiles and Preview Changes")]
     public static string GetIconClass(this FileTreeNodeIconType iconType) => iconType switch
     {
         FileTreeNodeIconType.File => "File",

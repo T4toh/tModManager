@@ -232,7 +232,7 @@ public abstract class ALegacyDatabaseTest
     /// </summary>
     record Statistics
     {
-        public string Name { get; init; }
+        public string Name { get; init; } = "";
         
         public ushort OldId { get; init; }
         
@@ -242,7 +242,7 @@ public abstract class ALegacyDatabaseTest
         public int LoadoutItemGroups { get; init; }
         public int Files { get; init; }
         public int Collections { get; init; }
-        public string Created { get; init; }
+        public string Created { get; init; } = "";
     }
     
     public static IEnumerable<object[]> DatabaseNames()

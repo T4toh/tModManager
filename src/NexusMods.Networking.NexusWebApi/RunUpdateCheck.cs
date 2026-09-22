@@ -137,7 +137,6 @@ public static class RunUpdateCheck
         var uid = mixin.GetModPageId();
 
         var modResult = await graphQlClient.QueryMod(uid.ModId, uid.GameId, cancellationToken);
-        // TODO: handle errors
         var mod = modResult.AssertHasData();
 
         mod.Resolve(db, tx, setFilesTimestamp: true);
@@ -146,7 +145,6 @@ public static class RunUpdateCheck
         var pageEntityId = mixin.GetModPageEntityId();
 
         var modFilesResult = await graphQlClient.QueryModFiles(uid.ModId, uid.GameId, cancellationToken: cancellationToken);
-        // TODO: handle errors
         var modFiles = modFilesResult.AssertHasData();
 
         foreach (var modFile in modFiles)

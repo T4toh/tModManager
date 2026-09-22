@@ -69,11 +69,6 @@ public interface ILoadoutManager
     /// <param name="parent">If specified the installed item will be placed in this group, otherwise it will default to the user's local collection</param>
     /// <param name="installer">The Library will use this installer to install the item</param>
     /// <param name="fallbackInstaller">The installer to use if the default installer fails</param>
-    /// <remarks>
-    /// Job returns a result with null <see cref="LoadoutItemGroup.ReadOnly"/> after
-    /// if supplied an external transaction via <paramref name="transaction"/>,
-    /// since it is the caller's responsibility to complete that transaction.
-    /// </remarks>
     IJobTask<IInstallLoadoutItemJob, InstallLoadoutItemJobResult> InstallItem(
         LibraryItem.ReadOnly libraryItem,
         LoadoutId targetLoadout,
@@ -112,7 +107,7 @@ public interface ILoadoutManager
     ValueTask ResolveFileConflicts(LoadoutItemGroupPriorityId[] winnerIds, LoadoutItemGroupPriorityId loserId);
 
     /// <summary>
-    /// Make items in <paramref name="losers"/> lose all file conflicts.
+    /// Make items in <paramref name="loserIds"/> lose all file conflicts.
     /// </summary>
     ValueTask LoseAllFileConflicts(LoadoutItemGroupPriorityId[] loserIds);
 

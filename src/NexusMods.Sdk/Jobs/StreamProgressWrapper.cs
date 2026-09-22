@@ -27,17 +27,17 @@ public sealed class StreamProgressWrapper<TState> : Stream
         _state = state;
         _notifyWritten = notifyWritten;
 
-        _period = period == default(TimeSpan) ? TimeSpan.FromSeconds(1) : period;
+        Period = period == default(TimeSpan) ? TimeSpan.FromSeconds(1) : period;
         timeProvider ??= TimeProvider.System;
 
-        _timer = timeProvider.CreateTimer(NotifyLoop, state: this, dueTime: TimeSpan.Zero, period: _period);
+        _timer = timeProvider.CreateTimer(NotifyLoop, state: this, dueTime: TimeSpan.Zero, period: Period);
         
         var pos = Size.FromLong(_innerStream.Position);
         _currentBytesWritten = pos;
         _lastBytesWritten = pos;
     }
 
-    private readonly TimeSpan _period;
+    private TimeSpan Period { get; }
     private Size _lastBytesWritten;
     private Size _currentBytesWritten;
 
@@ -48,7 +48,7 @@ public sealed class StreamProgressWrapper<TState> : Stream
         var current = self._currentBytesWritten;
 
         var diff = current - self._lastBytesWritten;
-        var speed = diff.Value / self._period.TotalSeconds;
+        var speed = diff.Value / self.Period.TotalSeconds;
 
         self._lastBytesWritten = self._currentBytesWritten;
         self._notifyWritten.Invoke(self._state, (current, speed));

@@ -38,7 +38,6 @@
     <PackageVersion Include="Spectre.Console.Testing" Version="0.51.1" />
     <PackageVersion Include="SteamKit2" Version="3.3.1" />
     <PackageVersion Include="StrawberryShake.Server" Version="15.1.12" />
-    <PackageVersion Include="System.Linq" Version="4.3.0" />
     <PackageVersion Include="TextMateSharp.Grammars" Version="1.0.70" />
     <PackageVersion Include="Polly.Core" Version="8.6.3" />
     <PackageVersion Include="Polly" Version="8.6.3" />

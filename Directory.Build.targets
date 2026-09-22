@@ -1,0 +1,9 @@
+<Project>
+    <!-- Weave is a transitive analyzer of NexusMods.MnemonicDB.SourceGenerator. It is only needed to build
+         that generator itself; in our projects it fails with CS8785 (ArgumentNullException 'path2'). -->
+    <Target Name="RemoveWeaveAnalyzer" AfterTargets="ResolveLockFileAnalyzers" BeforeTargets="CoreCompile">
+        <ItemGroup>
+            <Analyzer Remove="@(Analyzer)" Condition="'%(Filename)' == 'Weave'" />
+        </ItemGroup>
+    </Target>
+</Project>

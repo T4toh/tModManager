@@ -44,24 +44,50 @@ Actualmente hay dos sistemas paralelos de descarga con componentes duplicados:
 - [ ] Optimización de rescan MD5 para carpetas grandes
 - [ ] Tema claro / alto contraste (solo existe `NexusFluentDark`)
 
+## 🧹 Limpieza sistemática (en curso, rama `chore/systematic-cleanup`)
+
+Objetivo: codebase confiable antes de tocar features. Un PR por bloque, build + tests entre cada uno.
+
+- [x] **Borrar proyectos vacíos/huérfanos del sln:** `NexusMods.Cli` (0 .cs), `NexusMods.UI` (0 .cs), `App.Generators.Diagnostics.Sample`, `src/Examples` (ejemplos upstream, nadie los referencia)
+- [x] **Warnings a cero:** `CS0105` usings duplicados en `Sdk/Loadouts/Models/Loadout.cs`, `CS0168` en `Sdk/Games/IGameData.cs`, `NU1510` `System.Linq` en `Abstractions.Loadouts.Synchronizers.csproj`, `CS0612 Tracking` en `CollectionCreator.cs`, `CS0618` `GameInstallMetadata.Name` / `ManuallyAddedGame` (obsolete upstream; quitar `[Obsolete]` o migrar)
+- [x] **`CS8785` resuelto:** era el analyzer transitivo `Weave` (dependencia de `MnemonicDB.SourceGenerator`), no Fody. Se remueve en `Directory.Build.targets`
+- [x] **`ExperimentalSettings`:** quitado `StardewValley` de `SupportedGames`. `EnableCollectionSharing` se mantiene (gatea la UI de compartir colecciones)
+- [x] **13 `// TODO: handle errors`:** `GraphQlResult.AssertHasData()` ya no hace `Debug.Assert` (crasheaba builds Debug ante cualquier error de API) y la excepción incluye los errores GraphQL. Los dos sitios de UI usan `TryGetData` y no rompen la vista
+- [x] **Actualizar CLAUDE.md:** conteo de proyectos, stubs de telemetría, build en macOS
+- [ ] **Bugs runtime reales:** pendiente reproducir en Linux con juego instalado (crashes esporádicos reportados). Hipótesis a verificar: hay 108 `Debug.Assert`/`Debug.Fail` en `src/`; en build Debug (`dotnet run`, `dev.sh`) cualquier assert fallido mata el proceso. El AppImage es Release y no los ejecuta. Si los crashes son corriendo desde `dev.sh`, correr con `-c Release` para descartar
+- [ ] **Vulnerabilidades NuGet (NU1901/2/3):** `Magick.NET-Q16-AnyCPU` 14.8.1 (vía `Verify.ImageMagick`, solo tests), `Tmds.DBus.Protocol` 0.21.2 (high, transitivo de Avalonia), `Microsoft.Build.Tasks.Git` 8.0.0 (vía `Microsoft.SourceLink.GitHub`). Actualizar respetando regla de supply chain (versiones con ≥7 días)
+
+## 🎮 Multi-juego (después de limpieza)
+
+Intento anterior falló por acoplamiento a Cyberpunk filtrado fuera de `Games.RedEngine` (~35 archivos). Orden:
+
+- [ ] **Renombrar app:** "Cyberpunk 2077 Mod Manager" ya no aplica. Candidato: **tModManager**. Implica app ID (`com.cyberpunk2077.modmanager`), data dir, `.desktop`, `metainfo.xml`, `app.pupnet.conf`. Cuidar migración de data dir existente
+- [ ] **CI propio (post-rename):** GitHub Actions está deshabilitado en el repo y los workflows actuales dependen de los reusables de upstream (`Nexus-Mods/NexusMods.App.Meta`, incluyen macOS). Habilitar Actions, reemplazar `clean_environment_tests.yaml` por uno mínimo (`ubuntu-latest`, `dotnet build`, `dotnet test --filter "RequiresNetworking!=True&FlakeyTest!=True"`), borrar workflows muertos (`pr-builds`, `Publish NuGet Packages`, `Release` con firma). Hasta entonces, tests reales solo en la máquina Linux
+- [ ] **Desacoplar Cyberpunk del core:** mover refs detrás de `IGame`. Sitios: `DataModel/Storage/StorageAnalyzer.cs`, `DataModel/DataModelSettings.cs`, `SchemaVersions/_0010_FixDeepCleanDisabledItems.cs`, `Sdk/FileExtractor/Signatures.cs`, `Abstractions.Games/SortOrder/*`, UI (`StorageManager`, `EssentialMods`, `MyGames`, `Welcome`, `ManualAddGame`, `GameWidget`), `SingleProcess/CliSettings.cs`, `App/Services.cs`, `App/Program.cs`
+- [ ] **Recuperar `Games.CreationEngine` del history upstream** como base para Skyrim SE / Fallout 4 (mismo motor). Requiere: Proton, SKSE/F4SE, `plugins.txt` load order, FOMOD (ya existe)
+- [ ] **Elegir primer juego:** Skyrim SE (más mods, más testeado) vs Fallout 4
+
+## 🧬 Herencia de upstream a nivel repo (post-rename, "hacerlo nuestro")
+
+Inventario al 2026-09-22 de config heredada de `Nexus-Mods/NexusMods.App` que no aplica al fork:
+
+- [ ] **Dependabot** (`.github/dependabot.yml`): `reviewers` apunta a `Nexus-Mods/nexusmods-app-developers` (equipo inexistente acá), cadencia semanal sin cooldown viola la regla de supply chain (versiones con ≥7 días), grupo `GameFinder*` ya no se usa. Opciones: agregar `cooldown: default-days: 7` y sacar reviewers, o borrar el archivo y actualizar a mano. Cerrar PR #25 pendiente
+- [ ] **Submódulo `extern/SMAPI`** (`.gitmodules`): es de Stardew Valley, juego removido. Borrar submódulo
+- [ ] **Submódulo `docs/Nexus`**: tema MkDocs de Nexus Mods. Borrar junto con `mkdocs.yml`, `docs/` (200 archivos upstream), workflow `mkdocs-build-and-deploy`, `docs/requirements.txt`
+- [ ] **Workflows muertos** (`.github/workflows/`): `release.yaml` (firma de código Windows), `publish-nuget-packages.yaml`, `validate-nupkgs.yaml`, `pr-builds.yaml`, `update-changelog-assets`/`validate-changelog-assets`, `update-release-file`, `validate-codecov`, `stale`, `pr-maintenance`, `issue-maintenance`, `reformat-missing-game` + `.github/scripts/reformat-missing-game.js`. Ver ítem "CI propio" arriba
+- [ ] **Issue templates** (`.github/ISSUE_TEMPLATE/`): 6 templates + `config.yml` con links a Nexus Mods. Dejar solo bug + feature request, o ninguno
+- [ ] **Scripts** (`scripts/`): `sign.ps1`, `download-codesigntool.ps1`, `validate-nupkgs.ps1`, `changelog-prepare-assets.sh`, `scripts/python`. Todo Windows/release upstream
+- [ ] **Raíz**: `codecov.yaml`, `qodana.yaml`, `CHANGELOG.md` (historial upstream hasta v0.21.1), `CONTRIBUTING.md`, `Nexus-Icon.png`, `NuGet.Build.props` (metadata de paquetes NuGet de Nexus), `NexusMods.App.sln.DotSettings`, `.idea/` (8 archivos trackeados)
+- [ ] **README.md / mkdocs.yml**: referencias a `Nexus-Mods/NexusMods.App` (1 y 3)
+- [ ] **Licencia**: revisar `LICENSE.md` (GPL-3.0 upstream) y agregar atribución al proyecto original en README al renombrar
+
 ## 🐛 Errores conocidos y deuda
 
 Estado al 2026-09-22:
 
 - **Issues abiertos en GitHub:** 0
-- **Build:** 0 errores, 29 warnings (`CS0618` API obsoleta x32, `CS0105` using duplicado x8, `CS0612` x6, `NU1510` x4, `CS8785` x4, `CS1690` x2, `CS0168` x2)
+- **Build:** 0 errores, 0 warnings de compilador (solo `NU19xx` de auditoría NuGet, ver arriba)
 - **Comentarios `TODO`/`FIXME` en `src/`:** 99
-
-### `// TODO: handle errors` (fallos silenciosos, 13 sitios)
-
-Ninguno notifica al usuario. Cubrir con `IWindowNotificationService` o logging explícito:
-
-- `NexusMods.Networking.NexusWebApi/NexusModsLibrary.Collections.cs` — líneas 70, 98, 130, 151, 323
-- `NexusMods.Networking.NexusWebApi/NexusModsLibrary.cs` — líneas 68, 88, 108
-- `NexusMods.Networking.NexusWebApi/RunUpdateCheck.cs` — líneas 140, 149
-- `NexusMods.Networking.NexusWebApi/NexusApiClient.cs` — línea 123
-- `NexusMods.App.UI/Pages/LoadoutPage/LoadoutViewModel.cs` — línea 874
-- `NexusMods.App.UI/Pages/CollectionDownload/CollectionDownloadViewModel.cs` — línea 576
 
 ### Otros TODO relevantes en código
 

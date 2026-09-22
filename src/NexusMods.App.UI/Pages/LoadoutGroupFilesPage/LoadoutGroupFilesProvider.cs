@@ -59,7 +59,7 @@ public class LoadoutGroupFilesProvider
         var adapter = new TreeFolderGeneratorLoadoutTreeItemAdapter<LoadoutGroupFilesTreeFolderModelInitializer>(filesObservable);
         var wrapper = new DisposableObservableWrapper<IChangeSet<CompositeItemModel<GamePath>, GamePath>>
             (adapter.FolderGenerator.ObservableRoots(), adapter);
-        return wrapper; // Use `SimplifiedObservableRoots` to match previous behaviour pre-CompositeItemModels.
+        return wrapper;
     }
 
     private CompositeItemModel<GamePath> ToModFileItemModel(LoadoutItemWithTargetPath.ReadOnly modFile, bool useFullFilePaths)
