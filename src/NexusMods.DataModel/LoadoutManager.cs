@@ -299,7 +299,8 @@ internal partial class LoadoutManager : ILoadoutManager
 
     public Optional<LoadoutId> GetCurrentlyActiveLoadout(GameInstallation installation)
     {
-        var metadata = _gameRegistry.ForceGetMetadata(installation);
+        // No metadata means the game was detected but never managed: no loadout was ever applied.
+        if (!_gameRegistry.TryGetMetadata(installation, out var metadata)) return Optional<LoadoutId>.None;
         if (!GameInstallMetadata.LastSyncedLoadout.TryGetValue(metadata, out var lastAppliedLoadout))
             return Optional<LoadoutId>.None;
         return LoadoutId.From(lastAppliedLoadout);

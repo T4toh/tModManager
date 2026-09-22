@@ -57,8 +57,9 @@ public record LoggingSettings : ISettings
 
     /// <summary>
     /// When enabled, shows an exception modal to the user on every observed exception.
+    /// Debug-only by default: Release builds surface failures through toasts and the log.
     /// </summary>
-    public bool ShowExceptions { get; [UsedImplicitly] set; } = true;
+    public bool ShowExceptions { get; [UsedImplicitly] set; } = ApplicationConstants.IsDebug;
 
     /// <inheritdoc/>
     public static ISettingsBuilder Configure(ISettingsBuilder settingsBuilder)
