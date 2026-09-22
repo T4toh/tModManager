@@ -121,7 +121,6 @@ public class NexusApiClient : INexusApiClient
     public async Task<Response<CollectionDownloadLinks>> CollectionDownloadLinksAsync(CollectionSlug slug, RevisionNumber revision, bool viewAdultContent = true, CancellationToken token = default)
     {
         var result = await _graphQlClient.QueryCollectionRevisionDownloadLink(slug, revision, cancellationToken: token);
-        // TODO: handle errors
         var link = result.AssertHasData();
 
         var msg = await _factory.Create(HttpMethod.Get, new Uri($"{ClientConfig.ApiUrl}{link}"));

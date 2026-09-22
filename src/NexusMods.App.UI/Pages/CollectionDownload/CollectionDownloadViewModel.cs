@@ -573,8 +573,12 @@ public sealed class CollectionDownloadViewModel : APageViewModel<ICollectionDown
                     .ObserveOnUIThreadDispatcher()
                     .Subscribe(this, static (graphQlResult, self) =>
                         {
-                            // TODO: handle errors
-                            var lastPublishedRevisionNumber = graphQlResult.AssertHasData();
+                            if (!graphQlResult.TryGetData(out var lastPublishedRevisionNumber))
+                            {
+                                self._logger.LogWarning("No se pudo consultar la última revisión publicada de la colección '{Name}': {Errors}",
+                                    self._revision.Collection.Name, string.Join("; ", graphQlResult.Errors.Select(kv => kv.Value.Message)));
+                                return;
+                            }
                             if (!lastPublishedRevisionNumber.HasValue)
                             {
                                 self.IsUpdateAvailable.Value = false;

@@ -22,7 +22,6 @@ public record ExperimentalSettings : ISettings
     [JsonIgnore]
     public readonly GameId[] SupportedGames =
     [
-        GameId.From("StardewValley"),
         GameId.From("RedEngine.Cyberpunk2077"),
     ];
 

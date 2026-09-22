@@ -67,7 +67,6 @@ public partial class NexusModsLibrary
     private async ValueTask<PresignedUploadUrl> UploadCollectionArchive(IStreamFactory archiveStreamFactory, CancellationToken cancellationToken)
     {
         var result = await _graphQlClient.RequestCollectionRevisionUploadUrl(cancellationToken: cancellationToken);
-        // TODO: handle errors
         var presignedUploadUrl = result.AssertHasData();
 
         await using var stream = await archiveStreamFactory.GetStreamAsync();
@@ -95,7 +94,6 @@ public partial class NexusModsLibrary
             cancellationToken: cancellationToken
         );
 
-        // TODO: handle errors
         var returnedCollection = result.AssertHasData();
 
         using var tx = _connection.BeginTransaction();
@@ -127,7 +125,6 @@ public partial class NexusModsLibrary
             cancellationToken: cancellationToken
         );
 
-        // TODO: handle errors
         var (collection, revision) = result.AssertHasData();
 
         var revisionNumber = RevisionNumber.From((ulong)revision.RevisionNumber);
@@ -148,7 +145,6 @@ public partial class NexusModsLibrary
 
         var result = await _graphQlClient.CreateCollection(payload, presignedUploadUrl, cancellationToken);
 
-        // TODO: handle errors
         var (collection, revision) = result.AssertHasData();
 
         using var tx = _connection.BeginTransaction();
@@ -320,7 +316,6 @@ public partial class NexusModsLibrary
             cancellationToken: cancellationToken
         );
 
-        // TODO: handle errors
         var collectionRevision = graphQlResult.AssertHasData();
 
         var revisionMetadata = await AddCollectionToDatabase(collectionRoot, collectionRevision.Collection, collectionRevision, cancellationToken);

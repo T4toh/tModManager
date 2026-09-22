@@ -59,9 +59,9 @@ public class GraphQlResult<TData> : IGraphQlResult<TData>
     /// <inheritdoc/>
     public TData AssertHasData()
     {
-        Debug.Assert(HasData, "Result should have data when this method is called, use TryGetData instead if you can't guarantee it");
-        if (!HasData) throw new InvalidOperationException($"Expected the result to contain data but it has {Errors.Length} errors instead");
-        return _data.Value;
+        if (HasData) return _data.Value;
+        var details = string.Join("; ", Errors.Select(kv => $"{kv.Key}: {kv.Value.Message}"));
+        throw new InvalidOperationException($"GraphQL request returned no data ({Errors.Length} errors): {details}");
     }
 
     /// <inheritdoc/>

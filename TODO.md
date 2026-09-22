@@ -48,13 +48,14 @@ Actualmente hay dos sistemas paralelos de descarga con componentes duplicados:
 
 Objetivo: codebase confiable antes de tocar features. Un PR por bloque, build + tests entre cada uno.
 
-- [ ] **Borrar proyectos vacíos/huérfanos del sln:** `NexusMods.Cli` (0 .cs), `NexusMods.UI` (0 .cs), `App.Generators.Diagnostics.Sample`, `src/Examples` (ejemplos upstream, nadie los referencia)
-- [ ] **Warnings a cero:** `CS0105` usings duplicados en `Sdk/Loadouts/Models/Loadout.cs`, `CS0168` en `Sdk/Games/IGameData.cs`, `NU1510` `System.Linq` en `Abstractions.Loadouts.Synchronizers.csproj`, `CS0612 Tracking` en `CollectionCreator.cs`, `CS0618` `GameInstallMetadata.Name` / `ManuallyAddedGame` (obsolete upstream; quitar `[Obsolete]` o migrar)
-- [ ] **Investigar `CS8785`:** generator `GenerateWeaveSources` (Fody) falla con `ArgumentNullException 'path2'`. Silencioso hoy, candidato a errores raros
-- [ ] **`ExperimentalSettings`:** quitar `StardewValley` de `SupportedGames`, remover `EnableCollectionSharing` (TODO GA)
-- [ ] **13 `// TODO: handle errors`:** cubrir con `IWindowNotificationService` o `ILogger` explícito (lista abajo)
-- [ ] **Actualizar CLAUDE.md:** conteo de proyectos, stubs de telemetría ya no existen
-- [ ] **Bugs runtime reales:** pendiente reproducir en Linux con juego instalado (crashes esporádicos reportados)
+- [x] **Borrar proyectos vacíos/huérfanos del sln:** `NexusMods.Cli` (0 .cs), `NexusMods.UI` (0 .cs), `App.Generators.Diagnostics.Sample`, `src/Examples` (ejemplos upstream, nadie los referencia)
+- [x] **Warnings a cero:** `CS0105` usings duplicados en `Sdk/Loadouts/Models/Loadout.cs`, `CS0168` en `Sdk/Games/IGameData.cs`, `NU1510` `System.Linq` en `Abstractions.Loadouts.Synchronizers.csproj`, `CS0612 Tracking` en `CollectionCreator.cs`, `CS0618` `GameInstallMetadata.Name` / `ManuallyAddedGame` (obsolete upstream; quitar `[Obsolete]` o migrar)
+- [x] **`CS8785` resuelto:** era el analyzer transitivo `Weave` (dependencia de `MnemonicDB.SourceGenerator`), no Fody. Se remueve en `Directory.Build.targets`
+- [x] **`ExperimentalSettings`:** quitado `StardewValley` de `SupportedGames`. `EnableCollectionSharing` se mantiene (gatea la UI de compartir colecciones)
+- [x] **13 `// TODO: handle errors`:** `GraphQlResult.AssertHasData()` ya no hace `Debug.Assert` (crasheaba builds Debug ante cualquier error de API) y la excepción incluye los errores GraphQL. Los dos sitios de UI usan `TryGetData` y no rompen la vista
+- [x] **Actualizar CLAUDE.md:** conteo de proyectos, stubs de telemetría, build en macOS
+- [ ] **Bugs runtime reales:** pendiente reproducir en Linux con juego instalado (crashes esporádicos reportados). Hipótesis a verificar: hay 108 `Debug.Assert`/`Debug.Fail` en `src/`; en build Debug (`dotnet run`, `dev.sh`) cualquier assert fallido mata el proceso. El AppImage es Release y no los ejecuta. Si los crashes son corriendo desde `dev.sh`, correr con `-c Release` para descartar
+- [ ] **Vulnerabilidades NuGet (NU1901/2/3):** `Magick.NET-Q16-AnyCPU` 14.8.1 (vía `Verify.ImageMagick`, solo tests), `Tmds.DBus.Protocol` 0.21.2 (high, transitivo de Avalonia), `Microsoft.Build.Tasks.Git` 8.0.0 (vía `Microsoft.SourceLink.GitHub`). Actualizar respetando regla de supply chain (versiones con ≥7 días)
 
 ## 🎮 Multi-juego (después de limpieza)
 
@@ -70,19 +71,8 @@ Intento anterior falló por acoplamiento a Cyberpunk filtrado fuera de `Games.Re
 Estado al 2026-09-22:
 
 - **Issues abiertos en GitHub:** 0
-- **Build:** 0 errores, 29 warnings (`CS0618` API obsoleta x32, `CS0105` using duplicado x8, `CS0612` x6, `NU1510` x4, `CS8785` x4, `CS1690` x2, `CS0168` x2)
+- **Build:** 0 errores, 0 warnings de compilador (solo `NU19xx` de auditoría NuGet, ver arriba)
 - **Comentarios `TODO`/`FIXME` en `src/`:** 99
-
-### `// TODO: handle errors` (fallos silenciosos, 13 sitios)
-
-Ninguno notifica al usuario. Cubrir con `IWindowNotificationService` o logging explícito:
-
-- `NexusMods.Networking.NexusWebApi/NexusModsLibrary.Collections.cs` — líneas 70, 98, 130, 151, 323
-- `NexusMods.Networking.NexusWebApi/NexusModsLibrary.cs` — líneas 68, 88, 108
-- `NexusMods.Networking.NexusWebApi/RunUpdateCheck.cs` — líneas 140, 149
-- `NexusMods.Networking.NexusWebApi/NexusApiClient.cs` — línea 123
-- `NexusMods.App.UI/Pages/LoadoutPage/LoadoutViewModel.cs` — línea 874
-- `NexusMods.App.UI/Pages/CollectionDownload/CollectionDownloadViewModel.cs` — línea 576
 
 ### Otros TODO relevantes en código
 
