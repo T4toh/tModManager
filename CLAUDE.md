@@ -15,7 +15,8 @@ dotnet build                           # Build entire solution
 dotnet run --project src/NexusMods.App/NexusMods.App.csproj  # Run the app
 
 dotnet test                            # Run all tests
-dotnet test --filter "RequiresNetworking!=True&FlakeyTest!=True"  # Skip network/flakey tests
+dotnet test --filter "RequiresNetworking!=True&FlakeyTest!=True"  # Skip network/flakey tests (CI default)
+dotnet run --project tests/NexusMods.Sdk.Tests   # TUnit projects (Sdk.Tests, Backend.Tests) do not run under `dotnet test` on .NET 10
 dotnet test --filter "FullyQualifiedName~SomeTestClass.SomeMethod"  # Run a single test
 dotnet test tests/Games/NexusMods.Games.RedEngine.Tests  # Run RedEngine (CP2077) tests
 
@@ -27,9 +28,9 @@ dotnet build -p:UseSystemExtractor=true  # Use system 7z for extraction
 cd src/NexusMods.App && pupnet -y -k AppImage -p DefineConstants=INSTALLATION_METHOD_APPIMAGE   # output: Deploy/OUT/
 ```
 
-There is no CI yet (all upstream workflows were removed; see `TODO.md`) and no lint/format step; `.globalconfig` analyzer errors (below) are the only enforced gate. A full build currently produces **0 compiler warnings**; keep it that way (only `NU19xx` NuGet audit warnings from transitive packages remain).
+CI is `.github/workflows/ci.yaml` (ubuntu): `dotnet build -warnaserror`, then xUnit projects via `dotnet test` and the two TUnit projects (`Sdk.Tests`, `Backend.Tests`) via `dotnet run`. There is no lint/format step; `.globalconfig` analyzer errors (below) plus warnings-as-errors in CI are the gate. A full build currently produces **0 compiler warnings**; keep it that way (only `NU19xx` NuGet audit warnings from transitive packages remain).
 
-Building on macOS: the StrawberryShake code generator ships as a net9 tool, so run `DOTNET_ROLL_FORWARD=Major dotnet build` if only the net10 runtime is installed. Most tests require Linux (`LinuxInterop` asserts `IsLinux`); on macOS only the pure-logic test projects pass. Real test verification happens on a Linux box until CI exists.
+Building on macOS: the StrawberryShake code generator ships as a net9 tool, so run `DOTNET_ROLL_FORWARD=Major dotnet build` if only the net10 runtime is installed. Most tests require Linux (`LinuxInterop` asserts `IsLinux`); on macOS only the pure-logic test projects pass. Real test verification happens in CI or on a Linux box.
 
 Test traits used for filtering: `RequiresNetworking`, `FlakeyTest`, `RequiresApiKey`.
 

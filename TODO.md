@@ -62,7 +62,7 @@ Objetivo: codebase confiable antes de tocar features. Un PR por bloque, build + 
 Intento anterior falló por acoplamiento a Cyberpunk filtrado fuera de `Games.RedEngine` (~35 archivos). Orden:
 
 - [x] **Renombrar app a tModManager:** app ID `io.github.t4toh.tmodmanager`, data dir `~/.local/share/tModManager/` con migración automática desde `NexusMods.App.Cyberpunk/`, `.desktop` viejo se borra al registrar el handler nxm. Pendiente: renombrar el repo GitHub `cp2077-mm` → `tModManager` (manual, GitHub redirige)
-- [ ] **CI propio (post-rename):** GitHub Actions está deshabilitado en el repo y los workflows actuales dependen de los reusables de upstream (`Nexus-Mods/NexusMods.App.Meta`, incluyen macOS). Habilitar Actions, reemplazar `clean_environment_tests.yaml` por uno mínimo (`ubuntu-latest`, `dotnet build`, `dotnet test --filter "RequiresNetworking!=True&FlakeyTest!=True"`), borrar workflows muertos (`pr-builds`, `Publish NuGet Packages`, `Release` con firma). Hasta entonces, tests reales solo en la máquina Linux
+- [x] **CI propio:** GitHub Actions habilitado, `.github/workflows/ci.yaml` (ubuntu, `dotnet build -warnaserror`, xUnit vía `dotnet test` con filtro, TUnit vía `dotnet run`). Pendiente: ver qué tests fallan en ubuntu limpio y marcarlos o arreglarlos
 - [ ] **Desacoplar Cyberpunk del core:** mover refs detrás de `IGame`. Sitios: `DataModel/Storage/StorageAnalyzer.cs`, `DataModel/DataModelSettings.cs`, `SchemaVersions/_0010_FixDeepCleanDisabledItems.cs`, `Sdk/FileExtractor/Signatures.cs`, `Abstractions.Games/SortOrder/*`, UI (`StorageManager`, `EssentialMods`, `MyGames`, `Welcome`, `ManualAddGame`, `GameWidget`), `SingleProcess/CliSettings.cs`, `App/Services.cs`, `App/Program.cs`
 - [ ] **Recuperar `Games.CreationEngine` del history upstream** como base para Skyrim SE / Fallout 4 (mismo motor). Requiere: Proton, SKSE/F4SE, `plugins.txt` load order, FOMOD (ya existe)
 - [ ] **Elegir primer juego:** Skyrim SE (más mods, más testeado) vs Fallout 4
@@ -71,7 +71,7 @@ Intento anterior falló por acoplamiento a Cyberpunk filtrado fuera de `Games.Re
 
 Hecho el 2026-09-22 (rama `feat/rename-tmodmanager`): borrados `.github/` completo (dependabot, issue templates, 17 workflows, scripts), submódulos `extern/SMAPI` y `docs/Nexus`, `docs/` + `mkdocs.yml`, `scripts/`, `codecov.yaml`, `qodana.yaml`, `CHANGELOG.md`, `CONTRIBUTING.md`, `NexusMods.App.sln.DotSettings`, `Nexus-Icon.png`, `.idea/` (untrackeado). `NuGet.Build.props` reducido a `GenerateDocumentationFile`. README con atribución a NexusMods.App (GPL-3.0). PR #25 de dependabot cerrado.
 
-- [ ] **Renombrar repo GitHub** `cp2077-mm` → `tModManager` (manual; GitHub redirige). Después actualizar URLs en `metainfo.xml`, `app.pupnet.conf`, README
+- [x] **Renombrar repo GitHub** `cp2077-mm` → `tModManager` (2026-09-22, GitHub redirige la URL vieja). URLs actualizadas en `metainfo.xml` y `app.pupnet.conf`
 - [ ] **Issue templates propios** (bug + feature) si hace falta, cuando haya CI
 
 ## 🐛 Errores conocidos y deuda
