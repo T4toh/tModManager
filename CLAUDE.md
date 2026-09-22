@@ -22,13 +22,18 @@ dotnet test tests/Games/NexusMods.Games.RedEngine.Tests  # Run RedEngine (CP2077
 dotnet build -p:UseSystemExtractor=true  # Use system 7z for extraction
 
 ./dev.sh                               # Interactive menu (Spanish) with build/test/AppImage options
+
+# AppImage (requires `dotnet tool install --global KuiperZone.PupNet` + FUSE); dev.sh option 10 does the same
+cd src/NexusMods.App && pupnet -y -k AppImage -p DefineConstants=INSTALLATION_METHOD_APPIMAGE   # output: Deploy/OUT/
 ```
+
+There is no lint/format step in CI; `.globalconfig` analyzer errors (below) are the only enforced gate.
 
 Test traits used for filtering: `RequiresNetworking`, `FlakeyTest`, `RequiresApiKey`.
 
 ## Architecture
 
-### Solution Structure (81 projects: 49 src + 29 test + 3 other)
+### Solution Structure (81 projects: 51 src + 29 test + 1 benchmarks)
 
 The solution (`NexusMods.App.sln`) is organized into layers:
 
@@ -61,7 +66,7 @@ The solution (`NexusMods.App.sln`) is organized into layers:
 
 These are custom features not present in upstream:
 
-1. **Cookie-based free downloads** (`FirefoxCookieReader.cs`, `NexusApiClient.cs`): Reads Firefox session cookies and invokes `curl` to bypass Cloudflare TLS fingerprinting. Allows free/supporter users to download collection mods without premium API.
+1. **Cookie-based free downloads** (`FirefoxCookieReader.cs`, `NexusApiClient.cs`): Reads Firefox session cookies and invokes `curl` to bypass Cloudflare TLS fingerprinting. Allows free/supporter users to download collection mods without premium API. Firefox only: copies `cookies.sqlite` to a temp file and reads it via P/Invoke to `libsqlite3.so.0`. Calls to `GenerateDownloadUrl` are serialized (semaphore) to avoid Cloudflare challenge pages; the CDN download itself runs in parallel. Chrome/Chromium would need Secret Service decryption (see README).
 
 2. **Deep Clean tool** (`CyberpunkDeepCleanTool.cs`, `StorageAnalyzer.cs`): Moves mod directories to timestamped backup in `CyberpunkBackups/`, cleans old backups, removes mod groups from DB, rescans game folder. Accessed via Storage Manager page.
 
@@ -69,7 +74,7 @@ These are custom features not present in upstream:
 
 4. **Essential mods diagnostics** (`EssentialMods.cs`, `CoreModsDiagnosticEmitter.cs`): Tracks 7 essential CP2077 mods (Redscript, RED4ext, CET, ArchiveXL, TweakXL, Codeware, Equipment-EX). Diagnostic emitters check for missing mods, redundant folder structures, Wine prefix requirements, and pattern-based dependencies.
 
-5. **MD5 rescan** (`CollectionDownloader.cs`): Scans downloads folder to match existing files by MD5 hash, avoiding re-downloads.
+5. **MD5 rescan + collection resilience** (`CollectionDownloader.cs`, `NexusMods.Collections`): Scans downloads folder to match existing files by MD5 hash, avoiding re-downloads. If the MD5 does not match (mod updated), falls back to relative-path mapping. Missing collection archives on disk are re-downloaded; missing `.nx` entries (after Deep Clean / GC) are detected across all archive children and re-extracted from the parent archive. Apply works with partial installs. Warns before installing a collection when another is already installed.
 
 6. **Telemetry removal**: Matomo, Mixpanel, and OpenTelemetry completely removed. Empty project stubs remain in directory but have no implementation.
 
@@ -128,7 +133,7 @@ Games implement `IGame` and `IGameData<T>` and register via `AddGame<T>()`. Each
 - `Synchronizer` — game-specific `ILoadoutSynchronizer`
 - `GetLocations()` — maps `LocationId` → `AbsolutePath` for game directories
 
-`GamePath` combines a `LocationId` (Game, SaveData, Config, etc.) with a relative path for portable file references.
+`GamePath` combines a `LocationId` (Game, SaveData, Config, etc.) with a relative path for portable file references. Always use `GamePath` for game file references, never raw absolute paths.
 
 ### Loadout & Synchronization
 
@@ -144,7 +149,9 @@ Loadout data hierarchy: `Loadout` → `LoadoutItemGroup` (mod) → `LoadoutItem`
 
 Avalonia MVVM with interface-based ViewModels:
 - ViewModels inherit `AViewModel<TInterface>` and implement `IXxxViewModel`
-- Registration: `AddViewModel<Impl, IInterface>()` + `AddView<View, IInterface>()`
+- Reactive properties use `[Reactive]` (ReactiveUI.Fody) on auto-properties
+- `*DesignViewModel` classes sit alongside real VMs for the Avalonia previewer
+- Registration: `AddViewModel<Impl, IInterface>()` + `AddView<View, IInterface>()`, in the subsystem's `Services.cs`
 - `IPageFactory` implementations create pages dynamically
 - `IViewLocator` resolves Views from ViewModel types
 - TreeDataGrid for hierarchical file displays
@@ -160,9 +167,9 @@ Defined in `NexusMods.App.Cli` using attributes:
 
 ## Test Framework
 
-- **xUnit** with `Xunit.DependencyInjection` for constructor-injected services
+- **xUnit** with `Xunit.DependencyInjection` for constructor-injected services. Each test project has a `Startup.cs` whose `ConfigureServices` calls `AddDefaultServicesForTesting()` (plus `AddLogging(b => b.AddXUnit())`)
 - **NSubstitute** for mocking, **FluentAssertions** for assertions, **AutoFixture** for test data
-- **Verify** (snapshot testing) with `.verified.` files checked into source
+- **Verify** (snapshot testing) with `.verified.` files checked into source; never delete them manually
 - **`AGameTest<TGame>`** base class in `NexusMods.Games.TestFramework` provides pre-configured DI with game installations, file stores, loadout managers
 - `NexusMods.StandardGameLocators.TestHelpers` stubs game detection for CI environments
 
@@ -170,8 +177,8 @@ Defined in `NexusMods.App.Cli` using attributes:
 
 - .NET 10, C# with nullable reference types enabled, implicit usings
 - UTF-8, LF line endings, 4-space indentation (see `.editorconfig`)
-- Centralized NuGet versions in `Directory.Packages.props`
-- Global analyzer rules in `.globalconfig`: un-awaited tasks are errors (`CS4014`), missing switch cases are errors (`CS8509`)
+- Centralized NuGet versions in `Directory.Packages.props`; never put `Version=` on a `<PackageReference>`
+- Global analyzer rules in `.globalconfig` treated as errors (do not suppress): `CS4014` un-awaited task, `CS8509` non-exhaustive switch, `CA1069` duplicate enum values, `CA2211` visible non-constant static fields, `CA2021` incompatible `Cast`/`OfType`
 - Log messages and some UI strings are in Spanish (this is a personal fork)
 
 ## What Was Removed (vs upstream)
