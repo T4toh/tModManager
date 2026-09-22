@@ -50,6 +50,14 @@ public class LocalHttpServer : IDisposable
             {
                 var context = await _listener.GetContextAsync();
                 _logger.LogInformation("Got connection");
+
+                if (context.Request.Url?.PathAndQuery == "/stall")
+                {
+                    // Handled off-loop and never disposed here: the response must stay open to simulate a stall.
+                    _ = Task.Run(() => HandleStall(context));
+                    continue;
+                }
+
                 using var resp = context.Response;
 
                 if (context.Request.Url?.PathAndQuery.StartsWith("/Resources") ?? false)
@@ -146,6 +154,40 @@ public class LocalHttpServer : IDisposable
         }
     }
 
+    private readonly System.Collections.Concurrent.ConcurrentBag<HttpListenerResponse> _stalledResponses = new();
+
+    /// <summary>
+    /// Sends headers and 1 KB of body, then never sends another byte and never closes the connection.
+    /// </summary>
+    private async Task HandleStall(HttpListenerContext context)
+    {
+        var resp = context.Response;
+        _stalledResponses.Add(resp);
+
+        const long contentLength = 4 * MB;
+        resp.ProtocolVersion = HttpVersion.Version11;
+        resp.Headers.Add(HttpResponseHeader.ContentType, "application/octet-stream");
+        resp.Headers.Add(HttpResponseHeader.AcceptRanges, "bytes");
+
+        if (context.Request.HttpMethod == "HEAD")
+        {
+            resp.StatusCode = (int)HttpStatusCode.OK;
+            resp.ContentLength64 = contentLength;
+            resp.Close();
+            return;
+        }
+
+        var rangeString = context.Request.Headers.Get("Range");
+        var from = rangeString is null ? 0 : RangeHeaderValue.Parse(rangeString).Ranges.First().From ?? 0;
+        resp.StatusCode = rangeString is null ? (int)HttpStatusCode.OK : (int)HttpStatusCode.PartialContent;
+        resp.ContentLength64 = contentLength - from;
+        if (rangeString is not null) resp.Headers.Add(HttpResponseHeader.ContentRange, $"bytes {from}-{contentLength - 1}/{contentLength}");
+
+        await resp.OutputStream.WriteAsync(new byte[1024]);
+        await resp.OutputStream.FlushAsync();
+        // Stall: keep the connection open without sending anything else. Closed by Dispose().
+    }
+
     private const int MB = 1024 * 1024;
     private async Task HandleUnreliable(HttpListenerResponse resp, HttpListenerRequest request, bool truncate)
     {
@@ -220,6 +262,7 @@ public class LocalHttpServer : IDisposable
 
     public void Dispose()
     {
+        foreach (var resp in _stalledResponses) resp.Abort();
         _listener.Stop();
     }
 }

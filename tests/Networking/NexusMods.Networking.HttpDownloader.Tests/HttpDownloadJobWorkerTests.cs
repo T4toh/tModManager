@@ -18,6 +18,29 @@ public class HttpDownloadJobWorkerTests
     }
 
     [Fact]
+    public async Task Test_StalledDownloadFailsInsteadOfHangingForever()
+    {
+        var server = _serviceProvider.GetRequiredService<LocalHttpServer>();
+        var url = new Uri(server.Uri, "/stall");
+
+        var previousTimeout = HttpDownloadJob.StallTimeout;
+        HttpDownloadJob.StallTimeout = TimeSpan.FromSeconds(1);
+        try
+        {
+            await using var outputPath = _temporaryFileManager.CreateFile();
+            var act = async () => await HttpDownloadJob.Create(_serviceProvider, url, url, outputPath.Path);
+
+            // Polly retries the stall 3 times (resuming via range requests), then the job must fail visibly.
+            var exception = (await act.Should().ThrowAsync<Exception>()).Which;
+            exception.ToString().Should().Contain("stalled");
+        }
+        finally
+        {
+            HttpDownloadJob.StallTimeout = previousTimeout;
+        }
+    }
+
+    [Fact]
     [Trait("RequiresNetworking", "True")]
     public async Task Test_NexusModsCDN100MFile()
     {
