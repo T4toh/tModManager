@@ -14,6 +14,12 @@ Antes de arrancar: backup de `~/.local/share/NexusMods.App.Cyberpunk/` (la migra
    dotnet run -c Release --project src/NexusMods.App/NexusMods.App.csproj
    ```
    Alternativa: AppImage con `./dev.sh` opción 10 (ya usa `-c Release`).
+   Login desde un build de `bin/` (framework-dependent): el `.desktop` que registra la app lanza el apphost sin `DOTNET_ROOT`. Si el SDK está en `~/.dotnet` hace falta, una vez:
+   ```bash
+   sudo sh -c 'mkdir -p /etc/dotnet && echo $HOME/.dotnet > /etc/dotnet/install_location'
+   ```
+   Si no, el callback `nxm://` muere con `You must install .NET to run this application` y el login expira a los 3 min. El AppImage no lo sufre (2026-09-22, verificado: login OK tras el fix).
+   No correr `dotnet test` completo con la app registrada como handler antes de mergear #32: los tests reescribían el `.desktop` con `Exec=dotnet %u`.
 2. **Migración de data dir.** Al primer arranque stderr debe mostrar `Migrated data directory to .../tModManager`. Verificar:
    ```bash
    ls ~/.local/share/ | grep -i -e tModManager -e Cyberpunk   # solo tModManager
