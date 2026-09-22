@@ -24,9 +24,7 @@ namespace NexusMods.Backend;
 
 public static class ServiceExtensions
 {
-    public static IServiceCollection AddGameLocators(
-        this IServiceCollection serviceCollection,
-        GameLocatorSettings? settings = null)
+    public static IServiceCollection AddGameLocators(this IServiceCollection serviceCollection)
     {
         serviceCollection.AddSingleton<IGameLocator>(serviceProvider => new SteamLocator(serviceProvider.GetServices<IGameData>(), serviceProvider.GetRequiredService<ILoggerFactory>(), serviceProvider.GetRequiredService<IFileSystem>(), registry: null));
 
@@ -39,7 +37,6 @@ public static class ServiceExtensions
             .AddSingleton<IGameLocationsService, GameLocationsService>()
             .AddSingleton<IGameRegistry, GameRegistry>()
             .AddGameInstallMetadataModel()
-            .AddSettings<GameLocatorSettings>()
             .AddSingleton<IGameLocator, ManuallyAddedLocator>()
             .AddManuallyAddedGameModel();
     }

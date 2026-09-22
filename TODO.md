@@ -26,7 +26,7 @@ Antes de arrancar: backup de `~/.local/share/NexusMods.App.Cyberpunk/` (la migra
    ```
    Click en "Mod manager download" en Nexus → tiene que abrir tModManager, no el binario viejo.
 4. **Sanity funcional.** Instalar un mod, Apply, lanzar el juego desde la app. Storage Manager abre. Descargar colección chica sin premium.
-5. **Crashes esporádicos.** Si crashea en Release: log en `~/.local/share/NexusMods.App/Logs/nexusmods.app.main.current.log` (sí, todavía va al dir de la app oficial, ver deuda abajo). Pegar el stacktrace en la próxima sesión. Si solo crashea en Debug (`./dev.sh` opción 2) y el log dice `Assertion failed`, es un `Debug.Assert`: anotar cuál.
+5. **Crashes esporádicos.** Si crashea en Release: log en `~/.local/state/NexusMods.App/Logs/nexusmods.app.main.current.log` (sí, todavía va al dir de la app oficial, ver deuda abajo). Pegar el stacktrace en la próxima sesión. Si solo crashea en Debug (`./dev.sh` opción 2) y el log dice `Assertion failed`, es un `Debug.Assert`: anotar cuál.
 6. **Ventana.** Título y overlay de bienvenida dicen "tModManager". `StartupWMClass=tModManager` debería agrupar bien la ventana en el dock.
 
 ### Después de probar
