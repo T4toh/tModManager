@@ -11,6 +11,8 @@ using static NexusMods.Abstractions.Loadouts.Synchronizers.Rules.Signature;
 
 namespace NexusMods.DataModel.Tests;
 
+// xUnit1026: the unused theory parameters (shorthand, disk/prev/loadout hashes) are kept so the rows read like the rule table.
+#pragma warning disable xUnit1026
 public class SynchronizerRuleTests
 {
     /// <summary>

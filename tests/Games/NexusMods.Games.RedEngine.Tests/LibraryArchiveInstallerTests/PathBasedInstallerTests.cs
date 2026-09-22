@@ -1,4 +1,4 @@
-using System.Runtime.CompilerServices;
+﻿using System.Runtime.CompilerServices;
 using Microsoft.Extensions.DependencyInjection;
 
 using NexusMods.Games.RedEngine.Cyberpunk2077;
@@ -56,7 +56,8 @@ public class PathBasedInstallerTests(ITestOutputHelper outputHelper) : ALibraryA
 
     private SettingsTask VerifyChildren(IEnumerable<(RelativePath FromPath, Hash Hash, Sdk.Games.GamePath GamePath)> childrenFilesAndHashes, string[] archivePaths, [CallerFilePath] string sourceFile = "")
     {
-        var asArray = childrenFilesAndHashes.ToArray();
+        // Child enumeration order is not deterministic across file systems; sort so snapshots are stable.
+        var asArray = childrenFilesAndHashes.OrderBy(x => x.FromPath.ToString(), StringComparer.Ordinal).ToArray();
         
         return Verify(asArray.Select(row =>
                 new

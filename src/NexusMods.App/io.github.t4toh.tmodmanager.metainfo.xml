@@ -24,9 +24,9 @@
 
     <launchable type="desktop-id">io.github.t4toh.tmodmanager.desktop</launchable>
 
-    <url type="homepage">https://github.com/T4toh/cp2077-mm</url>
-    <url type="bugtracker">https://github.com/T4toh/cp2077-mm/issues</url>
-    <url type="vcs-browser">https://github.com/T4toh/cp2077-mm</url>
+    <url type="homepage">https://github.com/T4toh/tModManager</url>
+    <url type="bugtracker">https://github.com/T4toh/tModManager/issues</url>
+    <url type="vcs-browser">https://github.com/T4toh/tModManager</url>
 
     <content_rating type="oars-1.0">
         <content_attribute id="social-info">intense</content_attribute>
