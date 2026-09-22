@@ -16,7 +16,6 @@ using NexusMods.App.Commandline;
 using NexusMods.App.UI;
 using NexusMods.App.UI.Settings;
 using NexusMods.Backend;
-using NexusMods.Backend.Games.Locators;
 using NexusMods.CrossPlatform;
 using NexusMods.DataModel;
 using NexusMods.DataModel.SchemaVersions;
@@ -67,21 +66,18 @@ public class Program
 
         LoggingSettings loggingSettings;
         ExperimentalSettings experimentalSettings;
-        GameLocatorSettings gameLocatorSettings;
         using (var settingsHost = BuildSettingsHost())
         {
             var settingsManager = settingsHost.Services.GetRequiredService<ISettingsManager>();
             loggingSettings = settingsManager.Get<LoggingSettings>();
             experimentalSettings = settingsManager.Get<ExperimentalSettings>();
-            gameLocatorSettings = settingsManager.Get<GameLocatorSettings>();
         }
 
         var startupMode = StartupMode.Parse(args);
         using var host = BuildHost(
             startupMode,
             loggingSettings,
-            experimentalSettings,
-            gameLocatorSettings
+            experimentalSettings
         );
 
         var services = host.Services;
@@ -300,7 +296,6 @@ public class Program
                 .AddStorageBackend<JsonStorageBackend>()
                 .AddSettings<LoggingSettings>()
                 .AddSettings<ExperimentalSettings>()
-                .AddSettings<GameLocatorSettings>()
             )
             .ConfigureLogging((_, builder) => builder
                 .ClearProviders()
@@ -321,16 +316,14 @@ public class Program
     private static IHost BuildHost(
         StartupMode startupMode,
         LoggingSettings loggingSettings,
-        ExperimentalSettings experimentalSettings,
-        GameLocatorSettings? gameLocatorSettings = null)
+        ExperimentalSettings experimentalSettings)
     {
         var observableTarget = new ObservableLoggingTarget();
         var host = new HostBuilder().ConfigureServices(services =>
         {
             var s = services.AddApp(
                 startupMode: startupMode,
-                experimentalSettings: experimentalSettings,
-                gameLocatorSettings: gameLocatorSettings).Validate();
+                experimentalSettings: experimentalSettings).Validate();
 
             if (loggingSettings.ShowExceptions)
                 s.AddSingleton<IObservableExceptionSource, ObservableLoggingTarget>(_ => observableTarget);
