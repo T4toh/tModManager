@@ -3,6 +3,9 @@ using NexusMods.Sdk.Hashes;
 
 namespace NexusMods.Sdk.Tests.Hashes;
 
+// TUnit0059: concrete subclasses carry [InheritsTests]; the analyzer cannot see that from the abstract base.
+// TUnit0300: AOT compatibility of generic test classes is irrelevant here.
+#pragma warning disable TUnit0059, TUnit0300
 public abstract class HasherTestBase<THash, THasher>
     where THash : unmanaged, IEquatable<THash>
     where THasher : IHasher<THash, THasher>

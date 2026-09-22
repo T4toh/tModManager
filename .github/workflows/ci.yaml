@@ -31,7 +31,8 @@ jobs:
         run: dotnet restore NexusMods.App.sln
 
       - name: Build (warnings are errors)
-        run: dotnet build NexusMods.App.sln --no-restore -warnaserror
+        # Property form so WarningsNotAsErrors (NuGet audit) in Directory.Build.props is honoured.
+        run: dotnet build NexusMods.App.sln --no-restore -p:TreatWarningsAsErrors=true
 
       - name: Test (xUnit projects)
         run: |
