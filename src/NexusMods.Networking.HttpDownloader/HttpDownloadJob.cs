@@ -195,9 +195,9 @@ public record HttpDownloadJob : IJobDefinitionWithStart<HttpDownloadJob, Absolut
 
         try
         {
-            await response.Content.CopyToAsync(outputStream, context.CancellationToken);
+            await CopyWithStallDetection(response.Content, outputStream, context.CancellationToken);
         }
-        catch (TaskCanceledException)
+        catch (OperationCanceledException)
         {
             throw;
         }
@@ -293,6 +293,39 @@ public record HttpDownloadJob : IJobDefinitionWithStart<HttpDownloadJob, Absolut
 
         var contentLength = response.Content.Headers.ContentLength;
         _state.ContentLength = contentLength is not null ? Size.FromLong(contentLength.Value) : Optional<Size>.None;
+    }
+
+    // ponytail: fixed window; make it a DownloadSettings entry if some CDN legitimately idles longer
+    internal static TimeSpan StallTimeout = TimeSpan.FromSeconds(60);
+
+    /// <summary>
+    /// Copies the response body to <paramref name="output"/>, failing with a retryable <see cref="HttpIOException"/>
+    /// when the server stops sending bytes for <see cref="StallTimeout"/>. <see cref="HttpClient.Timeout"/> does not
+    /// cover the body read, so without this a stalled connection keeps the job in "downloading" forever.
+    /// </summary>
+    private static async Task CopyWithStallDetection(HttpContent content, Stream output, CancellationToken cancellationToken)
+    {
+        await using var input = await content.ReadAsStreamAsync(cancellationToken);
+        var buffer = new byte[81920];
+
+        while (true)
+        {
+            using var stallCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            stallCts.CancelAfter(StallTimeout);
+
+            int read;
+            try
+            {
+                read = await input.ReadAsync(buffer, stallCts.Token);
+            }
+            catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+            {
+                throw new HttpIOException(HttpRequestError.ResponseEnded, $"No data received for {StallTimeout.TotalSeconds:F0}s, download stalled");
+            }
+
+            if (read == 0) return;
+            await output.WriteAsync(buffer.AsMemory(0, read), cancellationToken);
+        }
     }
 
     private static ResiliencePipeline<AbsolutePath> BuildResiliencePipeline()
