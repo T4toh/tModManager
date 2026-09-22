@@ -1,5 +1,39 @@
 # TODO
 
+## 📍 Estado y próximos pasos (2026-09-22)
+
+Mergeado hoy en `main`: limpieza (0 warnings), rename a **tModManager**, repo `T4toh/tModManager`, herencia upstream borrada, CI verde en ubuntu (1175 xUnit + 94 TUnit). Nada de esto se probó todavía con el juego: **primero probar en Linux, después seguir con desacoplar Cyberpunk del core.**
+
+### Checklist de prueba en Linux
+
+Antes de arrancar: backup de `~/.local/share/NexusMods.App.Cyberpunk/` (la migración hace `mv`, no copia).
+
+1. **Build Release** (los `Debug.Assert` no corren en Release; si algo crashea acá es bug real):
+   ```bash
+   git pull && dotnet build -c Release
+   dotnet run -c Release --project src/NexusMods.App/NexusMods.App.csproj
+   ```
+   Alternativa: AppImage con `./dev.sh` opción 10 (ya usa `-c Release`).
+2. **Migración de data dir.** Al primer arranque stderr debe mostrar `Migrated data directory to .../tModManager`. Verificar:
+   ```bash
+   ls ~/.local/share/ | grep -i -e tModManager -e Cyberpunk   # solo tModManager
+   ```
+   La app tiene que abrir con el juego, loadouts y colecciones que ya tenías. Si aparece vacía, la migración falló: revisar stderr y el dir viejo.
+3. **Handler nxm.** Después de que la app registre el handler (arranque normal):
+   ```bash
+   ls ~/.local/share/applications/ | grep -e cyberpunk -e tmodmanager   # solo io.github.t4toh.tmodmanager.desktop (+ .sh si el path necesita escape)
+   xdg-mime query default x-scheme-handler/nxm                          # io.github.t4toh.tmodmanager.desktop
+   ```
+   Click en "Mod manager download" en Nexus → tiene que abrir tModManager, no el binario viejo.
+4. **Sanity funcional.** Instalar un mod, Apply, lanzar el juego desde la app. Storage Manager abre. Descargar colección chica sin premium.
+5. **Crashes esporádicos.** Si crashea en Release: log en `~/.local/share/NexusMods.App/Logs/nexusmods.app.main.current.log` (sí, todavía va al dir de la app oficial, ver deuda abajo). Pegar el stacktrace en la próxima sesión. Si solo crashea en Debug (`./dev.sh` opción 2) y el log dice `Assertion failed`, es un `Debug.Assert`: anotar cuál.
+6. **Ventana.** Título y overlay de bienvenida dicen "tModManager". `StartupWMClass=tModManager` debería agrupar bien la ventana en el dock.
+
+### Después de probar
+
+- [ ] Reportar resultado del checklist (qué falló, logs).
+- [ ] **Desacoplar Cyberpunk del core** (ver sección Multi-juego). Rama nueva desde `main`, con CI detrás.
+
 ## ✅ Completado
 
 - [x] Descarga automatizada de colecciones (sin premium, sin browser)
@@ -44,7 +78,7 @@ Actualmente hay dos sistemas paralelos de descarga con componentes duplicados:
 - [ ] Optimización de rescan MD5 para carpetas grandes
 - [ ] Tema claro / alto contraste (solo existe `NexusFluentDark`)
 
-## 🧹 Limpieza sistemática (en curso, rama `chore/systematic-cleanup`)
+## 🧹 Limpieza sistemática (PRs #26, #27, #28 mergeados)
 
 Objetivo: codebase confiable antes de tocar features. Un PR por bloque, build + tests entre cada uno.
 
@@ -84,6 +118,7 @@ Estado al 2026-09-22:
 
 ### Otros TODO relevantes en código
 
+- `NexusMods.Sdk/LoggingSettings.cs:135` — los logs van a `~/.local/share/NexusMods.App/Logs/` (dir de la app oficial) con nombre `nexusmods.app.*.log`. Mover a `tModManager/Logs/` usando `ApplicationConstants.DataDirectoryName`; cuidar que `dev.sh`/README apunten al path nuevo
 - `NexusMods.Library/DownloadsService.cs:46` — restaurar descargas completadas desde storage al arrancar
 - `NexusMods.Networking.NexusWebApi/NexusModsLibrary.Collections.cs:239-261` — metadata de colección hardcodeada (`AdultContent`, `Summary`, `Author`)
 - `NexusMods.Networking.NexusWebApi/LoginManager.cs:303` — diálogo de "necesitás login" para operaciones
