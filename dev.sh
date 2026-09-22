@@ -143,8 +143,11 @@ build_appimage() {
         return
     fi
     echo -e "${GREEN}Generando AppImage...${NC}"
+    # Versión desde el último tag (v0.23.4 -> 0.23.4); si no hay tags queda el fallback de app.pupnet.conf
+    local app_version
+    app_version=$(git -C "$SCRIPT_DIR" describe --tags --abbrev=0 2>/dev/null | sed 's/^v//')
     pushd "$APP_DIR" > /dev/null
-    pupnet -y -k AppImage -p DefineConstants=INSTALLATION_METHOD_APPIMAGE
+    pupnet -y -k AppImage ${app_version:+--app-version "$app_version"} -p DefineConstants=INSTALLATION_METHOD_APPIMAGE
     local exit_code=$?
     popd > /dev/null
     if [[ $exit_code -eq 0 ]]; then
