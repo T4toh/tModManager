@@ -44,6 +44,27 @@ Actualmente hay dos sistemas paralelos de descarga con componentes duplicados:
 - [ ] Optimización de rescan MD5 para carpetas grandes
 - [ ] Tema claro / alto contraste (solo existe `NexusFluentDark`)
 
+## 🧹 Limpieza sistemática (en curso, rama `chore/systematic-cleanup`)
+
+Objetivo: codebase confiable antes de tocar features. Un PR por bloque, build + tests entre cada uno.
+
+- [ ] **Borrar proyectos vacíos/huérfanos del sln:** `NexusMods.Cli` (0 .cs), `NexusMods.UI` (0 .cs), `App.Generators.Diagnostics.Sample`, `src/Examples` (ejemplos upstream, nadie los referencia)
+- [ ] **Warnings a cero:** `CS0105` usings duplicados en `Sdk/Loadouts/Models/Loadout.cs`, `CS0168` en `Sdk/Games/IGameData.cs`, `NU1510` `System.Linq` en `Abstractions.Loadouts.Synchronizers.csproj`, `CS0612 Tracking` en `CollectionCreator.cs`, `CS0618` `GameInstallMetadata.Name` / `ManuallyAddedGame` (obsolete upstream; quitar `[Obsolete]` o migrar)
+- [ ] **Investigar `CS8785`:** generator `GenerateWeaveSources` (Fody) falla con `ArgumentNullException 'path2'`. Silencioso hoy, candidato a errores raros
+- [ ] **`ExperimentalSettings`:** quitar `StardewValley` de `SupportedGames`, remover `EnableCollectionSharing` (TODO GA)
+- [ ] **13 `// TODO: handle errors`:** cubrir con `IWindowNotificationService` o `ILogger` explícito (lista abajo)
+- [ ] **Actualizar CLAUDE.md:** conteo de proyectos, stubs de telemetría ya no existen
+- [ ] **Bugs runtime reales:** pendiente reproducir en Linux con juego instalado (crashes esporádicos reportados)
+
+## 🎮 Multi-juego (después de limpieza)
+
+Intento anterior falló por acoplamiento a Cyberpunk filtrado fuera de `Games.RedEngine` (~35 archivos). Orden:
+
+- [ ] **Renombrar app:** "Cyberpunk 2077 Mod Manager" ya no aplica. Candidato: **tModManager**. Implica app ID (`com.cyberpunk2077.modmanager`), data dir, `.desktop`, `metainfo.xml`, `app.pupnet.conf`. Cuidar migración de data dir existente
+- [ ] **Desacoplar Cyberpunk del core:** mover refs detrás de `IGame`. Sitios: `DataModel/Storage/StorageAnalyzer.cs`, `DataModel/DataModelSettings.cs`, `SchemaVersions/_0010_FixDeepCleanDisabledItems.cs`, `Sdk/FileExtractor/Signatures.cs`, `Abstractions.Games/SortOrder/*`, UI (`StorageManager`, `EssentialMods`, `MyGames`, `Welcome`, `ManualAddGame`, `GameWidget`), `SingleProcess/CliSettings.cs`, `App/Services.cs`, `App/Program.cs`
+- [ ] **Recuperar `Games.CreationEngine` del history upstream** como base para Skyrim SE / Fallout 4 (mismo motor). Requiere: Proton, SKSE/F4SE, `plugins.txt` load order, FOMOD (ya existe)
+- [ ] **Elegir primer juego:** Skyrim SE (más mods, más testeado) vs Fallout 4
+
 ## 🐛 Errores conocidos y deuda
 
 Estado al 2026-09-22:
