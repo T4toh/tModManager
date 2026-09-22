@@ -16,6 +16,15 @@ internal partial class LinuxInterop
 
     public async ValueTask RegisterUriSchemeHandler(string scheme, bool setAsDefaultHandler, CancellationToken cancellationToken)
     {
+        // Under the `dotnet` host (tests, `dotnet exec`, IDE runs) the process path is the host itself,
+        // so the desktop entry would end up as `Exec=/path/to/dotnet %u` and break the real handler.
+        _ = GetRunningExecutablePath(out var runningProcessPath);
+        if (Path.GetFileName(runningProcessPath) == "dotnet")
+        {
+            _logger.LogWarning("Running under the dotnet host (`{Path}`), not registering the `{Scheme}` handler. Run the apphost binary or the AppImage instead", runningProcessPath, scheme);
+            return;
+        }
+
         var canWriteDesktopFile = ApplicationConstants.InstallationMethod is InstallationMethod.AppImage or InstallationMethod.Manually;
         var canRegisterAsDefault = ApplicationConstants.InstallationMethod is not InstallationMethod.Flatpak and not InstallationMethod.PackageManager;
 
