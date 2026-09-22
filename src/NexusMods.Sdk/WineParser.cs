@@ -230,10 +230,7 @@ public static class WineParser
             var typesSpan = trimmed[(colonIdx + 1)..].Trim();
 
             // Reuse ParseEnvironmentVariable by constructing 'dllname=types'
-            Span<char> fakeEnvEntry = stackalloc char[dllName.Length + 1 + typesSpan.Length];
-            dllName.AsSpan().CopyTo(fakeEnvEntry);
-            fakeEnvEntry[dllName.Length] = '=';
-            typesSpan.CopyTo(fakeEnvEntry[(dllName.Length + 1)..]);
+            var fakeEnvEntry = string.Concat(dllName, "=", typesSpan);
 
             var parsed = ParseEnvironmentVariable(fakeEnvEntry);
             results.AddRange(parsed);

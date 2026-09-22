@@ -10,7 +10,6 @@ using NexusMods.Sdk.NexusModsApi;
 namespace NexusMods.Backend.Games.Locators;
 
 [UsedImplicitly(ImplicitUseKindFlags.InstantiatedNoFixedConstructorSignature)]
-[Obsolete("this is a hack that will be removed soon tm")]
 internal class ManuallyAddedLocator : IGameLocator
 {
     private readonly IServiceProvider _serviceProvider;

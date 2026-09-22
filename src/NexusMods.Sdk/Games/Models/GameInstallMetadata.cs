@@ -30,12 +30,10 @@ public partial class GameInstallMetadata : IModelDefinition
     /// </summary>
     public static readonly StringAttribute Path = new(Namespace, nameof(Path)) { IsIndexed = true };
 
-    // TODO: remove
     /// <summary>
     /// User friendly name for the game.
-    /// May be referred to from diagnostics, telemetry or otherwise.
+    /// May be referred to from diagnostics or otherwise.
     /// </summary>
-    [Obsolete("to be removed")]
     public static readonly StringAttribute Name = new(Namespace, nameof(Name));
 
     /// <summary>

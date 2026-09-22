@@ -27,34 +27,6 @@ public class TreeFolderGenerator<TTreeItemWithPath, TFolderModelInitializer> : I
     public IObservable<IChangeSet<CompositeItemModel<GamePath>, GamePath>> ObservableRoots() => _observableRoots;
 
     /// <summary>
-    /// A variant of <see cref="ObservableRoots"/> which returns the contents of
-    /// a single 'LocationId' when there's only one root (LocationId). Used for
-    /// better UI/UX experience.
-    ///
-    /// In simpler words, don't show the 'GAME' folder if we only have files in 'GAME'.
-    /// But if we have 'GAME' and 'SAVES', show both!
-    /// </summary>
-    [Obsolete("Not usable yet, calling this causes a double dispose error when used from the UI. This needs investigation.")]
-    public IObservable<IChangeSet<CompositeItemModel<GamePath>, GamePath>> SimplifiedObservableRoots()
-    {
-        return _observableRoots
-            .Select(_ => LocationIdToTree.Count) // tied 1:1 with root count
-            .Select(GetAdaptedChangeSet) // get either changeset with 1 root, or with all roots.
-            .Switch();
-    }
-
-    private IObservable<IChangeSet<CompositeItemModel<GamePath>, GamePath>> GetAdaptedChangeSet(int count)
-    {
-        // Return all roots
-        if (count != 1)
-            return _observableRoots;
-
-        // Else if there's only one location ID, return its children
-        var singleRoot = LocationIdToTree.Values.First();
-        return singleRoot.ObservableChildren();
-    }
-
-    /// <summary>
     /// Invoked on every file received from the caller.
     /// This adds the file to the inner tree.
     /// </summary>

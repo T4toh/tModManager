@@ -52,7 +52,7 @@ public class _0001_ConvertTimestamps : IScanningMigration
             var dt = DateTimeOffset.FromUnixTimeMilliseconds(oldTimestamp);
             return dt.UtcTicks;
         }
-        catch (ArgumentOutOfRangeException ex)
+        catch (ArgumentOutOfRangeException)
         {
             // This is a timestamp that is out of range for the DateTimeOffset class, so assume it is already in Ticks.
             return oldTimestamp;

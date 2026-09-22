@@ -28,6 +28,7 @@ public class NexusApiClient : INexusApiClient
     // Sending many parallel requests triggers Cloudflare's bot detection (HTML response instead of JSON).
     private static readonly SemaphoreSlim _curlSemaphore = new(initialCount: 1, maxCount: 1);
 
+    /// <summary>
     /// Constructor.
     /// </summary>
     public NexusApiClient(

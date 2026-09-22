@@ -8,7 +8,7 @@ namespace NexusMods.App.UI.Dialog;
 
 public class DialogViewModel: IDialogViewModel
 {
-    public event PropertyChangedEventHandler? PropertyChanged;
+    public event PropertyChangedEventHandler? PropertyChanged { add { } remove { } }
     public ViewModelActivator Activator { get; }
     public R3.ReactiveCommand<ButtonDefinitionId, ButtonDefinitionId> ButtonPressCommand { get; }
     public string WindowTitle { get; }
