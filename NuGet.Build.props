@@ -1,33 +1,6 @@
 <Project>
+    <!-- Imported by library projects. Packaging metadata from upstream was removed; we don't publish NuGet packages. -->
     <PropertyGroup>
-        <!-- Overwrites IsPackable from global Directory.Build.props -->
-        <IsPackable>true</IsPackable>
-    </PropertyGroup>
-
-    <PropertyGroup>
-        <Authors>Nexus Mods</Authors>
-
-        <PackageIcon>Nexus-Icon.png</PackageIcon>
-        <PackageLicenseExpression>GPL-3.0-only</PackageLicenseExpression>
-        <PackageRequireLicenseAcceptance>true</PackageRequireLicenseAcceptance>
-
-        <PackageProjectUrl>https://github.com/Nexus-Mods/NexusMods.App</PackageProjectUrl>
-        <RepositoryUrl>https://github.com/Nexus-Mods/NexusMods.App.git</RepositoryUrl>
-        <RepositoryType>git</RepositoryType>
-
         <GenerateDocumentationFile>true</GenerateDocumentationFile>
-
-        <IncludeSymbols>true</IncludeSymbols>
-        <SymbolPackageFormat>snupkg</SymbolPackageFormat>
-
-        <!-- https://github.com/dotnet/sourcelink/tree/main/docs#publishrepositoryurl -->
-        <PublishRepositoryUrl>true</PublishRepositoryUrl>
     </PropertyGroup>
-
-    <ItemGroup>
-        <None Include="$(MSBuildThisFileDirectory)Nexus-Icon.png">
-            <Pack>True</Pack>
-            <PackagePath>/</PackagePath>
-        </None>
-    </ItemGroup>
 </Project>
