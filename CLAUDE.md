@@ -31,6 +31,10 @@ There is no lint/format step in CI; `.globalconfig` analyzer errors (below) are 
 
 Test traits used for filtering: `RequiresNetworking`, `FlakeyTest`, `RequiresApiKey`.
 
+## Roadmap & Known Issues
+
+Pending work, technical debt, and known-error status live in `TODO.md`. Update it when finishing or adding roadmap items; the README only links to it.
+
 ## Architecture
 
 ### Solution Structure (81 projects: 51 src + 29 test + 1 benchmarks)

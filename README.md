@@ -108,49 +108,7 @@ Detecta también carpetas redundantes en mods (ej. `Cyberpunk 2077/bin/...` dupl
 
 ## 🚀 Roadmap
 
-### ✅ Completado
-
-- [x] Descarga automatizada de colecciones (sin premium, sin browser)
-- [x] Captura de enlaces NXM (protocolo independiente)
-- [x] Vista unificada de descargas
-- [x] Diagnósticos de mods esenciales (Redscript, RED4ext, CET, ArchiveXL, TweakXL, Codeware)
-- [x] Deep Clean + Storage Manager
-- [x] Remoción total de telemetría
-- [x] Rebrand a "Cyberpunk 2077 Mod Manager"
-- [x] Limpieza de código muerto (directorios vacíos, NuGet huérfanos, tiendas removidas, UI de feedback, ComingSoon, settings muertos, premium gates, páginas de debug bajo `#if DEBUG`)
-- [x] Limpieza de tests: eliminación de databases de StardewValley, corrección de migración \_0004 para tolerar juegos no registrados, fix de limpieza de carpetas vacías en el Synchronizer, actualización de snapshots Verify, limpieza de referencias a juegos removidos en test data
-
-### 🔄 Consolidación de Vistas de Descarga
-
-Actualmente hay dos sistemas paralelos de descarga con componentes duplicados:
-
-- [x] **Unificar componentes de descarga:** Extraídos `SizeProgressComponent` y `SpeedComponent` a `SharedProgressComponents.cs`, usados por ambas vistas
-- [x] **Progreso de colecciones:** Las descargas de colección ahora muestran barra de progreso real y velocidad, conectándose a `IDownloadsService.ActiveDownloads` por `FileMetadataId`
-- [x] **Agregar interface a CollectionDataProvider:** Extraída `ICollectionDataProvider` con registro DI apropiado
-- [x] **Remover página de descargas vacía:** La navegación a la página standalone de descargas fue eliminada (estaba vacía). El botón de velocidad en el spine es ahora solo informativo. Descargas activas se ordenan arriba en la vista de colección
-- [x] **Controles de descarga en colección:** Botones de pausa/resume/cancel en la columna de acciones, conectados a `IDownloadsService`
-- [x] **Auto-reordenamiento:** La lista se re-ordena automáticamente cuando una descarga termina para que la siguiente suba al tope
-- [x] **Botón "Ver página del mod":** Abre la página de Nexus Mods del mod directamente desde la vista de colección
-- [x] **IsLoading infrastructure:** Agregado `IsLoading` a `APageViewModel` con control `LoadingSection` reutilizable
-- [ ] **Refactorizar CollectionDownloadViewModel:** ~850 líneas. Extraer lógica de orquestación a un servicio separado
-- [ ] **Unificar settings de paralelismo:** `DownloadSettings.MaxParallelDownloads` solo controla descargas de colección, no las regulares
-
-### 🎨 Mejoras de UI/UX
-
-- [x] **Loading indicators:** Agregado `IsLoading` al `APageViewModel` base con control `LoadingSection` reutilizable
-- [ ] **Manejo de errores visible:** Muchos ViewModels tienen `// TODO: handle errors`. Implementar notificación al usuario vía `IWindowNotificationService` en todos los comandos async
-- [ ] **Empty states consistentes:** El control `EmptyState` existe pero no todas las páginas lo usan. Auditar y completar: MyGames sin juego, Library vacía, Loadout sin mods
-- [ ] **Accesibilidad básica:** Faltan `TabIndex`, estilos `:focus`/`:keyboard`, tooltips en botones icon-only
-- [ ] **Strings hardcodeados:** Centralizar textos en español en `Language.resx` (actualmente mezclados inline en ViewModels y AXAML)
-- [ ] **DesignViewModels rotos:** `ApplyDiffDesignViewModel` tira `NotImplementedException`; varios otros son stubs mínimos
-
-### 🔮 Features Futuras
-
-- [ ] **Eliminar .nx file store:** Reemplazar el sistema NxFileStore (herencia del modelo premium upstream) por acceso directo a los archivos descargados (.zip/.7z). Elimina la clase entera de bugs "archivos perdidos tras Deep Clean" y simplifica la validación a "¿existe el .zip?"
-- [ ] **Endorse de mods desde la app:** Botón de endorse en la UI por cada mod instalado + endorse masivo para colecciones. La API ya tiene el endpoint (`POST /v1/games/{domain}/mods/{id}/endorse.json`). Los modders se lo merecen y la app oficial nunca lo implementó
-- [ ] Soporte multi-browser para cookies (Chrome/Chromium). Ver [implementación](#agregar-soporte-para-otro-browser)
-- [ ] Optimización de rescan MD5 para carpetas grandes
-- [ ] Tema claro / alto contraste (solo existe `NexusFluentDark`)
+Pendientes, deuda técnica y estado de errores en [TODO.md](TODO.md).
 
 ## 🏗 Cómo Construir
 

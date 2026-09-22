@@ -45,3 +45,6 @@ coverage.json
 
 # dev.sh local tools (appimagetool)
 .tools/
+
+# Local build/run logs
+*.log
