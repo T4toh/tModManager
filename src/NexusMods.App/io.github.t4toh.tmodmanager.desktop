@@ -1,0 +1,15 @@
+[Desktop Entry]
+Type=Application
+Name=tModManager
+GenericName=Mod Manager
+Comment=Mod manager for Cyberpunk 2077 on Linux (Steam/Proton)
+Categories=Game
+Terminal=false
+StartupWMClass=tModManager
+MimeType=x-scheme-handler/nxm
+Icon=io.github.t4toh.tmodmanager
+Exec=${INSTALL_EXEC} %u
+TryExec=${INSTALL_TRYEXEC}
+X-AppImage-Integrate=true
+X-AppImage-Name=tModManager
+X-AppImage-Arch=x86_64

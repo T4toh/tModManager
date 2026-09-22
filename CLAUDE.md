@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Fork of NexusMods.App focused exclusively on **Cyberpunk 2077** via **Steam on Linux**. Built with C#/.NET 10 and Avalonia UI. Manages mod installation, load order, file conflicts, and game directory synchronization.
 
-The upstream repository was discontinued. This fork removed support for other games (Stardew Valley, BG3, Skyrim/Fallout, M&B Bannerlord), stores (GOG, Epic Games Store, Xbox), and platforms (Windows, macOS). The app has been rebranded as **Cyberpunk 2077 Mod Manager** (`com.cyberpunk2077.modmanager`).
+The upstream repository was discontinued. This fork removed support for other games (Stardew Valley, BG3, Skyrim/Fallout, M&B Bannerlord), stores (GOG, Epic Games Store, Xbox), and platforms (Windows, macOS). The app is named **tModManager** (app ID `io.github.t4toh.tmodmanager`, constants in `NexusMods.Sdk/ApplicationConstants.cs`). C# namespaces keep the upstream `NexusMods.*` prefix on purpose.
 
 ## Build & Run Commands
 
@@ -15,7 +15,7 @@ dotnet build                           # Build entire solution
 dotnet run --project src/NexusMods.App/NexusMods.App.csproj  # Run the app
 
 dotnet test                            # Run all tests
-dotnet test --filter "RequiresNetworking!=True&FlakeyTest!=True"  # Skip network/flakey tests (CI default)
+dotnet test --filter "RequiresNetworking!=True&FlakeyTest!=True"  # Skip network/flakey tests
 dotnet test --filter "FullyQualifiedName~SomeTestClass.SomeMethod"  # Run a single test
 dotnet test tests/Games/NexusMods.Games.RedEngine.Tests  # Run RedEngine (CP2077) tests
 
@@ -27,9 +27,9 @@ dotnet build -p:UseSystemExtractor=true  # Use system 7z for extraction
 cd src/NexusMods.App && pupnet -y -k AppImage -p DefineConstants=INSTALLATION_METHOD_APPIMAGE   # output: Deploy/OUT/
 ```
 
-There is no lint/format step in CI; `.globalconfig` analyzer errors (below) are the only enforced gate. A full build currently produces **0 compiler warnings**; keep it that way (only `NU19xx` NuGet audit warnings from transitive packages remain).
+There is no CI yet (all upstream workflows were removed; see `TODO.md`) and no lint/format step; `.globalconfig` analyzer errors (below) are the only enforced gate. A full build currently produces **0 compiler warnings**; keep it that way (only `NU19xx` NuGet audit warnings from transitive packages remain).
 
-Building on macOS: the StrawberryShake code generator ships as a net9 tool, so run `DOTNET_ROLL_FORWARD=Major dotnet build` if only the net10 runtime is installed. Most tests require Linux (`LinuxInterop` asserts `IsLinux`); on macOS only the pure-logic test projects pass. Real test verification happens in CI (ubuntu) or on a Linux box.
+Building on macOS: the StrawberryShake code generator ships as a net9 tool, so run `DOTNET_ROLL_FORWARD=Major dotnet build` if only the net10 runtime is installed. Most tests require Linux (`LinuxInterop` asserts `IsLinux`); on macOS only the pure-logic test projects pass. Real test verification happens on a Linux box until CI exists.
 
 Test traits used for filtering: `RequiresNetworking`, `FlakeyTest`, `RequiresApiKey`.
 
@@ -43,7 +43,7 @@ Pending work, technical debt, and known-error status live in `TODO.md`. Update i
 
 The solution (`NexusMods.App.sln`) is organized into layers:
 
-- **`NexusMods.App`** — Entry point. Wires up DI, starts Avalonia UI or CLI. PupNet config: `com.cyberpunk2077.modmanager`.
+- **`NexusMods.App`** — Entry point. Wires up DI, starts Avalonia UI or CLI. PupNet config: `io.github.t4toh.tmodmanager`.
 - **`NexusMods.App.UI`** — Avalonia views and ViewModels (MVVM with ReactiveUI/R3).
 - **`NexusMods.App.Cli`** — CLI commands using `[Verb]`/`[Option]`/`[Injected]` attributes.
 - **`NexusMods.Backend`** — Core services: Linux interop, file extraction, game locators (Steam + manual), `SignatureChecker` (magic bytes).
@@ -64,8 +64,8 @@ The solution (`NexusMods.App.sln`) is organized into layers:
 - **Game:** Cyberpunk 2077 (`NexusMods.Games.RedEngine`) — Steam App ID `1091500`
 - **Store:** Steam on Linux only. Game locators: `SteamLocator` + `ManuallyAddedLocator`.
 - **OS Interop:** `LinuxInterop` only (no Windows/macOS).
-- **App ID:** `com.cyberpunk2077.modmanager`
-- **Data Directory:** `~/.local/share/NexusMods.App.Cyberpunk/` (isolated from official app)
+- **App ID:** `io.github.t4toh.tmodmanager`
+- **Data Directory:** `~/.local/share/tModManager/` (isolated from official app). The pre-rename directory `NexusMods.App.Cyberpunk` is moved here once at startup (`DataModelSettings.MigrateLegacyDataDirectory`), and the old `com.cyberpunk2077.modmanager.desktop` handler is removed when the nxm handler is registered.
 - **Downloads:** Shared with official NexusMods.App to avoid re-downloads.
 
 ### Fork-Specific Features
@@ -194,5 +194,5 @@ Defined in `NexusMods.App.Cli` using attributes:
 - **Locators:** GOGLocator, EGSLocator, XboxLocator, HeroicGOGLocator, WinePrefixWrappingLocator
 - **OS interop:** WindowsInterop, MacOSInterop (only LinuxInterop remains)
 - **Telemetry:** Matomo, Mixpanel, OpenTelemetry (completely removed, empty stubs remain)
-- **CI:** `build-windows-pupnet.yaml`, `signing-test.yaml`, Windows jobs in `release.yaml`
+- **Repo config:** all upstream `.github/` workflows, issue templates, dependabot, `docs/` + mkdocs, submodules (`extern/SMAPI`, `docs/Nexus`), release/signing scripts, codecov/qodana configs, CHANGELOG, CONTRIBUTING
 - **FileHashes:** GOG/EGS model definitions, attributes, and data import logic (only Steam remains)

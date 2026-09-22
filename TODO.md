@@ -61,25 +61,18 @@ Objetivo: codebase confiable antes de tocar features. Un PR por bloque, build + 
 
 Intento anterior falló por acoplamiento a Cyberpunk filtrado fuera de `Games.RedEngine` (~35 archivos). Orden:
 
-- [ ] **Renombrar app:** "Cyberpunk 2077 Mod Manager" ya no aplica. Candidato: **tModManager**. Implica app ID (`com.cyberpunk2077.modmanager`), data dir, `.desktop`, `metainfo.xml`, `app.pupnet.conf`. Cuidar migración de data dir existente
+- [x] **Renombrar app a tModManager:** app ID `io.github.t4toh.tmodmanager`, data dir `~/.local/share/tModManager/` con migración automática desde `NexusMods.App.Cyberpunk/`, `.desktop` viejo se borra al registrar el handler nxm. Pendiente: renombrar el repo GitHub `cp2077-mm` → `tModManager` (manual, GitHub redirige)
 - [ ] **CI propio (post-rename):** GitHub Actions está deshabilitado en el repo y los workflows actuales dependen de los reusables de upstream (`Nexus-Mods/NexusMods.App.Meta`, incluyen macOS). Habilitar Actions, reemplazar `clean_environment_tests.yaml` por uno mínimo (`ubuntu-latest`, `dotnet build`, `dotnet test --filter "RequiresNetworking!=True&FlakeyTest!=True"`), borrar workflows muertos (`pr-builds`, `Publish NuGet Packages`, `Release` con firma). Hasta entonces, tests reales solo en la máquina Linux
 - [ ] **Desacoplar Cyberpunk del core:** mover refs detrás de `IGame`. Sitios: `DataModel/Storage/StorageAnalyzer.cs`, `DataModel/DataModelSettings.cs`, `SchemaVersions/_0010_FixDeepCleanDisabledItems.cs`, `Sdk/FileExtractor/Signatures.cs`, `Abstractions.Games/SortOrder/*`, UI (`StorageManager`, `EssentialMods`, `MyGames`, `Welcome`, `ManualAddGame`, `GameWidget`), `SingleProcess/CliSettings.cs`, `App/Services.cs`, `App/Program.cs`
 - [ ] **Recuperar `Games.CreationEngine` del history upstream** como base para Skyrim SE / Fallout 4 (mismo motor). Requiere: Proton, SKSE/F4SE, `plugins.txt` load order, FOMOD (ya existe)
 - [ ] **Elegir primer juego:** Skyrim SE (más mods, más testeado) vs Fallout 4
 
-## 🧬 Herencia de upstream a nivel repo (post-rename, "hacerlo nuestro")
+## 🧬 Herencia de upstream a nivel repo
 
-Inventario al 2026-09-22 de config heredada de `Nexus-Mods/NexusMods.App` que no aplica al fork:
+Hecho el 2026-09-22 (rama `feat/rename-tmodmanager`): borrados `.github/` completo (dependabot, issue templates, 17 workflows, scripts), submódulos `extern/SMAPI` y `docs/Nexus`, `docs/` + `mkdocs.yml`, `scripts/`, `codecov.yaml`, `qodana.yaml`, `CHANGELOG.md`, `CONTRIBUTING.md`, `NexusMods.App.sln.DotSettings`, `Nexus-Icon.png`, `.idea/` (untrackeado). `NuGet.Build.props` reducido a `GenerateDocumentationFile`. README con atribución a NexusMods.App (GPL-3.0). PR #25 de dependabot cerrado.
 
-- [ ] **Dependabot** (`.github/dependabot.yml`): `reviewers` apunta a `Nexus-Mods/nexusmods-app-developers` (equipo inexistente acá), cadencia semanal sin cooldown viola la regla de supply chain (versiones con ≥7 días), grupo `GameFinder*` ya no se usa. Opciones: agregar `cooldown: default-days: 7` y sacar reviewers, o borrar el archivo y actualizar a mano. Cerrar PR #25 pendiente
-- [ ] **Submódulo `extern/SMAPI`** (`.gitmodules`): es de Stardew Valley, juego removido. Borrar submódulo
-- [ ] **Submódulo `docs/Nexus`**: tema MkDocs de Nexus Mods. Borrar junto con `mkdocs.yml`, `docs/` (200 archivos upstream), workflow `mkdocs-build-and-deploy`, `docs/requirements.txt`
-- [ ] **Workflows muertos** (`.github/workflows/`): `release.yaml` (firma de código Windows), `publish-nuget-packages.yaml`, `validate-nupkgs.yaml`, `pr-builds.yaml`, `update-changelog-assets`/`validate-changelog-assets`, `update-release-file`, `validate-codecov`, `stale`, `pr-maintenance`, `issue-maintenance`, `reformat-missing-game` + `.github/scripts/reformat-missing-game.js`. Ver ítem "CI propio" arriba
-- [ ] **Issue templates** (`.github/ISSUE_TEMPLATE/`): 6 templates + `config.yml` con links a Nexus Mods. Dejar solo bug + feature request, o ninguno
-- [ ] **Scripts** (`scripts/`): `sign.ps1`, `download-codesigntool.ps1`, `validate-nupkgs.ps1`, `changelog-prepare-assets.sh`, `scripts/python`. Todo Windows/release upstream
-- [ ] **Raíz**: `codecov.yaml`, `qodana.yaml`, `CHANGELOG.md` (historial upstream hasta v0.21.1), `CONTRIBUTING.md`, `Nexus-Icon.png`, `NuGet.Build.props` (metadata de paquetes NuGet de Nexus), `NexusMods.App.sln.DotSettings`, `.idea/` (8 archivos trackeados)
-- [ ] **README.md / mkdocs.yml**: referencias a `Nexus-Mods/NexusMods.App` (1 y 3)
-- [ ] **Licencia**: revisar `LICENSE.md` (GPL-3.0 upstream) y agregar atribución al proyecto original en README al renombrar
+- [ ] **Renombrar repo GitHub** `cp2077-mm` → `tModManager` (manual; GitHub redirige). Después actualizar URLs en `metainfo.xml`, `app.pupnet.conf`, README
+- [ ] **Issue templates propios** (bug + feature) si hace falta, cuando haya CI
 
 ## 🐛 Errores conocidos y deuda
 

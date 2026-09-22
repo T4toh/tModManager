@@ -14,6 +14,31 @@ namespace NexusMods.Sdk;
 public static class ApplicationConstants
 {
     /// <summary>
+    /// Human-readable application name.
+    /// </summary>
+    public const string AppName = "tModManager";
+
+    /// <summary>
+    /// Reverse-DNS application id, used for the desktop file, AppStream metadata and the AppImage.
+    /// </summary>
+    public const string AppId = "io.github.t4toh.tmodmanager";
+
+    /// <summary>
+    /// Name of the per-user data directory (under XDG_DATA_HOME on Linux).
+    /// </summary>
+    public const string DataDirectoryName = "tModManager";
+
+    /// <summary>
+    /// Application id used before the rename to tModManager. Its desktop file is removed on startup.
+    /// </summary>
+    public const string LegacyAppId = "com.cyberpunk2077.modmanager";
+
+    /// <summary>
+    /// Data directory name used before the rename to tModManager. Migrated on startup.
+    /// </summary>
+    public const string LegacyDataDirectoryName = "NexusMods.App.Cyberpunk";
+
+    /// <summary>
     /// Whether the application is running in debug mode.
     /// </summary>
     public static readonly bool IsDebug;

@@ -1,6 +1,6 @@
 <reactiveUi:ReactiveWindow
     Icon="/Assets/nexus-logo.ico"
-    Title="Cyberpunk 2077 Mod Manager"
+    Title="tModManager"
     d:DesignHeight="450"
     d:DesignWidth="800"
     MinHeight="360"
