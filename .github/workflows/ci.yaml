@@ -31,25 +31,37 @@ jobs:
         run: dotnet restore NexusMods.App.sln
 
       - name: Build (warnings are errors)
+        id: build
         # Property form so WarningsNotAsErrors (NuGet audit) in Directory.Build.props is honoured.
         run: dotnet build NexusMods.App.sln --no-restore -p:TreatWarningsAsErrors=true
 
       - name: Test (xUnit projects)
         run: |
-          set -euo pipefail
+          set -uo pipefail
+          failed=()
           for proj in $(grep -rL '"TUnit"' --include='*.Tests.csproj' tests); do
             echo "::group::$proj"
             dotnet test "$proj" --no-build --logger GitHubActions \
               --filter "RequiresNetworking!=True&FlakeyTest!=True" \
-              --blame-hang-timeout 10m
+              --blame-hang-timeout 10m || failed+=("$proj")
             echo "::endgroup::"
           done
+          if [ ${#failed[@]} -gt 0 ]; then
+            printf '::error::Failing test projects:\n%s\n' "${failed[@]}"
+            exit 1
+          fi
 
       - name: Test (TUnit projects)
+        if: always() && steps.build.outcome == 'success'
         run: |
-          set -euo pipefail
+          set -uo pipefail
+          failed=()
           for proj in $(grep -rl '"TUnit"' --include='*.Tests.csproj' tests); do
             echo "::group::$proj"
-            dotnet run --project "$proj" --no-build
+            dotnet run --project "$proj" --no-build || failed+=("$proj")
             echo "::endgroup::"
           done
+          if [ ${#failed[@]} -gt 0 ]; then
+            printf '::error::Failing test projects:\n%s\n' "${failed[@]}"
+            exit 1
+          fi
