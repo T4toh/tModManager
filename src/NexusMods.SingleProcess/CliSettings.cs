@@ -1,4 +1,5 @@
 using Microsoft.Extensions.DependencyInjection;
+using NexusMods.Sdk;
 using NexusMods.Sdk.Settings;
 using NexusMods.Paths;
 
@@ -33,14 +34,14 @@ public class CliSettings() : ISettings
     {
         var fs = provider.GetRequiredService<IFileSystem>();
         var directory = fs.OS.MatchPlatform(
-            () => fs.GetKnownPath(KnownPath.LocalApplicationDataDirectory).Combine("NexusMods.App.Cyberpunk"),
+            () => fs.GetKnownPath(KnownPath.LocalApplicationDataDirectory).Combine(ApplicationConstants.DataDirectoryName),
             () => fs.GetKnownPath(KnownPath.XDG_RUNTIME_DIR),
-            () => fs.GetKnownPath(KnownPath.ApplicationDataDirectory).Combine("NexusMods_App_Cyberpunk")
+            () => fs.GetKnownPath(KnownPath.ApplicationDataDirectory).Combine(ApplicationConstants.DataDirectoryName)
         );
 
         return new CliSettings
         {
-            SyncFile = directory.Combine("NexusMods.App.Cyberpunk-sync_file.sync"),
+            SyncFile = directory.Combine($"{ApplicationConstants.DataDirectoryName}-sync_file.sync"),
         };
     }
 

@@ -114,8 +114,7 @@ public record DataModelSettings : ISettings
             onOSX: () => KnownPath.LocalApplicationDataDirectory
         );
 
-        // NOTE: OSX ".App" is apparently special, using _ instead of . to prevent weirdness
-        baseDirectoryName = os.IsOSX ? "NexusMods_App_Cyberpunk" : "NexusMods.App.Cyberpunk";
+        baseDirectoryName = ApplicationConstants.DataDirectoryName;
         return baseKnownPath;
     }
 }

@@ -1,6 +1,6 @@
-# Cyberpunk 2077 Mod Manager (Linux/Steam)
+# tModManager
 
-Fork especializado de [NexusMods.App](https://github.com/Nexus-Mods/NexusMods.App) para gestionar mods de **Cyberpunk 2077** en **Linux** vía **Steam (Proton)**. El proyecto upstream fue discontinuado; este fork continúa el desarrollo con foco en un solo juego y plataforma.
+Gestor de mods para **Cyberpunk 2077** en **Linux** vía **Steam (Proton)**. Nace como fork de [NexusMods.App](https://github.com/Nexus-Mods/NexusMods.App) (GPL-3.0), discontinuado por Nexus Mods; el código base y la licencia se heredan de ahí, el desarrollo sigue acá con foco en Linux. Ver [TODO.md](TODO.md) para el roadmap (incluye soporte multi-juego).
 
 ## 🎯 Objetivo
 
@@ -26,8 +26,8 @@ El Storage Manager también permite limpiar archivos `.nx`, descargas y backups 
 
 ### Aislamiento del Sistema
 
-- **App ID:** `com.cyberpunk2077.modmanager` (convive con la versión oficial)
-- **Datos:** `~/.local/share/NexusMods.App.Cyberpunk/` (DB y configuración independientes)
+- **App ID:** `io.github.t4toh.tmodmanager` (convive con la versión oficial)
+- **Datos:** `~/.local/share/tModManager/` (DB y configuración independientes). Instalaciones previas en `NexusMods.App.Cyberpunk/` se migran solas al primer arranque
 - **Descargas compartidas:** Comparte carpeta de descargas con la versión oficial para no duplicar archivos
 - **Protocolo NXM:** Handler independiente para captura de enlaces `nxm://`
 

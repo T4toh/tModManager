@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Fork of NexusMods.App focused exclusively on **Cyberpunk 2077** via **Steam on Linux**. Built with C#/.NET 10 and Avalonia UI. Manages mod installation, load order, file conflicts, and game directory synchronization.
 
-The upstream repository was discontinued. This fork removed support for other games (Stardew Valley, BG3, Skyrim/Fallout, M&B Bannerlord), stores (GOG, Epic Games Store, Xbox), and platforms (Windows, macOS). The app has been rebranded as **Cyberpunk 2077 Mod Manager** (`com.cyberpunk2077.modmanager`).
+The upstream repository was discontinued. This fork removed support for other games (Stardew Valley, BG3, Skyrim/Fallout, M&B Bannerlord), stores (GOG, Epic Games Store, Xbox), and platforms (Windows, macOS). The app is named **tModManager** (app ID `io.github.t4toh.tmodmanager`, constants in `NexusMods.Sdk/ApplicationConstants.cs`). C# namespaces keep the upstream `NexusMods.*` prefix on purpose.
 
 ## Build & Run Commands
 
@@ -43,7 +43,7 @@ Pending work, technical debt, and known-error status live in `TODO.md`. Update i
 
 The solution (`NexusMods.App.sln`) is organized into layers:
 
-- **`NexusMods.App`** — Entry point. Wires up DI, starts Avalonia UI or CLI. PupNet config: `com.cyberpunk2077.modmanager`.
+- **`NexusMods.App`** — Entry point. Wires up DI, starts Avalonia UI or CLI. PupNet config: `io.github.t4toh.tmodmanager`.
 - **`NexusMods.App.UI`** — Avalonia views and ViewModels (MVVM with ReactiveUI/R3).
 - **`NexusMods.App.Cli`** — CLI commands using `[Verb]`/`[Option]`/`[Injected]` attributes.
 - **`NexusMods.Backend`** — Core services: Linux interop, file extraction, game locators (Steam + manual), `SignatureChecker` (magic bytes).
@@ -64,8 +64,8 @@ The solution (`NexusMods.App.sln`) is organized into layers:
 - **Game:** Cyberpunk 2077 (`NexusMods.Games.RedEngine`) — Steam App ID `1091500`
 - **Store:** Steam on Linux only. Game locators: `SteamLocator` + `ManuallyAddedLocator`.
 - **OS Interop:** `LinuxInterop` only (no Windows/macOS).
-- **App ID:** `com.cyberpunk2077.modmanager`
-- **Data Directory:** `~/.local/share/NexusMods.App.Cyberpunk/` (isolated from official app)
+- **App ID:** `io.github.t4toh.tmodmanager`
+- **Data Directory:** `~/.local/share/tModManager/` (isolated from official app). The pre-rename directory `NexusMods.App.Cyberpunk` is moved here once at startup (`DataModelSettings.MigrateLegacyDataDirectory`), and the old `com.cyberpunk2077.modmanager.desktop` handler is removed when the nxm handler is registered.
 - **Downloads:** Shared with official NexusMods.App to avoid re-downloads.
 
 ### Fork-Specific Features

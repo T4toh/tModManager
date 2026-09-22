@@ -1,9 +1,9 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
     <PropertyGroup>
         <!-- Target WinExe so that a console isn't automatically created on Windows -->
         <OutputType>WinExe</OutputType>
         <ApplicationIcon>icon.ico</ApplicationIcon>
-        <AssemblyName>Cyberpunk2077.Mod.Manager</AssemblyName>
+        <AssemblyName>tModManager</AssemblyName>
     </PropertyGroup>
 
     <PropertyGroup Condition=" '$(Configuration)' == 'Release' ">
@@ -54,17 +54,14 @@
     </ItemGroup>
 
     <ItemGroup>
-        <None Update="com.nexusmods.app.cyberpunk.desktop">
+        <None Update="io.github.t4toh.tmodmanager.desktop">
             <DependentUpon>app.pupnet.conf</DependentUpon>
         </None>
-        <None Update="com.nexusmods.app.cyberpunk.metainfo.xml">
+        <None Update="io.github.t4toh.tmodmanager.metainfo.xml">
             <DependentUpon>app.pupnet.conf</DependentUpon>
         </None>
         <None Update="icon.svg">
             <DependentUpon>app.pupnet.conf</DependentUpon>
-        </None>
-        <None Update="com.nexusmods.app.cyberpunk.releases.xml">
-          <DependentUpon>app.pupnet.conf</DependentUpon>
         </None>
     </ItemGroup>
 

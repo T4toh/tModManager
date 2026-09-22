@@ -36,6 +36,24 @@ public class Program
 {
     private static ILogger<Program> _logger = default!;
 
+    /// <summary>
+    /// One-time move of the pre-rename data directory. Runs before settings are read because they live inside it.
+    /// </summary>
+    private static void MigrateLegacyDataDirectory()
+    {
+        try
+        {
+            var fs = FileSystem.Shared;
+            var basePath = fs.GetKnownPath(fs.OS.IsLinux ? KnownPath.XDG_DATA_HOME : KnownPath.LocalApplicationDataDirectory);
+            if (DataDirectoryMigration.MigrateLegacyDataDirectory(basePath))
+                Console.Error.WriteLine($"Migrated data directory to {basePath.Combine(ApplicationConstants.DataDirectoryName)}");
+        }
+        catch (Exception e)
+        {
+            Console.Error.WriteLine($"Failed to migrate legacy data directory: {e}");
+        }
+    }
+
     [STAThread]
     public static int Main(string[] args)
     {
@@ -44,6 +62,8 @@ public class Program
             ConsoleHelper.EnsureConsole();
 
         MainThreadData.SetMainThread();
+
+        MigrateLegacyDataDirectory();
 
         LoggingSettings loggingSettings;
         ExperimentalSettings experimentalSettings;
@@ -332,7 +352,7 @@ public class Program
         var config = new NLog.Config.LoggingConfiguration();
 
         const string defaultLayout = "${processtime} [${level:uppercase=true}] (${logger}) ${message:withexception=true}";
-        const string defaultHeader = "############ Cyberpunk 2077 Mod Manager log file - ${longdate} ############";
+        const string defaultHeader = "############ " + ApplicationConstants.AppName + " log file - ${longdate} ############";
 
         FileTarget fileTarget;
         if (startupMode.RunAsMain)

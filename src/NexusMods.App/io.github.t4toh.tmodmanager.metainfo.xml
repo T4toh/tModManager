@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+    <!-- See https://www.freedesktop.org/software/appstream/docs/chap-Metadata.html#spec-component-filespec -->
+
+    <id>io.github.t4toh.tmodmanager</id>
+    <metadata_license>CC0-1.0</metadata_license>
+    <project_license>GPL-3.0-only</project_license>
+
+    <name>tModManager</name>
+    <summary>Mod manager for Cyberpunk 2077 on Linux (Steam/Proton)</summary>
+
+    <developer id="io.github.t4toh">
+        <name>Tatoh</name>
+    </developer>
+
+    <description>
+        <p>Mod manager for Cyberpunk 2077 on Linux, running the game through Steam/Proton. Based on the discontinued Nexus Mods App (GPL-3.0).</p>
+    </description>
+
+    <branding>
+        <color type="primary" scheme_preference="light">#fafafa</color>
+        <color type="primary" scheme_preference="dark">#1d1d21</color>
+    </branding>
+
+    <launchable type="desktop-id">io.github.t4toh.tmodmanager.desktop</launchable>
+
+    <url type="homepage">https://github.com/T4toh/cp2077-mm</url>
+    <url type="bugtracker">https://github.com/T4toh/cp2077-mm/issues</url>
+    <url type="vcs-browser">https://github.com/T4toh/cp2077-mm</url>
+
+    <content_rating type="oars-1.0">
+        <content_attribute id="social-info">intense</content_attribute>
+    </content_rating>
+
+    <categories>
+        <category>Game</category>
+    </categories>
+
+    <recommends>
+        <memory>1024</memory>
+        <internet>always</internet>
+        <display_length compare="ge">360</display_length>
+        <id version="1.0" compare="ge">com.valvesoftware.Steam</id>
+    </recommends>
+
+    <releases type="external"/>
+
+</component>

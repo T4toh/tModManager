@@ -8,7 +8,7 @@ namespace NexusMods.Backend.OS;
 
 internal partial class LinuxInterop
 {
-    private const string ApplicationId = "com.cyberpunk2077.modmanager";
+    private const string ApplicationId = ApplicationConstants.AppId;
     private const string DesktopFile = $"{ApplicationId}.desktop";
     private const string DesktopFileResourceName = $"NexusMods.Backend.{DesktopFile}";
     private const string ExecuteParameterPlaceholder = "${INSTALL_EXEC}";
@@ -33,6 +33,8 @@ internal partial class LinuxInterop
                 _logger.LogError(e, "Exception while creating desktop file, the handler for `{Scheme}` might not work", scheme);
                 return;
             }
+
+            RemoveLegacyDesktopFiles(applicationsDirectory);
 
             try
             {
@@ -108,6 +110,29 @@ internal partial class LinuxInterop
         text = text.Replace(TryExecuteParameterPlaceholder, EscapeDesktopFilePath(processPath));
         
         await filePath.WriteAllTextAsync(text, cancellationToken);
+    }
+
+    /// <summary>
+    /// Removes the desktop file and wrapper script registered under the pre-rename application id,
+    /// so only one nxm:// handler remains.
+    /// </summary>
+    private void RemoveLegacyDesktopFiles(AbsolutePath applicationsDirectory)
+    {
+        foreach (var name in new[] { $"{ApplicationConstants.LegacyAppId}.desktop", $"{ApplicationConstants.LegacyAppId}.sh" })
+        {
+            var path = applicationsDirectory.Combine(name);
+            if (!path.FileExists) continue;
+
+            _logger.LogInformation("Removing legacy desktop file `{Path}`", path);
+            try
+            {
+                path.Delete();
+            }
+            catch (Exception e)
+            {
+                _logger.LogWarning(e, "Failed to remove legacy desktop file `{Path}`", path);
+            }
+        }
     }
 
     private async Task<string> CreateWrapperScriptIfNeeded(AbsolutePath applicationsDirectory, string executablePath, CancellationToken cancellationToken = default)
