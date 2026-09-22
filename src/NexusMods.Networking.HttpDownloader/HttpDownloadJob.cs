@@ -115,6 +115,8 @@ public record HttpDownloadJob : IJobDefinitionWithStart<HttpDownloadJob, Absolut
         await FetchMetadata(context);
 
         await context.YieldAsync();
+        // The temp folder can vanish underneath us (cleanup verb, TemporaryFileManager dispose in another process)
+        Destination.Parent.CreateDirectory();
         await using var fileStream = Destination.Open(FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.Read);
 
         fileStream.Position = (long)_state.TotalBytesDownloaded.Value;

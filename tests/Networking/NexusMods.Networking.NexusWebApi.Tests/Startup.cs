@@ -15,6 +15,7 @@ using NexusMods.Sdk;
 using NexusMods.Sdk.Library;
 using NexusMods.Sdk.Settings;
 using Xunit.DependencyInjection.Logging;
+using NexusMods.Sdk.FileExtractor;
 
 namespace NexusMods.Networking.NexusWebApi.Tests;
 
@@ -39,6 +40,11 @@ public class Startup
             .AddLibrary()
             .AddLibraryModels()
             .AddFileExtractors()
+            // Keep the temp folder out of the user's real XDG_STATE_HOME: TemporaryFileManager deletes it on dispose
+            .OverrideSettingsForTests<FileExtractorSettings>(settings => settings with
+            {
+                TempFolderLocation = new ConfigurablePath(KnownPath.EntryDirectory, $"Temp-{Guid.NewGuid()}"),
+            })
             .AddFileHashes()
             .AddDataModel() // this is required because we're also using NMA integration
             .OverrideSettingsForTests<DataModelSettings>(settings => settings with

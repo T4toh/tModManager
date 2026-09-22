@@ -37,6 +37,7 @@ using NexusMods.StandardGameLocators.TestHelpers;
 using NSubstitute;
 using Xunit.Abstractions;
 using Xunit.DependencyInjection;
+using NexusMods.Sdk.FileExtractor;
 
 namespace NexusMods.DataModel.SchemaVersions.Tests;
 
@@ -83,6 +84,11 @@ public abstract class ALegacyDatabaseTest
             .AddRedEngineGames()
             .AddLoadoutAbstractions()
             .AddFileExtractors()
+            // Keep the temp folder out of the user's real XDG_STATE_HOME: TemporaryFileManager deletes it on dispose
+            .OverrideSettingsForTests<FileExtractorSettings>(settings => settings with
+            {
+                TempFolderLocation = new ConfigurablePath(KnownPath.EntryDirectory, $"Temp-{Guid.NewGuid()}"),
+            })
             .AddNexusModsCollections()
             .OverrideSettingsForTests<FileHashesServiceSettings>(settings => settings with
             {

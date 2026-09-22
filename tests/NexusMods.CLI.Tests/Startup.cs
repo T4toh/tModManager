@@ -20,6 +20,7 @@ using NexusMods.SingleProcess;
 using NexusMods.StandardGameLocators;
 using NexusMods.StandardGameLocators.TestHelpers;
 using Xunit.DependencyInjection.Logging;
+using NexusMods.Sdk.FileExtractor;
 
 namespace NexusMods.CLI.Tests;
 
@@ -47,6 +48,11 @@ public class Startup
                     ],
                 })
                 .AddFileExtractors()
+                // Keep the temp folder out of the user's real XDG_STATE_HOME: TemporaryFileManager deletes it on dispose
+                .OverrideSettingsForTests<FileExtractorSettings>(settings => settings with
+                {
+                    TempFolderLocation = new ConfigurablePath(KnownPath.EntryDirectory, $"Temp-{Guid.NewGuid()}"),
+                })
                 .AddFileHashes()
                 .AddCLI()
                 .AddHttpDownloader()
