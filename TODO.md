@@ -71,6 +71,8 @@ Actualmente hay dos sistemas paralelos de descarga con componentes duplicados:
 
 ## 🎨 Mejoras de UI/UX
 
+- [ ] **Botón "Borrar prefix de Proton"** en Storage Manager, junto al Deep Clean: borra `steamapps/compatdata/1091500/` (Steam lo recrea al lanzar). Con confirmación: se pierden saves no sincronizados con la nube y toda la config del prefix. Pedido 2026-09-22
+
 - [x] **Loading indicators:** Agregado `IsLoading` al `APageViewModel` base con control `LoadingSection` reutilizable
 - [ ] **Manejo de errores visible:** Muchos ViewModels tienen `// TODO: handle errors`. Implementar notificación al usuario vía `IWindowNotificationService` en todos los comandos async
 - [ ] **Empty states consistentes:** El control `EmptyState` existe pero no todas las páginas lo usan. Auditar y completar: MyGames sin juego, Library vacía, Loadout sin mods
