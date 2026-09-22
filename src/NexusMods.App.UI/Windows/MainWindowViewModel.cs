@@ -155,16 +155,19 @@ public class MainWindowViewModel : AViewModel<IMainWindowViewModel>, IMainWindow
                     var workspaceController = self.WorkspaceController;
 
                     var tuple = self.GetWorkspaceIdForGame(workspaceController, message.Revision.Collection.GameId);
-                    if (!tuple.HasValue) return;
 
-                    var (loadoutId, workspaceId) = tuple.Value;
+                    // Without a managed game there is no loadout: open the page in Home so the mods can be
+                    // downloaded now; the Install buttons stay disabled until the game is added.
+                    var workspaceId = tuple.HasValue
+                        ? tuple.Value.Item2
+                        : workspaceController.ChangeOrCreateWorkspaceByContext<HomeContext>(() => Optional<PageData>.None).Id;
 
                     var pageData = new PageData
                     {
                         FactoryId = CollectionDownloadPageFactory.StaticId,
                         Context = new CollectionDownloadPageContext
                         {
-                            TargetLoadout = loadoutId,
+                            TargetLoadout = tuple.HasValue ? tuple.Value.Item1 : Optional<LoadoutId>.None,
                             CollectionRevisionMetadataId = message.Revision,
                         },
                     };
@@ -172,10 +175,20 @@ public class MainWindowViewModel : AViewModel<IMainWindowViewModel>, IMainWindow
                     var behavior = workspaceController.GetDefaultOpenPageBehavior(pageData, NavigationInput.Default);
                     workspaceController.OpenPage(workspaceId, pageData, behavior);
 
-                    self._notificationService.ShowToast(
-                        string.Format(Language.ToastNotification_Adding_collection____0_, message.Revision.Collection.Name),
-                        ToastNotificationVariant.Success
-                    );
+                    if (tuple.HasValue)
+                    {
+                        self._notificationService.ShowToast(
+                            string.Format(Language.ToastNotification_Adding_collection____0_, message.Revision.Collection.Name),
+                            ToastNotificationVariant.Success
+                        );
+                    }
+                    else
+                    {
+                        self._notificationService.ShowToast(
+                            $"Collection added - {message.Revision.Collection.Name}. You can download its mods now; add the game in My Games to install them.",
+                            ToastNotificationVariant.Neutral
+                        );
+                    }
                 })
                 .DisposeWith(d);
             
