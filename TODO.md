@@ -4,9 +4,12 @@
 
 Mergeado hoy en `main`: limpieza (0 warnings), rename a **tModManager**, repo `T4toh/tModManager`, herencia upstream borrada, CI verde en ubuntu (1175 xUnit + 94 TUnit).
 
-Primera tarde en Linux con la app real (2026-09-22), 6 PRs (#30-#36): login OAuth y colección funcionan sin juego manejado. Fixes: `GameLocatorSettings` vacío (#31), tests pisando `.desktop` (#32) y `Temp/` (#33), metadata sin juego manejado + modal de excepciones solo en Debug (#34), página de colección sin loadout para bajar antes de tener el juego (#35), watchdog de descargas colgadas (#36). **Siguiente: checklist paso 4 con el juego bajado (manejar, instalar colección, apply), después desacoplar Cyberpunk del core.**
+Primera tarde en Linux con la app real (2026-09-22), 6 PRs (#30-#36): login OAuth y colección funcionan sin juego manejado. Fixes: `GameLocatorSettings` vacío (#31), tests pisando `.desktop` (#32) y `Temp/` (#33), metadata sin juego manejado + modal de excepciones solo en Debug (#34), página de colección sin loadout para bajar antes de tener el juego (#35), watchdog de descargas colgadas (#36). **Checklist completo, el juego corre modeado desde la app. Siguiente: desacoplar Cyberpunk del core.**
 
 ### Checklist de prueba en Linux
+
+**Completado el 2026-09-22 con el juego real:** build Release, login OAuth, handler nxm, manejar juego (primer sync borró 14 restos de mods con backup), instalar colección "Welcome to Night City 2.31a" (283 mods, 1757 archivos, 0 sin mapear, `SimpleOverlayModInstaller` para todo), Apply (1913 archivos en 1,8 s, 0 errores), lanzar el juego desde la app: Redscript/CET/RED4ext sin errores, jugable. Pasos 1-6 abajo quedan como referencia para la próxima máquina.
+
 
 Antes de arrancar: backup de `~/.local/share/NexusMods.App.Cyberpunk/` (la migración hace `mv`, no copia).
 
@@ -130,8 +133,8 @@ Estado al 2026-09-22:
 
 Encontrado el 2026-09-22 con el juego real (instalación anterior modeada, restaurada por Steam con solo 20 MB de descarga):
 
-- [ ] **Deep Clean no cubre todo.** Restos que quedaron tras un Deep Clean previo y hubo que mover a mano (`~/.local/share/NexusMods.App/CyberpunkBackups/manual_*`): 108 archivos sueltos en la raíz del juego (readmes e "item codes" que un instalador folderless dejó ahí), `r6/audioware/` (100 MB), `r6/input/` (XMLs de input_loader), `r6/config/cybercmd/`, `r6/config/redsUserHints/`, `r6/publishing/`, `r6/logs/`. Agregar esas rutas a `CyberpunkDeepCleanTool` y, para la raíz, mover todo archivo que no sea vanilla (`launcher-configuration.json`, `REDprelauncher.exe`, `REDlauncher-*.msi`, `*.dll`)
-- [ ] **Instaladores dejan readmes en la raíz del juego.** Los 108 `.txt/.png/.jpg` de arriba son documentación de mods deployada como archivo de juego. Vortex los manda a una carpeta aparte (`SpecialExtraFiles`); nosotros deberíamos ignorarlos o no deployarlos
+- [ ] **Deep Clean no cubre todo.** Restos que quedaron tras un Deep Clean previo y hubo que mover a mano (`~/.local/share/NexusMods.App/CyberpunkBackups/manual_*`): 108 archivos sueltos en la raíz del juego (readmes e "item codes" que un instalador folderless dejó ahí), `r6/audioware/` (100 MB), `r6/input/` (XMLs de input_loader), `r6/config/cybercmd/`, `r6/config/redsUserHints/`, `r6/publishing/`, `r6/logs/`. Agregar esas rutas a `CyberpunkDeepCleanTool` y, para la raíz, mover todo archivo que no sea vanilla (`launcher-configuration.json`, `REDprelauncher.exe`, `REDlauncher-*.msi`, `*.dll`). El primer sync de Manage encontró 14 más que tampoco cubre: INIs de mods en `engine/config/platform/pc/` (`AllowHighestAILOD.ini`, `BabyDriverV2.ini`, `input_loader.ini`), `engine/config/base/scripts.ini`, `r6/cache/final.redscripts.*`, `r6/cache/input*.xml`, `tools/redmod/tweaks/**/devices.tweak` (tweak de mod en carpeta vanilla), `bin/x64/CyberPunk.bat`
+- [ ] **Instaladores dejan readmes en la raíz del juego.** Los 108 `.txt/.png/.jpg` de arriba son documentación de mods deployada como archivo de juego. Vortex los manda a una carpeta aparte (`SpecialExtraFiles`); nosotros deberíamos ignorarlos o no deployarlos. Confirmado con la colección real: Apply dejó 4 readmes en la raíz (`FlatlinedExit_readme.txt`, `ItemRecordsFixes_readme.txt`, `Slaughtomatic_*_readme.txt`)
 - [ ] **Tests no deben tocar estado real del usuario.** Ya pasó dos veces (`.desktop` en #32, `Temp/` en #33). Revisar el resto de `AddDefaultServicesForTesting` + `AddOSInterop` real: `xdg-settings set` sigue corriendo en tests
 
 ### Otros TODO relevantes en código
