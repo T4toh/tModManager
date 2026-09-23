@@ -74,6 +74,9 @@ Actualmente hay dos sistemas paralelos de descarga con componentes duplicados:
 
 ## 🎨 Mejoras de UI/UX
 
+- [ ] **Tema "cueva": negro + violeta/índigo.** Reemplazar la paleta naranja/gris de Nexus por fondo negro y acentos violeta/índigo. Colores en `src/NexusMods.Themes.NexusFluentDark/Resources/` (src/NexusMods.Themes.NexusFluentDark/Resources/Palette/Colors/BrandColors.axaml src/NexusMods.Themes.NexusFluentDark/Resources/Palette/Colors/ElementColors.axaml ); los controles referencian brushes con nombre, así que es cambiar la paleta, no los controles. Pedido 2026-09-22
+- [ ] **Ícono nuevo** para reemplazar `src/NexusMods.App/icon.svg` e `icon.ico` (heredados de Nexus). Base: el de tWriter, `~/Repos/tWriter/src/assets/icon.png` (también `src-tauri/icons/*.png` en varios tamaños). Misma línea visual que el tema cueva. Actualizar también `io.github.t4toh.tmodmanager.metainfo.xml` si cambia el nombre del ícono. Pedido 2026-09-22
+
 - [ ] **Botón "Borrar prefix de Proton"** en Storage Manager, junto al Deep Clean: borra `steamapps/compatdata/1091500/` (Steam lo recrea al lanzar). Con confirmación: se pierden saves no sincronizados con la nube y toda la config del prefix. Pedido 2026-09-22
 
 - [x] **Loading indicators:** Agregado `IsLoading` al `APageViewModel` base con control `LoadingSection` reutilizable
