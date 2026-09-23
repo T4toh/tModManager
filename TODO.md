@@ -2,9 +2,14 @@
 
 ## 📍 Estado y próximos pasos (2026-09-22)
 
-Mergeado hoy en `main`: limpieza (0 warnings), rename a **tModManager**, repo `T4toh/tModManager`, herencia upstream borrada, CI verde en ubuntu (1175 xUnit + 94 TUnit). Nada de esto se probó todavía con el juego: **primero probar en Linux, después seguir con desacoplar Cyberpunk del core.**
+Mergeado hoy en `main`: limpieza (0 warnings), rename a **tModManager**, repo `T4toh/tModManager`, herencia upstream borrada, CI verde en ubuntu (1175 xUnit + 94 TUnit).
+
+Primera tarde en Linux con la app real (2026-09-22), 6 PRs (#30-#36): login OAuth y colección funcionan sin juego manejado. Fixes: `GameLocatorSettings` vacío (#31), tests pisando `.desktop` (#32) y `Temp/` (#33), metadata sin juego manejado + modal de excepciones solo en Debug (#34), página de colección sin loadout para bajar antes de tener el juego (#35), watchdog de descargas colgadas (#36). **Checklist completo, el juego corre modeado desde la app. Siguiente: desacoplar Cyberpunk del core.**
 
 ### Checklist de prueba en Linux
+
+**Completado el 2026-09-22 con el juego real:** build Release, login OAuth, handler nxm, manejar juego (primer sync borró 14 restos de mods con backup), instalar colección "Welcome to Night City 2.31a" (283 mods, 1757 archivos, 0 sin mapear, `SimpleOverlayModInstaller` para todo), Apply (1913 archivos en 1,8 s, 0 errores), lanzar el juego desde la app: Redscript/CET/RED4ext sin errores, jugable. Pasos 1-6 abajo quedan como referencia para la próxima máquina.
+
 
 Antes de arrancar: backup de `~/.local/share/NexusMods.App.Cyberpunk/` (la migración hace `mv`, no copia).
 
@@ -69,6 +74,8 @@ Actualmente hay dos sistemas paralelos de descarga con componentes duplicados:
 
 ## 🎨 Mejoras de UI/UX
 
+- [ ] **Botón "Borrar prefix de Proton"** en Storage Manager, junto al Deep Clean: borra `steamapps/compatdata/1091500/` (Steam lo recrea al lanzar). Con confirmación: se pierden saves no sincronizados con la nube y toda la config del prefix. Pedido 2026-09-22
+
 - [x] **Loading indicators:** Agregado `IsLoading` al `APageViewModel` base con control `LoadingSection` reutilizable
 - [ ] **Manejo de errores visible:** Muchos ViewModels tienen `// TODO: handle errors`. Implementar notificación al usuario vía `IWindowNotificationService` en todos los comandos async
 - [ ] **Empty states consistentes:** El control `EmptyState` existe pero no todas las páginas lo usan. Auditar y completar: MyGames sin juego, Library vacía, Loadout sin mods
@@ -106,6 +113,7 @@ Intento anterior falló por acoplamiento a Cyberpunk filtrado fuera de `Games.Re
 - [ ] **Desacoplar Cyberpunk del core:** mover refs detrás de `IGame`. Sitios: `DataModel/Storage/StorageAnalyzer.cs`, `DataModel/DataModelSettings.cs`, `SchemaVersions/_0010_FixDeepCleanDisabledItems.cs`, `Sdk/FileExtractor/Signatures.cs`, `Abstractions.Games/SortOrder/*`, UI (`StorageManager`, `EssentialMods`, `MyGames`, `Welcome`, `ManualAddGame`, `GameWidget`), `SingleProcess/CliSettings.cs`, `App/Services.cs`, `App/Program.cs`
 - [ ] **Recuperar `Games.CreationEngine` del history upstream** como base para Skyrim SE / Fallout 4 (mismo motor). Requiere: Proton, SKSE/F4SE, `plugins.txt` load order, FOMOD (ya existe)
 - [ ] **Elegir primer juego:** Skyrim SE (más mods, más testeado) vs Fallout 4
+- [ ] **Referencia Vortex:** `Nexus-Mods/vortex-games` (GPL-3) tiene una carpeta `game-*` por juego (100+) con las reglas de layout/instalación de cada uno; la de Cyberpunk es `E1337Kat/cyberpunk2077_ext_redux` (~25 tipos de layout vs nuestros 4 instaladores). No es código portable (TypeScript/Electron/Windows), son reglas a leer. Para CP2077 sirven: layouts "arreglables" (`.archive` suelto → `archive/pc/mod/`, Redscript sin subcarpeta → `r6/scripts/<mod>/`, DLL suelta → `red4ext/plugins/<mod>/`, REDmod sin `mods/`), mods envueltos en carpeta extra, archivos protegidos (`inputContexts.xml`, `inputUserMappings.xml`, `options.json`) con confirmación, core mods por versión (RED4ext `winmm.dll` vs `d3d11.dll`), CET exige `init.lua`
 
 ## 🧬 Herencia de upstream a nivel repo
 
@@ -122,6 +130,12 @@ Estado al 2026-09-22:
 - **Issues abiertos en GitHub:** 0
 - **Build:** 0 errores, 0 warnings de compilador (solo `NU19xx` de auditoría NuGet, ver arriba)
 - **Comentarios `TODO`/`FIXME` en `src/`:** 99
+
+Encontrado el 2026-09-22 con el juego real (instalación anterior modeada, restaurada por Steam con solo 20 MB de descarga):
+
+- [ ] **Deep Clean no cubre todo.** Restos que quedaron tras un Deep Clean previo y hubo que mover a mano (`~/.local/share/NexusMods.App/CyberpunkBackups/manual_*`): 108 archivos sueltos en la raíz del juego (readmes e "item codes" que un instalador folderless dejó ahí), `r6/audioware/` (100 MB), `r6/input/` (XMLs de input_loader), `r6/config/cybercmd/`, `r6/config/redsUserHints/`, `r6/publishing/`, `r6/logs/`. Agregar esas rutas a `CyberpunkDeepCleanTool` y, para la raíz, mover todo archivo que no sea vanilla (`launcher-configuration.json`, `REDprelauncher.exe`, `REDlauncher-*.msi`, `*.dll`). El primer sync de Manage encontró 14 más que tampoco cubre: INIs de mods en `engine/config/platform/pc/` (`AllowHighestAILOD.ini`, `BabyDriverV2.ini`, `input_loader.ini`), `engine/config/base/scripts.ini`, `r6/cache/final.redscripts.*`, `r6/cache/input*.xml`, `tools/redmod/tweaks/**/devices.tweak` (tweak de mod en carpeta vanilla), `bin/x64/CyberPunk.bat`
+- [ ] **Instaladores dejan readmes en la raíz del juego.** Los 108 `.txt/.png/.jpg` de arriba son documentación de mods deployada como archivo de juego. Vortex los manda a una carpeta aparte (`SpecialExtraFiles`); nosotros deberíamos ignorarlos o no deployarlos. Confirmado con la colección real: Apply dejó 4 readmes en la raíz (`FlatlinedExit_readme.txt`, `ItemRecordsFixes_readme.txt`, `Slaughtomatic_*_readme.txt`)
+- [ ] **Tests no deben tocar estado real del usuario.** Ya pasó dos veces (`.desktop` en #32, `Temp/` en #33). Revisar el resto de `AddDefaultServicesForTesting` + `AddOSInterop` real: `xdg-settings set` sigue corriendo en tests
 
 ### Otros TODO relevantes en código
 
