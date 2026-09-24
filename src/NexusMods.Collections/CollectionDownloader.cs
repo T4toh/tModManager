@@ -765,8 +765,8 @@ public class CollectionDownloader
         _logger.LogInformation("Starting rescan of Downloads folder for collection `{CollectionName}`", revision.Collection.Name);
         
         var fs = _serviceProvider.GetRequiredService<IFileSystem>();
-        var downloadsFolder = GetDownloadsFolder(fs);
-        if (!downloadsFolder.DirectoryExists()) 
+        var downloadsFolder = _serviceProvider.GetRequiredService<ISettingsManager>().Get<DownloadsSettings>().Folder.ToPath(fs);
+        if (!downloadsFolder.DirectoryExists())
         {
             _logger.LogWarning("Downloads folder does not exist: `{Path}`", downloadsFolder);
             return;
@@ -914,18 +914,6 @@ public class CollectionDownloader
             return string.Empty;
         }
         catch { return string.Empty; }
-    }
-
-    private static AbsolutePath GetDownloadsFolder(IFileSystem fs)
-    {
-        var basePath = fs.OS.MatchPlatform(
-            onWindows: () => KnownPath.LocalApplicationDataDirectory,
-            onLinux: () => KnownPath.XDG_DATA_HOME,
-            onOSX: () => KnownPath.LocalApplicationDataDirectory
-        );
-
-        var dirName = fs.OS.IsOSX ? "NexusMods_App" : "NexusMods.App";
-        return fs.GetKnownPath(basePath).Combine(dirName).Combine("Downloads");
     }
 
     /// <summary>
