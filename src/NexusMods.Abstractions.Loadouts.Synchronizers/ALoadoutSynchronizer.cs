@@ -442,20 +442,31 @@ public partial class ALoadoutSynchronizer : ILoadoutSynchronizer
     }
 
     /// <summary>
-    /// Re-extracts, from the original downloads, any loadout file whose hash is no longer in the file store.
+    /// Re-extracts, from the original downloads, any loadout file that still needs to be extracted to disk
+    /// (i.e. not already deployed with a matching hash) whose hash is no longer in the file store.
     /// Must run before <see cref="ProcessSyncTree"/> builds signatures, otherwise a missing archive is
     /// reported as unable to extract instead of being scheduled for extraction.
     /// </summary>
-    private async Task RestoreMissingArchives(Dictionary<GamePath, SyncNode> tree)
+    /// <remarks>
+    /// Only considers <see cref="LoadoutSourceItemType.Loadout"/> nodes that are not already deployed
+    /// (disk hash differs from, or is absent for, the loadout hash): already-deployed nodes map to
+    /// <see cref="Actions.DoNothing"/> and don't need the archive, and game files are rarely archived
+    /// in the store, so checking them here would restore nothing on every sync.
+    /// </remarks>
+    private async Task RestoreMissingArchives(Dictionary<GamePath, SyncNode> tree, SynchronizeLoadoutJob? job = null, CancellationToken ct = default)
     {
         var missing = tree.Values
-            .Where(node => node.HaveLoadout && !_fileStore.HaveFile(node.Loadout.Hash).Result)
+            .Where(node => node.HaveLoadout
+                && node.SourceItemType == LoadoutSourceItemType.Loadout
+                && (!node.HaveDisk || node.Disk.Hash != node.Loadout.Hash)
+                && !_fileStore.HaveFile(node.Loadout.Hash).Result)
             .Select(node => node.Loadout.Hash)
             .Distinct()
             .ToArray();
         if (missing.Length == 0) return;
 
-        var restored = await _reExtractor.RestoreAsync(missing, CancellationToken.None);
+        job?.SetStatus("Restaurando archivos faltantes desde Descargas");
+        var restored = await _reExtractor.RestoreAsync(missing, ct);
         Logger.LogInformation("Faltaban {Missing} archivos en el store antes de sincronizar; {Restored} reextraídos desde Descargas", missing.Length, restored.Count);
     }
 
@@ -1064,7 +1075,7 @@ public partial class ALoadoutSynchronizer : ILoadoutSynchronizer
 
         job?.SetStatus("Collecting files");
         var tree = await BuildSyncTree(loadout);
-        await RestoreMissingArchives(tree);
+        await RestoreMissingArchives(tree, job);
         ProcessSyncTree(tree);
         loadout = await RunActions(tree, loadout, job);
 
@@ -1391,7 +1402,7 @@ public partial class ALoadoutSynchronizer : ILoadoutSynchronizer
     {
         var diskStateEntries = DiskStateEntry.FindByGame(state.Db, state);
         var tree = BuildSyncTree(DiskStateToPathPartPair(diskStateEntries), DiskStateToPathPartPair(diskStateEntries), loadout);
-        await RestoreMissingArchives(tree);
+        await RestoreMissingArchives(tree, ct: cancellationToken);
         ProcessSyncTree(tree);
         await RunActions(tree, loadout);
     }
