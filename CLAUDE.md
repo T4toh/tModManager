@@ -174,9 +174,9 @@ Defined in `NexusMods.App.Cli` using attributes:
 
 ## Test Framework
 
-- **xUnit** with `Xunit.DependencyInjection` for constructor-injected services. Each test project has a `Startup.cs` whose `ConfigureServices` calls `AddDefaultServicesForTesting()` (plus `AddLogging(b => b.AddXUnit())`)
+- **xUnit v3** (`xunit.v3.mtp-off`: the default variant pulls MTP telemetry) with `Xunit.DependencyInjection` for constructor-injected services. Test projects are executables; xunit packages are added in `tests/Directory.Build.targets` unless the project sets `<UsesTUnit>true</UsesTUnit>` (TUnit projects, which reference `TUnit.Engine` + `TUnit.Assertions` instead of the `TUnit` meta-package for the same telemetry reason). Each test project has a `Startup.cs` whose `ConfigureServices` calls `AddDefaultServicesForTesting()` (plus `AddLogging(b => b.AddXUnit())`)
 - **NSubstitute** for mocking, **FluentAssertions** for assertions, **AutoFixture** for test data
-- **Verify** (snapshot testing) with `.verified.` files checked into source; never delete them manually
+- **Verify** (snapshot testing) with `.verified.` files checked into source; never delete them manually. Stay on Verify 32.x: 33+ adds a build-breaking "SponsorCheck" license gate
 - **`AGameTest<TGame>`** base class in `NexusMods.Games.TestFramework` provides pre-configured DI with game installations, file stores, loadout managers
 - `NexusMods.StandardGameLocators.TestHelpers` stubs game detection for CI environments
 

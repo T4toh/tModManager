@@ -1,8 +1,5 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
-    <ItemGroup>
-        <PackageReference Include="NexusMods.Paths.TestingHelpers"/>
-    </ItemGroup>
 
     <ItemGroup>
         <ProjectReference Include="..\..\..\src\NexusMods.Games.AdvancedInstaller.UI\NexusMods.Games.AdvancedInstaller.UI.csproj"/>

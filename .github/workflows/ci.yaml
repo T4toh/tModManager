@@ -39,7 +39,7 @@ jobs:
         run: |
           set -uo pipefail
           failed=()
-          for proj in $(grep -rL '"TUnit"' --include='*.Tests.csproj' tests); do
+          for proj in $(grep -rL '<UsesTUnit>true' --include='*.Tests.csproj' tests); do
             echo "::group::$proj"
             dotnet test "$proj" --no-build --logger GitHubActions \
               --filter "RequiresNetworking!=True&FlakeyTest!=True" \
@@ -56,7 +56,7 @@ jobs:
         run: |
           set -uo pipefail
           failed=()
-          for proj in $(grep -rl '"TUnit"' --include='*.Tests.csproj' tests); do
+          for proj in $(grep -rl '<UsesTUnit>true' --include='*.Tests.csproj' tests); do
             echo "::group::$proj"
             dotnet run --project "$proj" --no-build || failed+=("$proj")
             echo "::endgroup::"
