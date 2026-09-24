@@ -364,11 +364,11 @@ public class InstallCollectionDownloadJob : IJobDefinitionWithStart<InstallColle
 
         Logger.LogInformation("[REPLICATED] MD5 hashing complete for '{ModName}': {Hashed}/{Total} hashed, {Failed} failed", CollectionMod.Name, hashedCount, totalChildren, failedCount);
 
-        // Re-extraction fallback: when individual file entries are missing from the .nx store,
-        // try to re-extract them from the parent archive (the original downloaded .zip/.7z)
+        // Re-extraction fallback: when individual file entries are missing from the file store,
+        // restore them from their original downloads.
         if (failedCount > 0)
         {
-            var recovered = await TryReExtractMissingFiles(libraryFile, failedChildren, hashes, pathIndex);
+            var recovered = await TryReExtractMissingFiles(failedChildren, hashes, pathIndex);
             hashedCount += recovered;
             failedCount -= recovered;
             if (recovered > 0)
@@ -472,92 +472,30 @@ public class InstallCollectionDownloadJob : IJobDefinitionWithStart<InstallColle
     });
 
     /// <summary>
-    /// When individual file entries are missing from the .nx file store (their .nx archive was deleted),
-    /// try to re-extract them from the parent archive (the downloaded .zip/.7z) and re-backup to the store.
+    /// When individual file entries are missing from the file store, restore them from their original
+    /// downloads (the top-level archive that was extracted, or the loose file itself) via <see cref="IDownloadReExtractor"/>.
     /// </summary>
     private async Task<int> TryReExtractMissingFiles(
-        LibraryFile.ReadOnly parentLibraryFile,
         ConcurrentBag<LibraryArchiveFileEntry.ReadOnly> failedChildren,
         ConcurrentDictionary<Md5Value, HashMapping> hashes,
         ConcurrentDictionary<RelativePath, HashMapping> pathIndex)
     {
-        // Check if the parent archive itself is still in the .nx store
-        if (!await FileStore.HaveFile(parentLibraryFile.Hash))
+        var reExtractor = ServiceProvider.GetRequiredService<IDownloadReExtractor>();
+        var wanted = failedChildren.Select(c => c.AsLibraryFile().Hash).ToArray();
+        var restored = await reExtractor.RestoreAsync(wanted, default);
+        var recovered = 0;
+        foreach (var child in failedChildren)
         {
-            Logger.LogWarning("[RE-EXTRACT] Parent archive for '{ModName}' (hash={Hash}) is also missing from file store — cannot recover",
-                CollectionMod.Name, parentLibraryFile.Hash);
-            return 0;
+            var hash = child.AsLibraryFile().Hash;
+            if (!restored.Contains(hash)) continue;
+            await using var stream = await FileStore.GetFileStream(hash);
+            var md5 = await Md5Hasher.HashAsync(stream);
+            var mapping = new HashMapping { Hash = hash, Size = child.AsLibraryFile().Size };
+            hashes[md5] = mapping;
+            pathIndex[child.Path] = mapping;
+            recovered++;
         }
-
-        var fileExtractor = ServiceProvider.GetRequiredService<IFileExtractor>();
-        var tempFileManager = ServiceProvider.GetRequiredService<TemporaryFileManager>();
-
-        try
-        {
-            // Extract the parent archive to a temp directory
-            await using var tempDir = tempFileManager.CreateFolder();
-            await using var archiveStream = await FileStore.GetFileStream(parentLibraryFile.Hash);
-
-            // Write the archive stream to a temp file so the extractor can work with it
-            await using var tempArchiveFile = tempFileManager.CreateFile();
-            {
-                await using var writeStream = tempArchiveFile.Path.Create();
-                await archiveStream.CopyToAsync(writeStream);
-            }
-
-            await fileExtractor.ExtractAllAsync(tempArchiveFile.Path, tempDir.Path);
-
-            Logger.LogInformation("[RE-EXTRACT] Extracted parent archive for '{ModName}' to temp dir, looking for {Count} missing files",
-                CollectionMod.Name, failedChildren.Count);
-
-            var recovered = 0;
-            var toBackup = new List<ArchivedFileEntry>();
-
-            foreach (var child in failedChildren)
-            {
-                var extractedPath = tempDir.Path.Combine(child.Path.ToString());
-                if (!extractedPath.FileExists)
-                {
-                    Logger.LogWarning("[RE-EXTRACT] File '{Path}' not found in extracted archive", child.Path);
-                    continue;
-                }
-
-                // Hash the extracted file
-                Hash xxHash;
-                Md5Value md5;
-                Size size;
-                xxHash = await extractedPath.XxHash3Async();
-                await using (var fileStream = extractedPath.Open(FileMode.Open, FileAccess.Read, FileShare.Read))
-                {
-                    md5 = await Md5Hasher.HashAsync(fileStream);
-                }
-                size = extractedPath.FileInfo.Size;
-
-                // Queue for backup to .nx store
-                toBackup.Add(new ArchivedFileEntry(new NativeFileStreamFactory(extractedPath), xxHash, size));
-
-                var mapping = new HashMapping { Hash = xxHash, Size = size };
-                hashes[md5] = mapping;
-                pathIndex[child.Path] = mapping;
-                recovered++;
-
-                Logger.LogInformation("[RE-EXTRACT] Recovered '{Path}' (xxHash={Hash}, md5={Md5})", child.Path, xxHash, md5);
-            }
-
-            // Re-backup all recovered files to the .nx store
-            if (toBackup.Count > 0)
-            {
-                await FileStore.BackupFiles(toBackup, deduplicate: true);
-                Logger.LogInformation("[RE-EXTRACT] Backed up {Count} recovered files to .nx store", toBackup.Count);
-            }
-
-            return recovered;
-        }
-        catch (Exception ex)
-        {
-            Logger.LogError(ex, "[RE-EXTRACT] Failed to re-extract files from parent archive for '{ModName}'", CollectionMod.Name);
-            return 0;
-        }
+        return recovered;
     }
 
     private async ValueTask<PatchedFile[]> PatchFiles(LibraryArchive.ReadOnly srcArchive, CancellationToken cancellationToken)
