@@ -151,13 +151,6 @@ public sealed class LooseFileStore : IFileStore
         return await path.ReadAllBytesAsync(token);
     }
 
-    /// <inheritdoc />
-    public AsyncFriendlyReaderWriterLock.WriteLockDisposable WriteLock() => Lock.WriteLock();
-
-    /// <inheritdoc />
-    /// <remarks>No-op: paths are computed on the fly from the hash, there is no cache to reload.</remarks>
-    public void ReloadCaches() { }
-
     /// <summary>
     /// How long an unreferenced file (hash or temp) survives a sweep. Exposed for tests.
     /// </summary>
