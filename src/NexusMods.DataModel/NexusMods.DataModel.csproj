@@ -34,7 +34,6 @@
 
     <ItemGroup>
         <InternalsVisibleTo Include="NexusMods.DataModel.Tests" />
-        <InternalsVisibleTo Include="NexusMods.DataModel.Synchronizer.Tests" />
         <InternalsVisibleTo Include="NexusMods.Games.TestFramework"/>
     </ItemGroup>
 

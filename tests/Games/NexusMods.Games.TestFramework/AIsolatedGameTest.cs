@@ -98,6 +98,11 @@ public abstract class AIsolatedGameTest<TTest, TGame> : IAsyncLifetime where TGa
         
         FileSystem = ServiceProvider.GetRequiredService<IFileSystem>();
         FileStore = ServiceProvider.GetRequiredService<IFileStore>();
+        // Tests run fast enough that every file is "young"; without this, the grace period that
+        // protects an in-flight backup from the GC sweep would also protect files that a test
+        // expects to be swept immediately (e.g. anything backed up but never referenced by a loadout).
+        if (FileStore is LooseFileStore looseFileStore)
+            looseFileStore.GracePeriod = TimeSpan.Zero;
         FileExtractor = ServiceProvider.GetRequiredService<IFileExtractor>();
         TemporaryFileManager = ServiceProvider.GetRequiredService<TemporaryFileManager>();
         Connection = ServiceProvider.GetRequiredService<IConnection>();

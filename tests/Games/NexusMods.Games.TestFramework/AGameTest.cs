@@ -64,6 +64,11 @@ public abstract class AGameTest<TGame> where TGame : IGame
 
         FileSystem = serviceProvider.GetRequiredService<IFileSystem>();
         FileStore = serviceProvider.GetRequiredService<IFileStore>();
+        // Tests run fast enough that every file is "young"; without this, the grace period that
+        // protects an in-flight backup from the GC sweep would also protect files that a test
+        // expects to be swept immediately (e.g. anything backed up but never referenced by a loadout).
+        if (FileStore is LooseFileStore looseFileStore)
+            looseFileStore.GracePeriod = TimeSpan.Zero;
         TemporaryFileManager = serviceProvider.GetRequiredService<TemporaryFileManager>();
         Connection = serviceProvider.GetRequiredService<IConnection>();
         LoadoutManager = serviceProvider.GetRequiredService<ILoadoutManager>();
