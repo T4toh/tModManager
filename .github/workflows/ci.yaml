@@ -39,11 +39,13 @@ jobs:
         run: |
           set -uo pipefail
           failed=()
-          for proj in $(grep -rL '"TUnit"' --include='*.Tests.csproj' tests); do
+          for proj in $(grep -rL '<UsesTUnit>true' --include='*.Tests.csproj' tests); do
             echo "::group::$proj"
+            # "No test is available" exits 0, so a project that silently stops discovering tests must fail too
             dotnet test "$proj" --no-build --logger GitHubActions \
               --filter "RequiresNetworking!=True&FlakeyTest!=True" \
-              --blame-hang-timeout 10m || failed+=("$proj")
+              --blame-hang-timeout 10m | tee test.log
+            if [ "${PIPESTATUS[0]}" -ne 0 ] || grep -q "No test is available" test.log; then failed+=("$proj"); fi
             echo "::endgroup::"
           done
           if [ ${#failed[@]} -gt 0 ]; then
@@ -56,7 +58,7 @@ jobs:
         run: |
           set -uo pipefail
           failed=()
-          for proj in $(grep -rl '"TUnit"' --include='*.Tests.csproj' tests); do
+          for proj in $(grep -rl '<UsesTUnit>true' --include='*.Tests.csproj' tests); do
             echo "::group::$proj"
             dotnet run --project "$proj" --no-build || failed+=("$proj")
             echo "::endgroup::"

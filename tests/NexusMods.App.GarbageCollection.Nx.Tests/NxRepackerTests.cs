@@ -6,7 +6,6 @@ using NexusMods.Hashing.xxHash3;
 using NexusMods.Paths;
 using NexusMods.Paths.Extensions.Nx.Extensions;
 using NexusMods.Paths.Extensions.Nx.FileProviders;
-using NexusMods.Paths.TestingHelpers;
 using Xunit;
 namespace NexusMods.App.GarbageCollection.Nx.Tests;
 
@@ -20,9 +19,11 @@ public class NxRepackerTests
     private const string File3Content = "Content 3";
     private const string OriginalArchiveName = "archive.nx";
 
-    [Theory, AutoFileSystem]
-    public async Task CollectGarbage_ShouldRepackArchiveCorrectly(InMemoryFileSystem fs, AbsolutePath folderPath)
+    [Fact]
+    public async Task CollectGarbage_ShouldRepackArchiveCorrectly()
     {
+        var fs = new InMemoryFileSystem();
+        var folderPath = fs.GetKnownPath(KnownPath.TempDirectory) / Guid.NewGuid().ToString();
 /*
     This test verifies that the NxRepacker correctly repacks an Nx archive
     during the garbage collection process.
@@ -76,9 +77,11 @@ public class NxRepackerTests
         (await fs.ReadAllTextAsync(extractedFile2)).Should().Be(File2Content);
     }
     
-    [Theory, AutoFileSystem]
-    public async Task CollectGarbage_ShouldCreateEmptyArchiveWhenAllFilesUnreferenced(InMemoryFileSystem fs, AbsolutePath folderPath)
+    [Fact]
+    public async Task CollectGarbage_ShouldCreateEmptyArchiveWhenAllFilesUnreferenced()
     {
+        var fs = new InMemoryFileSystem();
+        var folderPath = fs.GetKnownPath(KnownPath.TempDirectory) / Guid.NewGuid().ToString();
 /*
     This test verifies that the NxRepacker produces no new files when there are no
     files to be repacked. i.e. It does not produce empty archives.

@@ -189,8 +189,10 @@ public class DownloadsServiceTests(
             out var completedDownloads,
             out var activeDownloads);
         
-        // Initially empty
-        allDownloads.Should().BeEmpty("no jobs should exist initially");
+        // The service is a singleton shared with the other tests, so count relative to what already exists
+        var allBefore = allDownloads.Count;
+        var completedBefore = completedDownloads.Count;
+        var activeBefore = activeDownloads.Count;
         
         // Create and start job
         var context = _jobFactory.CreateAndStartDownloadJob(gameId);
@@ -200,8 +202,8 @@ public class DownloadsServiceTests(
             .Should().BeTrue("jobs should signal ready within timeout");
         
         // Job should appear in collections
-        allDownloads.Should().HaveCount(1, "job should be in AllDownloads when started");
-        activeDownloads.Should().HaveCount(1, "job should be in ActiveDownloads when started");
+        allDownloads.Should().HaveCount(allBefore + 1, "job should be in AllDownloads when started");
+        activeDownloads.Should().HaveCount(activeBefore + 1, "job should be in ActiveDownloads when started");
         
         // Start a pre-Cancelled the job
         context.CancelJob();
@@ -218,11 +220,11 @@ public class DownloadsServiceTests(
 
         // Cancelled jobs should be completely removed
         // Note: The change isn't instant so we must wait for the collections to update
-        (await SyncHelpers.WaitForCollectionCount(allDownloads, 0, TimeSpan.FromSeconds(30)))
+        (await SyncHelpers.WaitForCollectionCount(allDownloads, allBefore, TimeSpan.FromSeconds(30)))
             .Should().BeTrue("cancelled jobs should be removed from AllDownloads");
-        (await SyncHelpers.WaitForCollectionCount(completedDownloads, 0, TimeSpan.FromSeconds(30)))
+        (await SyncHelpers.WaitForCollectionCount(completedDownloads, completedBefore, TimeSpan.FromSeconds(30)))
             .Should().BeTrue("cancelled jobs should not be in CompletedDownloads");
-        (await SyncHelpers.WaitForCollectionCount(activeDownloads, 0, TimeSpan.FromSeconds(30)))
+        (await SyncHelpers.WaitForCollectionCount(activeDownloads, activeBefore, TimeSpan.FromSeconds(30)))
             .Should().BeTrue("cancelled jobs should not be in ActiveDownloads");
     }
 

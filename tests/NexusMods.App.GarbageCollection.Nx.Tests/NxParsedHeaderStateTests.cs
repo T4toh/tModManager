@@ -1,5 +1,4 @@
 using AutoFixture;
-using AutoFixture.Xunit2;
 using FluentAssertions;
 using NexusMods.Archives.Nx.FileProviders;
 using NexusMods.Archives.Nx.Headers;
@@ -10,9 +9,10 @@ namespace NexusMods.App.GarbageCollection.Nx.Tests;
 
 public class NxParsedHeaderStateTests
 {
-    [Theory, AutoData]
-    public void CanUseNxParsedHeaders(IFixture fixture)
+    [Fact]
+    public void CanUseNxParsedHeaders()
     {
+        var fixture = new Fixture();
         // Act: Setup Dummy Nx Archive
         var files = GetRandomDummyFiles(fixture, out var settings);
         NxPacker.Pack(files, settings);
