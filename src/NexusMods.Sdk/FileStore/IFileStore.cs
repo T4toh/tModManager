@@ -1,6 +1,5 @@
 using NexusMods.Hashing.xxHash3;
 using NexusMods.Paths;
-using NexusMods.Sdk.Threading;
 
 namespace NexusMods.Sdk.FileStore;
 
@@ -74,18 +73,6 @@ public interface IFileStore
     /// Load the given file into memory.
     /// </summary>
     Task<byte[]> Load(Hash hash, CancellationToken token = default);
-
-    /// <summary>
-    /// Locks the file store, preventing it from being used until the returned
-    /// <see cref="IDisposable"/> is disposed.
-    /// </summary>
-    AsyncFriendlyReaderWriterLock.WriteLockDisposable WriteLock();
-
-    /// <summary>
-    /// Reload any caches that may be stale due to GC operations
-    /// <remarks>This should be run under the store write lock since it updates the caches</remarks>
-    /// </summary>
-    void ReloadCaches();
 }
 
 

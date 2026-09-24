@@ -1,7 +1,6 @@
 using NexusMods.Hashing.xxHash3;
 using NexusMods.Paths;
 using NexusMods.Sdk.FileStore;
-using NexusMods.Sdk.Threading;
 
 namespace NexusMods.Benchmarks.Benchmarks.Loadouts.Harness;
 
@@ -40,12 +39,5 @@ public class DummyFileStore : IFileStore
     public HashSet<ulong> GetFileHashes()
     {
         return [];
-    }
-
-    public AsyncFriendlyReaderWriterLock.WriteLockDisposable WriteLock() => throw new NotImplementedException(); // Only used by GC, so never called right now.
-    
-    public void ReloadCaches()
-    {
-        
     }
 }

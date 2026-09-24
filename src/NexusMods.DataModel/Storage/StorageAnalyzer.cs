@@ -3,7 +3,6 @@ using NexusMods.Abstractions.Loadouts;
 using NexusMods.MnemonicDB.Abstractions;
 using NexusMods.MnemonicDB.Abstractions.TxFunctions;
 using NexusMods.Paths;
-using NexusMods.Paths.Utilities;
 using NexusMods.Sdk.Jobs;
 using NexusMods.Sdk.Loadouts;
 using NexusMods.Sdk.Settings;
@@ -48,11 +47,11 @@ internal class StorageAnalyzer : IStorageAnalyzer
     {
         var settings = _settingsManager.Get<DataModelSettings>();
 
-        // Sum sizes of all .nx archive files
+        // Sum sizes of all files under the archive locations (loose content-addressed store)
         var archivesSize = settings.ArchiveLocations
             .Select(loc => loc.ToPath(_fileSystem))
             .Where(dir => dir.DirectoryExists())
-            .SelectMany(dir => dir.EnumerateFiles(KnownExtensions.Nx))
+            .SelectMany(dir => dir.EnumerateFiles("*", recursive: true))
             .Aggregate(0UL, (acc, file) => acc + file.FileInfo.Size.Value);
 
         // Count backed-up game files currently pinned in the database
@@ -132,8 +131,8 @@ internal class StorageAnalyzer : IStorageAnalyzer
         {
             var dir = loc.ToPath(_fileSystem);
             if (!dir.DirectoryExists()) continue;
-            foreach (var file in dir.EnumerateFiles(KnownExtensions.Nx))
-                file.Delete();
+            foreach (var sub in dir.EnumerateDirectories())
+                sub.DeleteDirectory(recursive: true);
         }
         return Task.CompletedTask;
     }
