@@ -1,5 +1,4 @@
 using Humanizer;
-using Humanizer.Bytes;
 using NexusMods.App.UI.Controls.Filters;
 using NexusMods.App.UI.Controls.TreeDataGrid.Filters;
 using NexusMods.App.UI.Resources;

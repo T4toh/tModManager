@@ -3,7 +3,6 @@ using Avalonia.Input;
 using Avalonia.Interactivity;
 using DynamicData.Binding;
 using Humanizer;
-using Humanizer.Localisation;
 using JetBrains.Annotations;
 using NexusMods.Abstractions.NexusModsLibrary.Models;
 using NexusMods.App.UI.Controls;

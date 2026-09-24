@@ -5,15 +5,17 @@ using NexusMods.App.GarbageCollection.Structs;
 using NexusMods.App.GarbageCollection.Tests.Helpers;
 using NexusMods.Hashing.xxHash3;
 using NexusMods.Paths;
-using NexusMods.Paths.TestingHelpers;
 using Xunit;
 namespace NexusMods.App.GarbageCollection.Tests;
 
 public class ArchiveGarbageCollectorTests
 {
-    [Theory, AutoFileSystem]
-    public void AddFiles_ShouldAddAllHashes(AbsolutePath archivePath)
+    private static AbsolutePath NewPath() => new InMemoryFileSystem().GetKnownPath(KnownPath.TempDirectory) / Guid.NewGuid().ToString();
+
+    [Fact]
+    public void AddFiles_ShouldAddAllHashes()
     {
+        var archivePath = NewPath();
         // Arrange
         var collector = new ArchiveGarbageCollector<MockParsedHeaderState, MockFileHash>();
         var hash1 = (Hash)1;
@@ -43,9 +45,10 @@ public class ArchiveGarbageCollectorTests
         collector.AllArchives.Count.Should().Be(1);
     }
 
-    [Theory, AutoFileSystem]
-    public void AddFiles_WithMultipleReferences_ShouldIncreaseRefCount(AbsolutePath archivePath)
+    [Fact]
+    public void AddFiles_WithMultipleReferences_ShouldIncreaseRefCount()
     {
+        var archivePath = NewPath();
         // Arrange
         var collector = new ArchiveGarbageCollector<MockParsedHeaderState, MockFileHash>();
         var hash1 = (Hash)1;
@@ -78,9 +81,11 @@ public class ArchiveGarbageCollectorTests
         act.Should().Throw<UnknownFileException>();
     }
 
-    [Theory, AutoFileSystem]
-    public void AddArchive_ShouldHandleMultipleArchives(AbsolutePath path1, AbsolutePath path2)
+    [Fact]
+    public void AddArchive_ShouldHandleMultipleArchives()
     {
+        var path1 = NewPath();
+        var path2 = NewPath();
         // Arrange
         var collector = new ArchiveGarbageCollector<MockParsedHeaderState, MockFileHash>();
         var hash1 = (Hash)1;
@@ -115,9 +120,10 @@ public class ArchiveGarbageCollectorTests
         collector.AllArchives.Count.Should().Be(2);
     }
 
-    [Theory, AutoFileSystem]
-    public void CollectGarbage_ShouldNotRepackWhenAllFilesReferenced(AbsolutePath archivePath)
+    [Fact]
+    public void CollectGarbage_ShouldNotRepackWhenAllFilesReferenced()
     {
+        var archivePath = NewPath();
         // Arrange
         var collector = new ArchiveGarbageCollector<MockParsedHeaderState, MockFileHash>();
         var hash1 = (Hash)1;
@@ -140,9 +146,10 @@ public class ArchiveGarbageCollectorTests
         repackCalled.Should().BeFalse();
     }
 
-    [Theory, AutoFileSystem]
-    public void CollectGarbage_ShouldRepackWhenSomeFilesUnreferenced(AbsolutePath archivePath)
+    [Fact]
+    public void CollectGarbage_ShouldRepackWhenSomeFilesUnreferenced()
     {
+        var archivePath = NewPath();
         // Arrange
         var collector = new ArchiveGarbageCollector<MockParsedHeaderState, MockFileHash>();
         var hash1 = (Hash)1;
@@ -178,9 +185,11 @@ public class ArchiveGarbageCollectorTests
         repackedArchive.FilePath.Should().Be(archivePath);
     }
 
-    [Theory, AutoFileSystem]
-    public void CollectGarbage_ShouldHandleMultipleArchives(AbsolutePath path1, AbsolutePath path2)
+    [Fact]
+    public void CollectGarbage_ShouldHandleMultipleArchives()
     {
+        var path1 = NewPath();
+        var path2 = NewPath();
         // Arrange
         var collector = new ArchiveGarbageCollector<MockParsedHeaderState, MockFileHash>();
         var hash1 = (Hash)1;
@@ -220,9 +229,10 @@ public class ArchiveGarbageCollectorTests
         toBeRemoved![0].Should().Be(hash2);
     }
 
-    [Theory, AutoFileSystem]
-    public void CollectGarbage_ShouldHandleEmptyArchives(AbsolutePath archivePath)
+    [Fact]
+    public void CollectGarbage_ShouldHandleEmptyArchives()
     {
+        var archivePath = NewPath();
         // Arrange
         var collector = new ArchiveGarbageCollector<MockParsedHeaderState, MockFileHash>();
         var headerState = new MockParsedHeaderState();
@@ -241,9 +251,10 @@ public class ArchiveGarbageCollectorTests
         repackCalled.Should().BeFalse();
     }
 
-    [Theory, AutoFileSystem]
-    public void CollectGarbage_ShouldHandleAllUnreferencedFiles(AbsolutePath archivePath)
+    [Fact]
+    public void CollectGarbage_ShouldHandleAllUnreferencedFiles()
     {
+        var archivePath = NewPath();
         // Arrange
         var collector = new ArchiveGarbageCollector<MockParsedHeaderState, MockFileHash>();
         var hash1 = (Hash)1;

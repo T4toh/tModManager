@@ -1,4 +1,4 @@
-using Humanizer.Bytes;
+using Humanizer;
 using NexusMods.App.UI.Resources;
 
 namespace NexusMods.App.UI.Helpers;

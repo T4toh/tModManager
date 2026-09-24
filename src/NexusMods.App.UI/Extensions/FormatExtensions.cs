@@ -1,6 +1,5 @@
 using System.Globalization;
 using Humanizer;
-using Humanizer.Bytes;
 using NexusMods.Paths;
 using R3;
 

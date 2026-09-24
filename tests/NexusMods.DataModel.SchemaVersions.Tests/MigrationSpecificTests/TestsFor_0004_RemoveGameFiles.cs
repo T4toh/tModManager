@@ -5,7 +5,7 @@ using NexusMods.MnemonicDB.Abstractions.Query;
 using NexusMods.Sdk.Games;
 using NexusMods.Sdk.Loadouts;
 using Microsoft.Extensions.DependencyInjection;
-using Xunit.Abstractions;
+using Xunit;
 using Xunit.DependencyInjection;
 
 namespace NexusMods.DataModel.SchemaVersions.Tests.MigrationSpecificTests;

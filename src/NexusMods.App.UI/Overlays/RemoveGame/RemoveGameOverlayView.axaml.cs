@@ -1,6 +1,5 @@
 using Avalonia.ReactiveUI;
 using Humanizer;
-using Humanizer.Bytes;
 using NexusMods.App.UI.Resources;
 using R3;
 using ReactiveUI;

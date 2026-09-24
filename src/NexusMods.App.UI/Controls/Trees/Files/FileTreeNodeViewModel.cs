@@ -3,7 +3,7 @@ using System.Diagnostics;
 using System.Reactive.Disposables;
 using Avalonia.Controls;
 using Avalonia.Controls.Models.TreeDataGrid;
-using Humanizer.Bytes;
+using Humanizer;
 using NexusMods.Abstractions.Loadouts.Files.Diff;
 using NexusMods.App.UI.Controls.Trees.Common;
 using NexusMods.App.UI.Resources;
