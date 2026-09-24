@@ -13,6 +13,7 @@ using NexusMods.Sdk.Hashes;
 using NexusMods.Sdk.IO;
 using NexusMods.Sdk.Jobs;
 using NexusMods.Sdk.Library;
+using NexusMods.Sdk.Settings;
 
 namespace NexusMods.Library;
 
@@ -41,6 +42,7 @@ internal class AddLibraryFileJob : IJobDefinitionWithStart<AddLibraryFileJob, Li
             Connection = provider.GetRequiredService<IConnection>(),
             TemporaryFileManager = provider.GetRequiredService<TemporaryFileManager>(),
             FileStore = provider.GetRequiredService<IFileStore>(),
+            DownloadsFolder = provider.GetRequiredService<ISettingsManager>().Get<DownloadsSettings>().Folder.ToPath(provider.GetRequiredService<IFileSystem>()),
         };
         return monitor.Begin<AddLibraryFileJob, LibraryFile.New>(job);
     }
@@ -48,6 +50,7 @@ internal class AddLibraryFileJob : IJobDefinitionWithStart<AddLibraryFileJob, Li
     internal required IFileStore FileStore { get; set; }
     internal required TemporaryFileManager TemporaryFileManager { get; init; }
     internal required IFileExtractor FileExtractor { get; init; }
+    internal required AbsolutePath DownloadsFolder { get; init; }
     public required IConnection Connection { get; set; }
 
     public async ValueTask<LibraryFile.New> StartAsync(IJobContext<AddLibraryFileJob> context)
@@ -84,6 +87,9 @@ internal class AddLibraryFileJob : IJobDefinitionWithStart<AddLibraryFileJob, Li
 
         var (hash, md5) = await HashAsync(filePath, isNestedFile: isNestedFile, cancellationToken: context.CancellationToken);
         var libraryFile = CreateLibraryFile(Transaction, filePath, hash, md5);
+
+        if (!isNestedFile && filePath.InFolder(DownloadsFolder))
+            Transaction.Add(libraryFile.Id, LibraryFile.DownloadPath, filePath.RelativeTo(DownloadsFolder));
 
         if (isArchive)
         {
