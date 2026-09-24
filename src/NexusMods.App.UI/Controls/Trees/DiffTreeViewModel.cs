@@ -1,7 +1,7 @@
 using System.Collections.ObjectModel;
 using Avalonia.Controls;
 using DynamicData;
-using Humanizer.Bytes;
+using Humanizer;
 using NexusMods.Abstractions.Loadouts;
 using NexusMods.Abstractions.Loadouts.Files.Diff;
 using NexusMods.App.UI.Controls.Trees.Files;

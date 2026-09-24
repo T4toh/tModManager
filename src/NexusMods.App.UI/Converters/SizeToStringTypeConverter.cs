@@ -1,5 +1,4 @@
 using Humanizer;
-using Humanizer.Bytes;
 using NexusMods.Paths;
 using ReactiveUI;
 

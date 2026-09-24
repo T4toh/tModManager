@@ -1,4 +1,4 @@
-using Humanizer.Bytes;
+using Humanizer;
 using JetBrains.Annotations;
 using NexusMods.Abstractions.GC;
 using NexusMods.App.UI.Dialog;
