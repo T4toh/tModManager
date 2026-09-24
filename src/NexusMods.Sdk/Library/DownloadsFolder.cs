@@ -18,7 +18,7 @@ public static class DownloadsFolder
     public static async Task<AbsolutePath> PlaceAsync(AbsolutePath source, AbsolutePath folder, string fileName, CancellationToken ct)
     {
         folder.CreateDirectory();
-        var candidate = folder.Combine(fileName);
+        var candidate = folder.Combine(SanitizeFileName(fileName));
         var stem = candidate.GetFileNameWithoutExtension();
         var ext = candidate.Extension.ToString();
         Hash? sourceHash = null;
@@ -63,8 +63,11 @@ public static class DownloadsFolder
                 File.Move(tmp.ToString(), candidate.ToString(), overwrite: false);
                 return true;
             }
-            catch (IOException)
+            catch (IOException) when (candidate.FileExists)
             {
+                // Only a race (another writer won first) looks like this: the move failed AND the
+                // candidate now exists. Anything else (disk full, read-only filesystem, ...) leaves
+                // `candidate` missing, so it must propagate instead of spinning PlaceAsync's loop forever.
                 return false;
             }
         }
@@ -78,5 +81,16 @@ public static class DownloadsFolder
     {
         await using var stream = path.Read();
         return await stream.xxHash3Async(token: ct);
+    }
+
+    /// <summary>
+    /// Keeps only the last path segment of an untrusted file name (from an HTTP header or Nexus
+    /// metadata), so it can never place the file outside the destination folder via directory
+    /// traversal. Falls back to a random name if nothing usable is left.
+    /// </summary>
+    private static string SanitizeFileName(string fileName)
+    {
+        var name = Path.GetFileName(fileName);
+        return string.IsNullOrEmpty(name) || name is "." or ".." ? $"download-{Guid.NewGuid():N}" : name;
     }
 }

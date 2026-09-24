@@ -63,4 +63,34 @@ public class DownloadsFolderTests : IDisposable
         (await File.ReadAllTextAsync(candidate.ToString())).Should().Be("existing");
         folder.EnumerateFiles("*", recursive: false).Should().ContainSingle();
     }
+
+    [Fact]
+    public async Task TryClaim_MoveFailsForNonCollisionReason_Throws()
+    {
+        // Not every IOException from File.Move means "someone else claimed the name": occupy the
+        // candidate with a directory instead of a file, so the move fails but `candidate.FileExists`
+        // (a plain-file check) stays false, exactly like disk-full or a read-only filesystem would.
+        // This must propagate instead of being swallowed as a race and retried forever.
+        var folder = _root.Combine("Downloads");
+        folder.CreateDirectory();
+        var candidate = folder.Combine("Mod.zip");
+        candidate.CreateDirectory();
+
+        var act = async () => await DownloadsFolder.TryClaimAsync(await Temp("new"), candidate, default);
+
+        await act.Should().ThrowAsync<IOException>();
+        candidate.FileExists.Should().BeFalse();
+    }
+
+    [Theory]
+    [InlineData("../evil.zip", "evil.zip")]
+    [InlineData("sub/dir/mod.zip", "mod.zip")]
+    public async Task Preserve_UntrustedName_SanitizedToLastSegmentInsideFolder(string untrustedName, string expectedName)
+    {
+        var folder = _root.Combine("Downloads");
+        var dest = await DownloadsFolder.PlaceAsync(await Temp("a"), folder, untrustedName, default);
+
+        dest.Parent.Should().Be(folder);
+        dest.FileName.ToString().Should().Be(expectedName);
+    }
 }
