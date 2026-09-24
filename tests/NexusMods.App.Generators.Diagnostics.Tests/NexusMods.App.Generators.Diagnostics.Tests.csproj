@@ -1,11 +1,15 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
+    <PropertyGroup>
+        <UsesXunitDI>false</UsesXunitDI>
+    </PropertyGroup>
+
     <ItemGroup>
         <PackageReference Include="Verify.XunitV3"/>
         <PackageReference Include="Verify.SourceGenerators"/>
+        <!-- Verify.SourceGenerators needs Microsoft.CodeAnalysis >= 4.9 at runtime -->
+        <PackageReference Include="Microsoft.CodeAnalysis.CSharp"/>
 
-        <PackageReference Remove="Xunit.DependencyInjection" />
-        <PackageReference Remove="Xunit.DependencyInjection.Logging" />
     </ItemGroup>
 
     <ItemGroup>
