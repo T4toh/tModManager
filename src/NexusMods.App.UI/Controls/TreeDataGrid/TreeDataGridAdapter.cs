@@ -237,14 +237,19 @@ public abstract class TreeDataGridAdapter<TModel, TKey> : ReactiveR3Object, ISea
         RowDragStartedSubject.OnNext((sourceModels, e));
     }
 
+    // TreeDataGrid 11.1 still packs its drag info into the legacy DataObject API
+#pragma warning disable CS0618
+    private static DragInfo? GetDragInfo(TreeDataGridRowDragEventArgs e) =>
+        (e.Inner.Data as DataObject)?.Get("TreeDataGridDragInfo") as DragInfo;
+#pragma warning restore CS0618
+
     public virtual void OnRowDragOver(object? sender, TreeDataGridRowDragEventArgs e)
     {
         // extract the target model from the event args
         if (e.TargetRow.Model is not TModel targetModel) return;
 
         // extract the source models from the event args
-        var dataObject = e.Inner.Data as DataObject;
-        if (dataObject?.Get("TreeDataGridDragInfo") is not DragInfo dragInfo) return;
+        if (GetDragInfo(e) is not { } dragInfo) return;
 
         var source = dragInfo.Source;
         var indices = dragInfo.Indexes;
@@ -276,8 +281,7 @@ public abstract class TreeDataGridAdapter<TModel, TKey> : ReactiveR3Object, ISea
         if (e.TargetRow.Model is not TModel targetModel) return;
 
         // extract the source models from the event args
-        var dataObject = e.Inner.Data as DataObject;
-        if (dataObject?.Get("TreeDataGridDragInfo") is not DragInfo dragInfo) return;
+        if (GetDragInfo(e) is not { } dragInfo) return;
 
         var source = dragInfo.Source;
         var indices = dragInfo.Indexes;
