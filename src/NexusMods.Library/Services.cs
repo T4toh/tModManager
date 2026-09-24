@@ -2,6 +2,7 @@ using JetBrains.Annotations;
 using Microsoft.Extensions.DependencyInjection;
 using NexusMods.Abstractions.Downloads;
 using NexusMods.Abstractions.Library;
+using NexusMods.Sdk.FileStore;
 
 namespace NexusMods.Library;
 
@@ -18,6 +19,7 @@ public static class Services
     {
         return serviceCollection
             .AddSingleton<ILibraryService, LibraryService>()
-            .AddSingleton<IDownloadsService, DownloadsService>();
+            .AddSingleton<IDownloadsService, DownloadsService>()
+            .AddSingleton<IDownloadReExtractor, DownloadReExtractor>();
     }
 }
