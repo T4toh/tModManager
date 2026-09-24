@@ -32,7 +32,7 @@ public class ChunkedStreamTests
         using var ms = stream;
 
         var source = await ChunkedMemoryStream.Create(ms, chunkSize: 1024);
-        await using var chunked = new ChunkedStream<ChunkedMemoryStream>(source);
+        await using var chunked = new NexusMods.Sdk.IO.ChunkedStream<ChunkedMemoryStream>(source);
 
         var actualHash = await chunked.HashingCopyAsync(Stream.Null, CancellationToken.None);
         await Assert.That(actualHash).IsEqualTo(expectedHash);
@@ -52,7 +52,7 @@ public class ChunkedStreamTests
         ms.Write("Hello World"u8);
 
         var source = await ChunkedMemoryStream.Create(ms, chunkSize: 1024);
-        await using var chunked = new ChunkedStream<ChunkedMemoryStream>(source);
+        await using var chunked = new NexusMods.Sdk.IO.ChunkedStream<ChunkedMemoryStream>(source);
 
         using var outputStream = new MemoryStream();
         await chunked.CopyToAsync(outputStream);
@@ -75,7 +75,7 @@ public class ChunkedStreamTests
         ms.Write("Hello World"u8);
 
         var source = await ChunkedMemoryStream.Create(ms, chunkSize: 1024);
-        await using var chunked = new ChunkedStream<ChunkedMemoryStream>(source);
+        await using var chunked = new NexusMods.Sdk.IO.ChunkedStream<ChunkedMemoryStream>(source);
 
         using var outputStream = new MemoryStream();
         // ReSharper disable once MethodHasAsyncOverload
@@ -92,7 +92,7 @@ public class ChunkedStreamTests
         using var ms = new MemoryStream(buffer);
 
         var source = await ChunkedMemoryStream.Create(ms, chunkSize: 16);
-        await using var chunked = new ChunkedStream<ChunkedMemoryStream>(source);
+        await using var chunked = new NexusMods.Sdk.IO.ChunkedStream<ChunkedMemoryStream>(source);
 
         var bytesRead = await chunked.ReadAsync(buffer);
         await Assert.That(bytesRead).IsEqualTo(16);
@@ -101,7 +101,7 @@ public class ChunkedStreamTests
         await Assert.That(bytesRead).IsEqualTo(0) .Because("Reached end of stream");
     }
     
-    private class ChunkedMemoryStream : IChunkedStreamSource
+    private class ChunkedMemoryStream : NexusMods.Sdk.IO.IChunkedStreamSource
     {
         private readonly (ulong Offset, byte[] Data)[] _chunks;
 

@@ -290,6 +290,6 @@ public class Session : ISteamSession
             manifest, file
         );
         // 48 1MB chunks, 32 preloaded
-        return new ChunkedStream<DepotChunkProvider>(chunkedProvider, capacity: 48, preFetch: 32);
+        return new NexusMods.Sdk.IO.ChunkedStream<DepotChunkProvider>(chunkedProvider, capacity: 48, preFetch: 32);
     }
 }
