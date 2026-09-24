@@ -4,8 +4,4 @@
     <PropertyGroup>
         <WarningsAsErrors>Nullable</WarningsAsErrors>
     </PropertyGroup>
-
-    <ItemGroup>
-        <PackageReference Include="Microsoft.SourceLink.GitHub" PrivateAssets="all" />
-    </ItemGroup>
 </Project>
