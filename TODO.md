@@ -88,7 +88,6 @@ Actualmente hay dos sistemas paralelos de descarga con componentes duplicados:
 
 ## 🔮 Features Futuras
 
-- [ ] **Eliminar .nx file store:** Reemplazar el sistema NxFileStore (herencia del modelo premium upstream) por acceso directo a los archivos descargados (.zip/.7z). Elimina la clase entera de bugs "archivos perdidos tras Deep Clean" y simplifica la validación a "¿existe el .zip?"
 - [ ] **Endorse de mods desde la app:** Botón de endorse en la UI por cada mod instalado + endorse masivo para colecciones. La API ya tiene el endpoint (`POST /v1/games/{domain}/mods/{id}/endorse.json`). Los modders se lo merecen y la app oficial nunca lo implementó
 - [ ] Soporte multi-browser para cookies (Chrome/Chromium). Ver [implementación](README.md#agregar-soporte-para-otro-browser)
 - [ ] Optimización de rescan MD5 para carpetas grandes
@@ -105,7 +104,19 @@ Objetivo: codebase confiable antes de tocar features. Un PR por bloque, build + 
 - [x] **13 `// TODO: handle errors`:** `GraphQlResult.AssertHasData()` ya no hace `Debug.Assert` (crasheaba builds Debug ante cualquier error de API) y la excepción incluye los errores GraphQL. Los dos sitios de UI usan `TryGetData` y no rompen la vista
 - [x] **Actualizar CLAUDE.md:** conteo de proyectos, stubs de telemetría, build en macOS
 - [ ] **Bugs runtime reales:** pendiente reproducir en Linux con juego instalado (crashes esporádicos reportados). Hipótesis a verificar: hay 108 `Debug.Assert`/`Debug.Fail` en `src/`; en build Debug (`dotnet run`, `dev.sh`) cualquier assert fallido mata el proceso. El AppImage es Release y no los ejecuta. Si los crashes son corriendo desde `dev.sh`, correr con `-c Release` para descartar
-- [x] **Vulnerabilidades NuGet** (2026-09-24): `Tmds.DBus.Protocol` 0.21.3 vía Avalonia 11.3.22, `Magick.NET` pineado a 14.17.1 en UI.Tests, SourceLink removido (el SDK 10 lo trae). Bump de 60 paquetes dentro del mismo major. Pendientes de major: Avalonia 12 / ReactiveUI 24 / SkiaSharp 4, MnemonicDB 0.52, Microsoft.Extensions 10, TUnit 1.x (+ Verify 31.27+). TreeDataGrid queda en 11.1.1 (11.3 rompe API y no declara licencia OSS); FluentAssertions en 7.x (8 es comercial); Fomod 1.2.1 es solo Windows
+- [x] **Paquetes al día** (2026-09-24, PRs #38, #39, #40): vulnerabilidades NuGet a 0, bumps dentro del major, Microsoft.Extensions 10, Humanizer 3, StrawberryShake 16, tests a xunit v3 / TUnit 1.x / Verify 32, Paths 0.22.5. Retenidos a propósito: TreeDataGrid 11.1.1 (11.2+ es comercial, Avalonia Accelerate), FluentAssertions 7.x (8 es comercial), Verify 32.x (33+ trae SponsorCheck que rompe el build), Fomod 1.2.1 (solo Windows), MnemonicDB 0.28.2 (ver abajo)
+- [ ] **Avalonia 12** (+ ReactiveUI 24, SkiaSharp 4, Splat 21): migrar ~259 `[Reactive]` de ReactiveUI.Fody (muerto) a ReactiveUI.SourceGenerators; TreeDataGrid 12 es comercial, así que vendorizar el fuente MIT de 11.1 (`AvaloniaUI/Avalonia.Controls.TreeDataGrid`, archivado) y portarlo. Sin apuro mientras Avalonia 11 reciba parches (11.3.22 el 2026-09-11)
+
+## 📦 Dependencias heredadas de Nexus
+
+Decidido 2026-09-24. Todas son GPL-3.0 como tModManager: se pueden vendorizar (copiar el fuente a `src/`) sin problema legal. Criterio: **congeladas en la última versión que funciona; se vendorizan cuando haya un motivo concreto** (bug, vulnerabilidad en una dependencia nativa, versión de .NET que las rompa), no antes.
+
+- **MnemonicDB** (la base: loadouts, mods, colecciones): repo archivado 2025-11. Quedamos en **0.28.2**, la última que usó la app oficial en producción. **No subir a 0.50+**: es una reescritura de API publicada dos semanas antes de archivar, ninguna app real la usó. Si hace falta tocarla, vendorizar el tag `v0.28.2`. Depende de RocksDB 9.10 y DuckDB (vigilar sus advisories). Largo plazo opcional: reemplazar por SQLite (~286 archivos la usan)
+- **NexusMods.Paths** (`AbsolutePath`, `GamePath`, filesystem en memoria para tests): sin commits desde 2025-10. Congelada en **0.22.5**. Ojo: 0.22 trae su propio `ChunkedStream`/`IChunkedStreamSource` (este último en el namespace global); usamos el nuestro de `NexusMods.Sdk.IO`, calificado
+- **NexusMods.Hashing.xxHash3**: reemplazable por `XxHash3` de `System.IO.Hashing` (paquete oficial de Microsoft). Hacerlo junto con la eliminación de `.nx`, porque los hashes también se guardan en la base
+- **NexusMods.Archives.Nx**: se elimina, ver abajo
+- [ ] **Eliminar `.nx` file store** (siguiente trabajo grande después de desacoplar Cyberpunk): el formato de almacenamiento de Nexus no nos aporta nada; hoy guardamos el zip descargado **y** una copia `.nx` (doble espacio) y de ahí sale toda la clase de bugs "archivos perdidos tras Deep Clean". El archivo original (.zip/.7z) pasa a ser la fuente de verdad y la validación queda en "¿existe el archivo?". Toca `NxFileStore`, `GarbageCollection.*` (3 proyectos), Deep Clean, validación de colecciones y `Paths.Extensions.Nx`. Sale también `NexusMods.Archives.Nx`
+- Activas, no requieren acción: `FomodInstaller` (Nexus, commits 2026-09), `GameFinder` y `TransparentValueObjects` (erri120)
 
 ## 🎮 Multi-juego (después de limpieza)
 

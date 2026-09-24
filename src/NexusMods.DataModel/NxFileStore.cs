@@ -409,7 +409,7 @@ public class NxFileStore : IFileStore, IReadOnlyStreamSource
         var header = HeaderParser.ParseHeader(provider);
 
         return Task.FromResult<Stream>(
-            new ChunkedStream<ChunkedArchiveStream>(new ChunkedArchiveStream(entry, header, file)));
+            new NexusMods.Sdk.IO.ChunkedStream<ChunkedArchiveStream>(new ChunkedArchiveStream(entry, header, file)));
     }
 
     public Task<byte[]> Load(Hash hash, CancellationToken token = default)
@@ -439,7 +439,7 @@ public class NxFileStore : IFileStore, IReadOnlyStreamSource
     public AsyncFriendlyReaderWriterLock.WriteLockDisposable WriteLock() => _lock.WriteLock();
     
 
-    private class ChunkedArchiveStream : IChunkedStreamSource
+    private class ChunkedArchiveStream : NexusMods.Sdk.IO.IChunkedStreamSource
     {
         private FileEntry _entry;
         private readonly ParsedHeader _header;

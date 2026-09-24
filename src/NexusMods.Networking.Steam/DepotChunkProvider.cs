@@ -7,7 +7,7 @@ using SteamKit2;
 
 namespace NexusMods.Networking.Steam;
 
-public class DepotChunkProvider : IChunkedStreamSource
+public class DepotChunkProvider : NexusMods.Sdk.IO.IChunkedStreamSource
 {
     private readonly Manifest.FileData _fileData;
     private readonly Session _session;
