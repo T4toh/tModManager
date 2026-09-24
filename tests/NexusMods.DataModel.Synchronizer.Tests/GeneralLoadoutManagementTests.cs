@@ -5,6 +5,7 @@ using FluentAssertions;
 using Microsoft.Extensions.Logging;
 
 using NexusMods.Abstractions.Loadouts;
+using NexusMods.DataModel;
 using NexusMods.Games.TestFramework;
 using NexusMods.Hashing.xxHash3;
 using NexusMods.MnemonicDB.Abstractions.ElementComparers;
@@ -20,8 +21,14 @@ public class GeneralLoadoutManagementTests(ITestOutputHelper helper) : ACyberpun
     [Fact]
     public async Task SynchronizerIntegrationTests()
     {
+        // The per-sync GC sweep (ALoadoutSynchronizer.RunActions) must delete the unreferenced
+        // baseline game files backed up by StubbedFileHasherService immediately, matching the old
+        // Nx GC's behavior, otherwise the grace period keeps them "archived" and ResetToOriginalGameState
+        // restores them to disk at the end of this test.
+        ((LooseFileStore)FileStore).GracePeriod = TimeSpan.Zero;
+
         var sb = new StringBuilder();
-        
+
         var originalFileGamePath = new GamePath(LocationId.Game, "bin/originalGameFile.txt");
         var originalFileFullPath = GameInstallation.Locations.ToAbsolutePath(originalFileGamePath);
         originalFileFullPath.Parent.CreateDirectory();
