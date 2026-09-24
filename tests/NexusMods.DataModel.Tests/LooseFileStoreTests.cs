@@ -24,6 +24,8 @@ public class LooseFileStoreTests : IDisposable
 
     public void Dispose() { if (_root.DirectoryExists()) _root.DeleteDirectory(true); }
 
+    private AbsolutePath StoreRoot => _root.Combine("store");
+
     private static ArchivedFileEntry Entry(string text, Hash? hashOverride = null)
     {
         var bytes = Encoding.UTF8.GetBytes(text);
@@ -164,5 +166,72 @@ public class LooseFileStoreTests : IDisposable
         _store.DeleteAllExcept(new HashSet<Hash>());
 
         tmp.FileExists.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task DeleteAllExcept_IgnoresForeignFilesAndDirectories()
+    {
+        var keep = Entry("vivo");
+        await _store.BackupFiles([keep]);
+        _store.GracePeriod = TimeSpan.Zero;
+
+        // A top-level file that isn't a two-hex-char directory.
+        var foreignTopLevel = StoreRoot.Combine("old.nx");
+        await foreignTopLevel.WriteAllTextAsync("legacy archive");
+
+        // An unrelated directory with a file inside.
+        var foreignDirFile = StoreRoot.Combine("notes").Combine("readme.txt");
+        foreignDirFile.Parent.CreateDirectory();
+        await foreignDirFile.WriteAllTextAsync("not ours");
+
+        // A 16-char name that isn't hex, sitting inside a legitimate two-hex-char directory.
+        var prefix = keep.Hash.ToHex()[..2];
+        var foreignInHexDir = StoreRoot.Combine(prefix).Combine("zzzzzzzzzzzzzzzz");
+        await foreignInHexDir.WriteAllTextAsync("not a hash");
+
+        var deleted = _store.DeleteAllExcept(new HashSet<Hash> { keep.Hash });
+
+        deleted.Should().Be(0, "none of the foreign entries are owned by the store, and the live hash is kept");
+        foreignTopLevel.FileExists.Should().BeTrue();
+        foreignDirFile.FileExists.Should().BeTrue();
+        foreignInHexDir.FileExists.Should().BeTrue();
+        (await _store.HaveFile(keep.Hash)).Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task DeleteAll_RemovesOnlyOwnedFiles()
+    {
+        var a = Entry("uno");
+        var b = Entry("dos");
+        await _store.BackupFiles([a, b]);
+
+        var foreignDirFile = StoreRoot.Combine("notes").Combine("readme.txt");
+        foreignDirFile.Parent.CreateDirectory();
+        await foreignDirFile.WriteAllTextAsync("not ours");
+
+        var prefix = a.Hash.ToHex()[..2];
+        var foreignInHexDir = StoreRoot.Combine(prefix).Combine("zzzzzzzzzzzzzzzz");
+        await foreignInHexDir.WriteAllTextAsync("not a hash");
+
+        var deleted = _store.DeleteAll();
+
+        deleted.Should().Be(2);
+        (await _store.HaveFile(a.Hash)).Should().BeFalse();
+        (await _store.HaveFile(b.Hash)).Should().BeFalse();
+        foreignDirFile.FileExists.Should().BeTrue("DeleteAll must never touch foreign content");
+        foreignInHexDir.FileExists.Should().BeTrue("DeleteAll must never touch foreign content, even inside an owned directory");
+    }
+
+    [Fact]
+    public async Task TotalSize_ExcludesForeignFiles()
+    {
+        var e = Entry("conteo");
+        await _store.BackupFiles([e]);
+        var before = _store.TotalSize();
+
+        var foreignTopLevel = StoreRoot.Combine("old.nx");
+        await foreignTopLevel.WriteAllTextAsync("legacy archive, much bigger than the tracked file above");
+
+        _store.TotalSize().Should().Be(before);
     }
 }

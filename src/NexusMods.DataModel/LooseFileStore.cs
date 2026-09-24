@@ -156,6 +156,50 @@ public sealed class LooseFileStore : IFileStore
     /// </summary>
     internal TimeSpan GracePeriod { get; set; } = TimeSpan.FromHours(1);
 
+    // Hash.ToHex() emits uppercase hex (e.g. "4024E3632B936F67"), so that's what PathFor lays out on disk.
+    private static bool IsHex(char c) => c is (>= '0' and <= '9') or (>= 'A' and <= 'F');
+
+    private static bool IsTwoHexChars(ReadOnlySpan<char> s) => s.Length == 2 && IsHex(s[0]) && IsHex(s[1]);
+
+    private static bool IsHashFileName(ReadOnlySpan<char> s)
+    {
+        if (s.Length != 16) return false;
+        foreach (var c in s)
+        {
+            if (!IsHex(c)) return false;
+        }
+        return true;
+    }
+
+    /// <summary>
+    /// Enumerates only the files this store owns: files directly inside a two-hex-char
+    /// child directory of <see cref="_root"/>, that are either a 16-char hex hash whose first two
+    /// characters match the containing directory, or a temp file (<see cref="TmpMarker"/>). Anything
+    /// else on disk under <see cref="_root"/> (foreign files, unrelated subdirectories) is ignored:
+    /// never deleted, never counted.
+    /// </summary>
+    private IEnumerable<AbsolutePath> EnumerateOwnedFiles()
+    {
+        foreach (var dir in _root.EnumerateDirectories())
+        {
+            var dirName = dir.FileName.ToString();
+            if (!IsTwoHexChars(dirName)) continue;
+
+            foreach (var file in dir.EnumerateFiles())
+            {
+                var name = file.FileName.ToString();
+                if (name.Contains(TmpMarker, StringComparison.Ordinal))
+                {
+                    yield return file;
+                    continue;
+                }
+
+                if (IsHashFileName(name) && name.StartsWith(dirName, StringComparison.Ordinal))
+                    yield return file;
+            }
+        }
+    }
+
     /// <summary>
     /// Deletes every stored file whose hash is not in <paramref name="live"/>, plus stale temp files.
     /// Returns the number of deleted files.
@@ -164,13 +208,12 @@ public sealed class LooseFileStore : IFileStore
     {
         using var _ = Lock.WriteLock();
         var deleted = 0;
-        foreach (var file in _root.EnumerateFiles("*", recursive: true))
+        foreach (var file in EnumerateOwnedFiles())
         {
             var name = file.FileName.ToString();
-            var tmpIdx = name.IndexOf(TmpMarker, StringComparison.Ordinal);
-            // ponytail: young files may belong to a backup whose DB commit hasn't landed yet
-            if (tmpIdx >= 0)
+            if (name.Contains(TmpMarker, StringComparison.Ordinal))
             {
+                // ponytail: young files may belong to a backup whose DB commit hasn't landed yet
                 if (DateTime.UtcNow - File.GetLastWriteTimeUtc(file.ToString()) > GracePeriod)
                 {
                     file.Delete();
@@ -179,12 +222,46 @@ public sealed class LooseFileStore : IFileStore
                 continue;
             }
 
-            if (name.Length != 16) continue; // not ours
             if (live.Contains(Hash.FromHex(name))) continue;
             if (DateTime.UtcNow - File.GetLastWriteTimeUtc(file.ToString()) <= GracePeriod) continue;
             file.Delete();
             deleted++;
         }
         return deleted;
+    }
+
+    /// <summary>
+    /// Deletes every file this store owns, ignoring the grace period (this is an explicit user
+    /// action, e.g. "Delete Archives" in the Storage Manager), then removes the two-hex-char
+    /// directories left empty by that deletion. Foreign files/directories are never touched.
+    /// Returns the number of deleted files.
+    /// </summary>
+    internal int DeleteAll()
+    {
+        using var _ = Lock.WriteLock();
+        var owned = EnumerateOwnedFiles().ToArray();
+        foreach (var file in owned)
+            file.Delete();
+
+        foreach (var dir in _root.EnumerateDirectories())
+        {
+            var dirName = dir.FileName.ToString();
+            if (!IsTwoHexChars(dirName)) continue;
+            if (!dir.EnumerateFiles().Any() && !dir.EnumerateDirectories().Any())
+                dir.DeleteDirectory(recursive: false);
+        }
+
+        return owned.Length;
+    }
+
+    /// <summary>
+    /// Total size of every file this store owns. Foreign files under <see cref="_root"/> are not counted.
+    /// </summary>
+    internal Size TotalSize()
+    {
+        var total = 0UL;
+        foreach (var file in EnumerateOwnedFiles())
+            total += file.FileInfo.Size.Value;
+        return Size.From(total);
     }
 }
