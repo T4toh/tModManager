@@ -45,6 +45,31 @@ public class DownloadReExtractorTests(ITestOutputHelper helper) : ACyberpunkIsol
     }
 
     [Fact]
+    public async Task WhenCancelled_PropagatesCancellation()
+    {
+        var library = ServiceProvider.GetRequiredService<ILibraryService>();
+        var store = (LooseFileStore)ServiceProvider.GetRequiredService<IFileStore>();
+        var reExtractor = ServiceProvider.GetRequiredService<IDownloadReExtractor>();
+        var downloads = ServiceProvider.GetRequiredService<ISettingsManager>().Get<DownloadsSettings>().Folder.ToPath(FileSystem);
+        downloads.CreateDirectory();
+        var src = FileSystem.GetKnownPath(KnownPath.CurrentDirectory).Combine("Resources").Combine("Lookup Anything 1.48.1-541-1-48-1-1739333325.zip");
+        var inDownloads = downloads.Combine("mod-cancel.zip");
+        File.Copy(src.ToString(), inDownloads.ToString(), overwrite: true);
+
+        var local = await library.AddLocalFile(inDownloads);
+        var entryHashes = LibraryArchiveFileEntry.FindByParent(Connection.Db, local.AsLibraryFile().Id)
+            .Select(e => e.AsLibraryFile().Hash).ToArray();
+        entryHashes.Should().NotBeEmpty();
+        foreach (var h in entryHashes) store.PathFor(h).Delete();
+
+        using var cts = new CancellationTokenSource();
+        await cts.CancelAsync();
+
+        var act = async () => await reExtractor.RestoreAsync(entryHashes, cts.Token);
+        await act.Should().ThrowAsync<OperationCanceledException>();
+    }
+
+    [Fact]
     public async Task TopLevelLooseFile_RestoresDirectlyFromDownloadsFolder()
     {
         var library = ServiceProvider.GetRequiredService<ILibraryService>();

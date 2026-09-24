@@ -27,6 +27,7 @@ internal sealed class DownloadReExtractor(
     {
         var restored = new HashSet<Hash>();
         if (missing.Count == 0) return restored;
+        ct.ThrowIfCancellationRequested();
         var db = connection.Db;
         var downloads = settings.Get<DownloadsSettings>().Folder.ToPath(fs);
 
@@ -48,6 +49,9 @@ internal sealed class DownloadReExtractor(
 
         foreach (var (archive, wanted) in byDownload)
         {
+            // Checked explicitly (rather than relying only on the extractor honoring the token) because
+            // IFileExtractor swallows a canceled extractor attempt into FileExtractionException internally.
+            ct.ThrowIfCancellationRequested();
             var before = restored.Count;
             try
             {
@@ -81,7 +85,7 @@ internal sealed class DownloadReExtractor(
                 }
                 logger.LogInformation("Reextraídos {Count} archivos desde {Archive}", restored.Count - before, archive.FileName);
             }
-            catch (Exception ex)
+            catch (Exception ex) when (ex is not OperationCanceledException)
             {
                 logger.LogWarning(ex, "No se pudo reextraer desde {Archive}", archive);
             }
