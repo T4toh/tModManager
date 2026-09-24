@@ -1,6 +1,8 @@
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using NexusMods.Abstractions.NexusModsLibrary;
+using NexusMods.Sdk;
+using NexusMods.Sdk.Library;
 using NexusMods.Sdk.Settings;
 using NexusMods.Backend;
 using NexusMods.DataModel;
@@ -39,6 +41,10 @@ public static class DIHelpers
             .OverrideSettingsForTests<DataModelSettings>(settings => settings with
             {
                 UseInMemoryDataModel = true,
+            })
+            .OverrideSettingsForTests<DownloadsSettings>(settings => settings with
+            {
+                Folder = new ConfigurablePath(baseKnownPath, $"{baseDirectory}/Downloads"),
             })
 
             // Add DownloadsService itself

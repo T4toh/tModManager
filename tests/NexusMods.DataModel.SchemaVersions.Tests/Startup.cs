@@ -2,6 +2,7 @@ using Microsoft.Extensions.DependencyInjection;
 using NexusMods.App;
 using NexusMods.Paths;
 using NexusMods.Sdk;
+using NexusMods.Sdk.Library;
 using NexusMods.Sdk.Settings;
 
 namespace NexusMods.DataModel.SchemaVersions.Tests;
@@ -32,6 +33,11 @@ public class Startup
                     [
                         new ConfigurablePath(baseKnownPath, $"{baseDirectory}/Archives"),
                     ],
+                }
+            )
+            .OverrideSettingsForTests<DownloadsSettings>(settings => settings with
+                {
+                    Folder = new ConfigurablePath(baseKnownPath, $"{baseDirectory}/Downloads"),
                 }
             );
     }

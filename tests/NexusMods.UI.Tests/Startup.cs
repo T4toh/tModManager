@@ -6,6 +6,7 @@ using NexusMods.DataModel;
 using NexusMods.Games.RedEngine.Cyberpunk2077;
 using NexusMods.Paths;
 using NexusMods.Sdk;
+using NexusMods.Sdk.Library;
 using NexusMods.Sdk.Settings;
 using NexusMods.StandardGameLocators.TestHelpers;
 using NexusMods.UI.Tests.Framework;
@@ -37,6 +38,10 @@ public class Startup
                     ArchiveLocations = [
                         new ConfigurablePath(baseKnownPath, $"{baseDirectory}/Archives"),
                     ],
+                })
+                .OverrideSettingsForTests<DownloadsSettings>(settings => settings with
+                {
+                    Folder = new ConfigurablePath(baseKnownPath, $"{baseDirectory}/Downloads"),
                 })
                 .AddSingleton<AvaloniaApp>()
                 .AddLogging(builder => builder.AddXunitOutput().SetMinimumLevel(LogLevel.Debug))
