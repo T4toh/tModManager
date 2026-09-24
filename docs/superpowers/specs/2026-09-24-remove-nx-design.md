@@ -76,7 +76,7 @@ Patrón de `.git/objects`, pnpm y Nix: cada archivo se guarda una vez, con su ha
 - Nueva clase `LooseFileStore : IFileStore` en `NexusMods.DataModel`, registrada en lugar de
   `NxFileStore`.
 - Ubicación: `~/.local/share/tModManager/DataModel/Archives/`. `DataModelSettings.ArchiveLocations`
-  (array, soporte multi-ubicación del `.nx`) pasa a un único `ArchiveLocation`.
+  se conserva (lo usa la UI de settings) pero solo se usa el primer elemento.
 - Layout: `Archives/<2 primeros hex>/<hash hex completo>`, hash xxHash3 como hoy. El prefijo evita
   carpetas con cientos de miles de entradas.
 - `BackupFiles`: escribe a `<destino>.tmp-<guid>` en la misma carpeta y hace `File.Move` atómico al
@@ -107,8 +107,9 @@ código muerto sin consumidores (`IStreamSourceDispatcher`, `StreamSourceDispatc
 
 ### 2. Descargas de primera clase
 
-- Una sola fuente de la ruta: `DataModelSettings.DownloadsFolder`, default
-  `~/.local/share/tModManager/Downloads`. Se eliminan las copias hardcodeadas de `AddDownloadJob` y
+- Una sola fuente de la ruta: `DownloadsSettings.Folder` (nuevo, en `NexusMods.Sdk` para que lo
+  vean Library, Collections y DataModel), default `~/.local/share/tModManager/Downloads`. Sale
+  `DataModelSettings.DownloadsFolder`. Se eliminan las copias hardcodeadas de `AddDownloadJob` y
   `CollectionDownloader`; ambos leen el setting.
 - Nombre del archivo: el que da Nexus (el mismo nombre que baja el browser; hoy ya se calcula un
   "nombre significativo" en `AddDownloadJob.PreserveOriginalFile`, se reutiliza esa fuente).
