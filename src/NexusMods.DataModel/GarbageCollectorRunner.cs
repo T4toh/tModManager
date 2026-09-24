@@ -1,33 +1,24 @@
 using Microsoft.Extensions.Logging;
 using NexusMods.Abstractions.GC;
-using NexusMods.Sdk.Settings;
-using NexusMods.App.GarbageCollection.DataModel;
-using NexusMods.CrossPlatform;
 using NexusMods.MnemonicDB.Abstractions;
 using NexusMods.Sdk;
 
 namespace NexusMods.DataModel;
 
 /// <inheritdoc />
-public class GarbageCollectorRunner(ISettingsManager settings, NxFileStore store, IConnection connection, ILogger<GarbageCollectorRunner> logger) : IGarbageCollectorRunner
+public class GarbageCollectorRunner(LooseFileStore store, IConnection connection, ILogger<GarbageCollectorRunner> logger) : IGarbageCollectorRunner
 {
-    private readonly DataModelSettings _settings = settings.Get<DataModelSettings>();
-    private readonly NxFileStore _store = store;
-    private readonly IConnection _connection = connection;
-    private readonly ILogger<GarbageCollectorRunner> _logger = logger;
-
     /// <inheritdoc />
     public void Run()
     {
-        RunGarbageCollector.Do(_logger, _settings.ArchiveLocations, _store, _connection);
+        var live = LiveHashes.Collect(connection.Db);
+        var deleted = store.DeleteAllExcept(live);
+        logger.LogInformation("GC: {Deleted} archivos sin referencia borrados del store ({Live} vivos)", deleted, live.Count);
     }
-    
+
     /// <inheritdoc />
-    public Task RunAsync()
-    {
-        return Task.Run(Run);
-    }
-    
+    public Task RunAsync() => Task.Run(Run);
+
     /// <inheritdoc />
     public async Task RunWithMode(GarbageCollectorRunMode gcRunMode)
     {
@@ -37,7 +28,7 @@ public class GarbageCollectorRunner(ISettingsManager settings, NxFileStore store
                 Run();
                 break;
             case GarbageCollectorRunMode.RunAsyncInBackground:
-                RunAsync().FireAndForget(_logger);
+                RunAsync().FireAndForget(logger);
                 break;
             case GarbageCollectorRunMode.RunAsynchronously:
                 await RunAsync();

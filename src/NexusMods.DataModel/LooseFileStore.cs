@@ -81,6 +81,7 @@ public sealed class LooseFileStore : IFileStore
     /// <inheritdoc />
     public async Task ExtractFiles(IEnumerable<(Hash Hash, AbsolutePath Dest)> files, CancellationToken token = default, Action<(int Current, int Max)>? progress = null)
     {
+        using var _ = Lock.ReadLock();
         var list = files.ToArray();
         var missing = list.Where(f => f.Hash != EmptyFile && !PathFor(f.Hash).FileExists).ToArray();
         if (missing.Length > 0) throw new MissingArchiveException(missing);
@@ -126,6 +127,7 @@ public sealed class LooseFileStore : IFileStore
     /// <inheritdoc />
     public async Task<byte[]> Load(Hash hash, CancellationToken token = default)
     {
+        using var _ = Lock.ReadLock();
         if (hash == EmptyFile) return [];
         var path = PathFor(hash);
         if (!path.FileExists) throw new MissingArchiveException(hash);
@@ -139,9 +141,36 @@ public sealed class LooseFileStore : IFileStore
     /// <remarks>No-op: paths are computed on the fly from the hash, there is no cache to reload.</remarks>
     public void ReloadCaches() { }
 
+    private static readonly TimeSpan TmpGracePeriod = TimeSpan.FromHours(1);
+
     /// <summary>
     /// Deletes every stored file whose hash is not in <paramref name="live"/>, plus stale temp files.
-    /// Returns the number of deleted files. Implemented in Task 2.
+    /// Returns the number of deleted files.
     /// </summary>
-    internal int DeleteAllExcept(IReadOnlySet<Hash> live) => throw new NotImplementedException();
+    internal int DeleteAllExcept(IReadOnlySet<Hash> live)
+    {
+        using var _ = Lock.WriteLock();
+        var deleted = 0;
+        foreach (var file in _root.EnumerateFiles("*", recursive: true))
+        {
+            var name = file.FileName.ToString();
+            var tmpIdx = name.IndexOf(TmpMarker, StringComparison.Ordinal);
+            if (tmpIdx >= 0)
+            {
+                // ponytail: stale temp files from a crash are swept after an hour; in-flight ones are younger
+                if (DateTime.UtcNow - File.GetLastWriteTimeUtc(file.ToString()) > TmpGracePeriod)
+                {
+                    file.Delete();
+                    deleted++;
+                }
+                continue;
+            }
+
+            if (name.Length != 16) continue; // not ours
+            if (live.Contains(Hash.FromHex(name))) continue;
+            file.Delete();
+            deleted++;
+        }
+        return deleted;
+    }
 }

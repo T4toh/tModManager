@@ -109,4 +109,31 @@ public class LooseFileStoreTests : IDisposable
         s.CanSeek.Should().BeTrue();
         s.Length.Should().Be(6);
     }
+
+    [Fact]
+    public async Task DeleteAllExcept_KeepsLiveDeletesRest()
+    {
+        var keep = Entry("vivo");
+        var drop = Entry("muerto");
+        await _store.BackupFiles([keep, drop]);
+
+        var deleted = _store.DeleteAllExcept(new HashSet<Hash> { keep.Hash });
+
+        deleted.Should().Be(1);
+        (await _store.HaveFile(keep.Hash)).Should().BeTrue();
+        (await _store.HaveFile(drop.Hash)).Should().BeFalse();
+    }
+
+    [Fact]
+    public void Gc_DoesNotDeleteTmpFilesInFlight()
+    {
+        // A temp file younger than the grace period belongs to a backup still running in another process step.
+        var tmp = _store.PathFor(Hash.From(99)).Parent.Combine("0000000000000063.tmp-abc");
+        tmp.Parent.CreateDirectory();
+        tmp.Create().Dispose();
+
+        _store.DeleteAllExcept(new HashSet<Hash>());
+
+        tmp.FileExists.Should().BeTrue();
+    }
 }
