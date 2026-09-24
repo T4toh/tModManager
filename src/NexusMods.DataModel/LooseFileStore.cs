@@ -49,10 +49,26 @@ public sealed class LooseFileStore : IFileStore
     public async Task BackupFiles(IEnumerable<ArchivedFileEntry> backups, bool deduplicate = true, CancellationToken token = default)
     {
         using var _ = Lock.ReadLock();
-        var entries = backups.DistinctBy(x => x.Hash).Where(x => !PathFor(x.Hash).FileExists).ToArray();
+        var entries = backups.DistinctBy(x => x.Hash).ToArray();
+        var written = 0;
         await Parallel.ForEachAsync(entries, token, async (entry, ct) =>
         {
             var dest = PathFor(entry.Hash);
+            if (dest.FileExists)
+            {
+                try
+                {
+                    // Dedupe-reused file: refresh its mtime so the GC sweep's grace period protects
+                    // it until whatever just referenced it (again) commits to the DB.
+                    File.SetLastWriteTimeUtc(dest.ToString(), DateTime.UtcNow);
+                    return;
+                }
+                catch (Exception e) when (e is FileNotFoundException or DirectoryNotFoundException)
+                {
+                    // Vanished between the check and the touch; fall through and write it normally.
+                }
+            }
+
             dest.Parent.CreateDirectory();
             var tmp = dest.Parent.Combine($"{dest.FileName}{TmpMarker}{Guid.NewGuid():N}");
             try
@@ -69,13 +85,14 @@ public sealed class LooseFileStore : IFileStore
 
                 // Another writer may have finished the same hash first; identical content, so overwriting is harmless.
                 File.Move(tmp.ToString(), dest.ToString(), overwrite: true);
+                Interlocked.Increment(ref written);
             }
             finally
             {
                 if (tmp.FileExists) tmp.Delete();
             }
         });
-        if (entries.Length > 0) _logger.LogDebug("Guardados {Count} archivos en el store", entries.Length);
+        if (written > 0) _logger.LogDebug("Guardados {Count} archivos en el store", written);
     }
 
     /// <inheritdoc />
@@ -141,7 +158,10 @@ public sealed class LooseFileStore : IFileStore
     /// <remarks>No-op: paths are computed on the fly from the hash, there is no cache to reload.</remarks>
     public void ReloadCaches() { }
 
-    private static readonly TimeSpan TmpGracePeriod = TimeSpan.FromHours(1);
+    /// <summary>
+    /// How long an unreferenced file (hash or temp) survives a sweep. Exposed for tests.
+    /// </summary>
+    internal TimeSpan GracePeriod { get; set; } = TimeSpan.FromHours(1);
 
     /// <summary>
     /// Deletes every stored file whose hash is not in <paramref name="live"/>, plus stale temp files.
@@ -155,10 +175,10 @@ public sealed class LooseFileStore : IFileStore
         {
             var name = file.FileName.ToString();
             var tmpIdx = name.IndexOf(TmpMarker, StringComparison.Ordinal);
+            // ponytail: young files may belong to a backup whose DB commit hasn't landed yet
             if (tmpIdx >= 0)
             {
-                // ponytail: stale temp files from a crash are swept after an hour; in-flight ones are younger
-                if (DateTime.UtcNow - File.GetLastWriteTimeUtc(file.ToString()) > TmpGracePeriod)
+                if (DateTime.UtcNow - File.GetLastWriteTimeUtc(file.ToString()) > GracePeriod)
                 {
                     file.Delete();
                     deleted++;
@@ -168,6 +188,7 @@ public sealed class LooseFileStore : IFileStore
 
             if (name.Length != 16) continue; // not ours
             if (live.Contains(Hash.FromHex(name))) continue;
+            if (DateTime.UtcNow - File.GetLastWriteTimeUtc(file.ToString()) <= GracePeriod) continue;
             file.Delete();
             deleted++;
         }

@@ -116,12 +116,41 @@ public class LooseFileStoreTests : IDisposable
         var keep = Entry("vivo");
         var drop = Entry("muerto");
         await _store.BackupFiles([keep, drop]);
+        _store.GracePeriod = TimeSpan.Zero;
 
         var deleted = _store.DeleteAllExcept(new HashSet<Hash> { keep.Hash });
 
         deleted.Should().Be(1);
         (await _store.HaveFile(keep.Hash)).Should().BeTrue();
         (await _store.HaveFile(drop.Hash)).Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task DeleteAllExcept_KeepsYoungUnreferencedFiles()
+    {
+        // A file with no DB reference yet may belong to a backup whose commit just hasn't landed.
+        var drop = Entry("recien_escrito");
+        await _store.BackupFiles([drop]);
+
+        var deleted = _store.DeleteAllExcept(new HashSet<Hash>());
+
+        deleted.Should().Be(0);
+        (await _store.HaveFile(drop.Hash)).Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task BackupFiles_ExistingFile_RefreshesMtime()
+    {
+        var e = Entry("reusado");
+        await _store.BackupFiles([e]);
+        File.SetLastWriteTimeUtc(_store.PathFor(e.Hash).ToString(), DateTime.UtcNow - TimeSpan.FromHours(2));
+
+        await _store.BackupFiles([e]);
+
+        (DateTime.UtcNow - File.GetLastWriteTimeUtc(_store.PathFor(e.Hash).ToString())).Should().BeLessThan(TimeSpan.FromMinutes(1));
+        var deleted = _store.DeleteAllExcept(new HashSet<Hash>());
+        deleted.Should().Be(0);
+        (await _store.HaveFile(e.Hash)).Should().BeTrue();
     }
 
     [Fact]
