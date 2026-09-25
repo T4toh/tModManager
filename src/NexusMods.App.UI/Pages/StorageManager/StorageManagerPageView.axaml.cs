@@ -42,6 +42,9 @@ public partial class StorageManagerPageView : ReactiveUserControl<IStorageManage
 
             this.BindCommand(ViewModel, vm => vm.DeleteDownloadsCommand, view => view.DeleteDownloadsButton)
                 .DisposeWith(d);
+
+            this.BindCommand(ViewModel, vm => vm.DeleteProtonPrefixCommand, view => view.DeleteProtonPrefixButton)
+                .DisposeWith(d);
         });
     }
 }

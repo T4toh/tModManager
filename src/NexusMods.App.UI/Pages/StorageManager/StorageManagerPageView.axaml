@@ -140,6 +140,9 @@
                                 <Button x:Name="DeleteDownloadsButton"
                                         Classes="Danger"
                                         Content="Borrar descargas" />
+                                <Button x:Name="DeleteProtonPrefixButton"
+                                        Classes="Danger"
+                                        Content="Borrar prefix de Proton" />
                             </StackPanel>
                         </StackPanel>
                     </Border>

@@ -77,28 +77,6 @@ public class LegacyCleanupOverlayTests
     }
 
     [Fact]
-    public void FindSteamLibraryRoot_WalksUpToTheFolderWithSteamapps()
-    {
-        using var tempDir = new TempDir();
-        var library = FileSystem.Shared.FromUnsanitizedFullPath(tempDir.Path);
-        var game = library.Combine("steamapps").Combine("common").Combine("Cyberpunk 2077");
-        game.CreateDirectory();
-
-        LegacyCleanupOverlayViewModel.FindSteamLibraryRoot(game).Should().Be(library);
-        LegacyCleanupOverlayViewModel.FindSteamLibraryRoot(library.Combine("steamapps")).Should().Be(library);
-    }
-
-    [Fact]
-    public void FindSteamLibraryRoot_ReturnsNullWithoutSteamapps()
-    {
-        using var tempDir = new TempDir();
-        var game = FileSystem.Shared.FromUnsanitizedFullPath(tempDir.Path).Combine("Games").Combine("Cyberpunk 2077");
-        game.CreateDirectory();
-
-        LegacyCleanupOverlayViewModel.FindSteamLibraryRoot(game).Should().BeNull();
-    }
-
-    [Fact]
     public void Wizard_RunsEachStepInOrderAndRestartsAtTheEnd()
     {
         var storage = Substitute.For<IStorageAnalyzer>();

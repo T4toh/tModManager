@@ -1,14 +1,12 @@
 using Humanizer;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using NexusMods.App.UI.Helpers;
 using NexusMods.DataModel;
 using NexusMods.DataModel.LegacyData;
 using NexusMods.DataModel.Storage;
-using NexusMods.MnemonicDB.Abstractions;
 using NexusMods.Paths;
 using NexusMods.Sdk;
-using NexusMods.Sdk.Games;
-using NexusMods.Sdk.Loadouts;
 using NexusMods.Sdk.Settings;
 using R3;
 
@@ -139,7 +137,7 @@ public class LegacyCleanupOverlayViewModel : AOverlayViewModel<ILegacyCleanupOve
             storage: serviceProvider.GetRequiredService<IStorageAnalyzer>(),
             osInterop: osInterop,
             logger: serviceProvider.GetRequiredService<ILogger<LegacyCleanupOverlayViewModel>>(),
-            steamLibraryRoot: () => SteamLibraryRoot(serviceProvider),
+            steamLibraryRoot: () => SteamPaths.LibraryRoot(serviceProvider),
             resetAndRestart: () =>
             {
                 LegacyDataDetector.RequestResetOnStart(fs);
@@ -147,28 +145,5 @@ public class LegacyCleanupOverlayViewModel : AOverlayViewModel<ILegacyCleanupOve
             },
             quit: AppRestart.Shutdown
         );
-    }
-
-    /// <summary>The Steam library that holds the first managed game (the folder containing <c>steamapps</c>), or null.</summary>
-    private static AbsolutePath? SteamLibraryRoot(IServiceProvider serviceProvider)
-    {
-        var db = serviceProvider.GetRequiredService<IConnection>().Db;
-        foreach (var loadout in Loadout.All(db))
-        {
-            if (!loadout.IsVisible()) continue;
-            return FindSteamLibraryRoot(loadout.InstallationInstance.Locations[LocationId.Game].Path);
-        }
-
-        return null;
-    }
-
-    /// <summary>Walks up from <paramref name="gamePath"/> (<c>&lt;lib&gt;/steamapps/common/&lt;game&gt;</c>) to the directory containing <c>steamapps</c>.</summary>
-    internal static AbsolutePath? FindSteamLibraryRoot(AbsolutePath gamePath)
-    {
-        for (var dir = gamePath; ; dir = dir.Parent)
-        {
-            if (dir.Combine("steamapps").DirectoryExists()) return dir;
-            if (dir == dir.Parent) return null;
-        }
     }
 }
