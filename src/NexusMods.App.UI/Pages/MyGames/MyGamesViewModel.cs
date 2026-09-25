@@ -333,6 +333,7 @@ public class MyGamesViewModel : APageViewModel<IMyGamesViewModel>, IMyGamesViewM
                                 catch (Exception ex)
                                 {
                                     _logger.LogError(ex, "Error removing game");
+                                    _notificationService.ShowToast($"No se quitó el juego: {ex.Message}", ToastNotificationVariant.Failure);
                                 }
                                 finally
                                 {
@@ -461,7 +462,10 @@ public class MyGamesViewModel : APageViewModel<IMyGamesViewModel>, IMyGamesViewM
             }
             catch (Exception ex)
             {
-                _logger.LogWarning(ex, "UnManage file operation failed. Continuing with database removal.");
+                // Stop here: removing the DB records now would drop the backups of the original game files the
+                // mods overwrote (GameBackedUpFile), and GC would delete them, while the mods stay deployed
+                _logger.LogError(ex, "UnManage failed; the game is not removed so its backups are kept");
+                throw;
             }
         }
 

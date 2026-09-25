@@ -284,7 +284,7 @@ public class CyberpunkDeepCleanTool : ITool
         // Removing the mods from the database below would make the next apply delete the files that could not be
         // backed up, and pruning could drop the only older backup. Stop here instead.
         if (failedMoves > 0)
-            throw new InvalidOperationException($"No se pudieron mover {failedMoves} carpeta(s) o archivo(s) al backup (¿el juego está en otro disco?); no se borró nada ni se tocaron los mods. Revisá el log.");
+            throw new InvalidOperationException($"No se pudieron mover {failedMoves} carpeta(s) o archivo(s) al backup (¿el juego está en otro disco?). Lo que sí se movió quedó en {backupDir}; no se borró nada y los mods siguen en la base, así que al aplicar se vuelven a poner. Revisá el log.");
 
         foreach (var relativePath in PathsToDelete)
         {

@@ -478,6 +478,11 @@ public partial class ALoadoutSynchronizer : ILoadoutSynchronizer
         var gameMetadataId = loadout.InstallationId;
         var locations = loadout.InstallationInstance.Locations;
         EnsureDiskChangesStayInside(syncTree, locations);
+
+        // A Steam patch the hash database doesn't know drops the vanilla files from the Game layer, so original game
+        // files show up as leftovers to delete. Adding files stays possible; deleting waits for the vanilla list.
+        if (loadout.Installation.Store == GameStore.Steam && syncTree.Values.Any(node => node.Actions.HasFlag(Actions.DeleteFromDisk)))
+            EnsureVanillaDataKnown(loadout.Installation.Store, loadout.LocatorIds.ToArray(), "borrar archivos del juego");
         HashSet<GamePath> foldersWithDeletedFiles = [];
         EntityId? overridesGroup = null;
 
@@ -1083,11 +1088,6 @@ public partial class ALoadoutSynchronizer : ILoadoutSynchronizer
         
         // Update locator IDs before building the sync tree
         loadout = await UpdateLocatorIds(loadout);
-
-        // A Steam patch the hash database doesn't know drops the vanilla files from the Game layer: syncing would
-        // then delete every original game file as a leftover
-        if (loadout.Installation.Store == GameStore.Steam)
-            EnsureVanillaDataKnown(loadout.Installation.Store, loadout.LocatorIds.ToArray(), "aplicar el loadout");
         
         // If we are swapping loadouts, then we need to synchronize the previous loadout first to ingest
         // any changes, then we can apply the new loadout.

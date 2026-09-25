@@ -38,7 +38,7 @@ internal class GameLocationsService : IGameLocationsService
         var topLevelLocations = installation.Locations.GetTopLevelLocations();
         // Never enter symlinked folders: files behind a link live elsewhere, and once indexed the synchronizer
         // would back them up and delete them on clean/unmanage/loadout switch
-        var enumerable = topLevelLocations.Where(kv => kv.Value.DirectoryExists()).SelectMany(kv => SafePath.EnumerateFilesNoFollow(kv.Value));
+        var enumerable = topLevelLocations.Where(kv => kv.Value.DirectoryExists()).SelectMany(kv => SafePath.EnumerateFilesNoFollow(kv.Value).Where(file => SafePath.IsStrictlyInside(kv.Value, file)));
 
         var seenPaths = new ConcurrentDictionary<GamePath, bool>();
         var newFiles = new ConcurrentDictionary<GamePath, IndexFileResult>();

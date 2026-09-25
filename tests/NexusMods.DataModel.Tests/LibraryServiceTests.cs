@@ -80,6 +80,17 @@ public class LibraryServiceTests : ACyberpunkIsolatedGameTest<LibraryServiceTest
     }
 
     [Fact]
+    public async Task ArchiveWithSymlink_IsRejected()
+    {
+        // Hashing a link reads its target; with an older system 7z that target can be anywhere on disk
+        var archivePath = FileSystem.GetKnownPath(KnownPath.CurrentDirectory).Combine("Resources").Combine("with-symlink.7z");
+        archivePath.FileExists.Should().BeTrue();
+
+        var act = async () => await _libraryService.AddLocalFile(archivePath);
+        await act.Should().ThrowAsync<InvalidOperationException>().WithMessage("*symlink*");
+    }
+
+    [Fact]
     public async Task Test_Issue3003()
     {
         const string fileName = "zip-with-spaces.zip";

@@ -42,6 +42,7 @@ internal static class CleanupVerbs
             .Select(loadout => loadout.InstallationInstance)
             .Distinct();
 
+        var revertFailed = false;
         foreach (var installation in managedInstallations)
         {
             try
@@ -51,8 +52,16 @@ internal static class CleanupVerbs
             }
             catch (Exception ex)
             {
+                revertFailed = true;
                 await renderer.Error(ex, "Error reverting {0}: {1}", installation.Game.DisplayName, ex.Message);
             }
+        }
+
+        // Deleting the store and the DB now would lose the backups of the original game files the mods overwrote
+        if (revertFailed)
+        {
+            await renderer.Text("A game could not be reverted; nothing was deleted. Fix the error above and run uninstall-app again.");
+            return -1;
         }
 
         // Step 2: Delete application-specific directories

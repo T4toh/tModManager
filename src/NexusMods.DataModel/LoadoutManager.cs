@@ -233,20 +233,23 @@ internal partial class LoadoutManager : ILoadoutManager
 
     public async ValueTask DeleteLoadout(LoadoutId loadoutId, GarbageCollectorRunMode gcRunMode = GarbageCollectorRunMode.DoNotRun, bool deactivateIfActive = true, CancellationToken cancellationToken = default)
     {
-        {
-            using var tx1 = _connection.BeginTransaction();
-            tx1.Add(loadoutId, Loadout.LoadoutKind, LoadoutKind.Deleted);
-            await tx1.Commit();
-        }
-
         var loadout = Loadout.Load(_connection.Db, loadoutId);
-        Debug.Assert(!loadout.IsVisible(), "loadout shouldn't be visible anymore");
 
+        // Deactivate first: if the reset to vanilla refuses (no vanilla file list), the loadout must stay intact
+        // instead of hidden-but-still-applied, which would make every later sync retry (and fail) the swap
         var metadata = GameInstallMetadata.Load(_connection.Db, loadout.InstallationId);
         if (deactivateIfActive && GameInstallMetadata.LastSyncedLoadout.TryGetValue(metadata, out var lastAppliedLoadout) && lastAppliedLoadout == loadoutId.Value)
         {
             await DeactivateCurrentLoadout(loadout.InstallationInstance, cancellationToken: cancellationToken);
         }
+
+        {
+            using var tx1 = _connection.BeginTransaction();
+            tx1.Add(loadoutId, Loadout.LoadoutKind, LoadoutKind.Deleted);
+            await tx1.Commit();
+        }
+        loadout = Loadout.Load(_connection.Db, loadoutId);
+        Debug.Assert(!loadout.IsVisible(), "loadout shouldn't be visible anymore");
 
         using var tx = _connection.BeginTransaction();
 

@@ -43,12 +43,15 @@ public class DataDirectoryMigrationTests
             upstream.Combine("FileHashesDatabase/db").CreateDirectory();
             File.WriteAllText(upstream.Combine("Configs/Downloads.json").ToString(), """{"Folder":"tModManager/Downloads"}""");
             File.WriteAllText(upstream.Combine("Configs/Logging.json").ToString(), """{"File":"NexusMods.App/Logs/x.log"}""");
+            File.WriteAllText(upstream.Combine("Configs/Cli.json").ToString(), """{"SyncFile":"/run/user/1000/NexusMods.App-sync_file.sync"}""");
             File.WriteAllText(upstream.Combine("FileHashesDatabase/db/data").ToString(), "hashes");
 
             DataDirectoryMigration.CopyUpstreamDataOnce(basePath);
 
             await Assert.That(ours.Combine("Configs/Downloads.json").FileExists).IsTrue();
             await Assert.That(ours.Combine("Configs/Logging.json").FileExists).IsFalse();
+            await Assert.That(ours.Combine("Configs/Cli.json").FileExists).IsFalse();
+            await Assert.That(Directory.EnumerateDirectories(ours.ToString(), "*.tmp-*")).IsEmpty();
             await Assert.That(File.ReadAllText(ours.Combine("FileHashesDatabase/db/data").ToString())).IsEqualTo("hashes");
             // Copied, not moved: the official app keeps its folder
             await Assert.That(upstream.Combine("Configs/Logging.json").FileExists).IsTrue();

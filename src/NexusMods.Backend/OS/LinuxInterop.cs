@@ -74,7 +74,8 @@ internal partial class LinuxInterop : IOSInterop
         // NOTE(erri120): the XDG Desktop Portal API works off file descriptors
         // we can't open empty directories, we need at least one file
 
-        if (!directoryPath.EnumerateFiles().TryGetFirst(out var file))
+        // Top level only: a recursive walk follows symlinks, and a Proton prefix's dosdevices/z: points at /
+        if (!directoryPath.EnumerateFiles("*", recursive: false).TryGetFirst(out var file))
         {
             _logger.LogWarning("Opening empty directories is not supported on Linux");
             return;
