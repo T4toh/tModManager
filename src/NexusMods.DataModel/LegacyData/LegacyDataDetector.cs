@@ -39,6 +39,28 @@ public static class LegacyDataDetector
     public static bool IsResetPending(IFileSystem fs, AbsolutePath? markerPath = null) =>
         ResetMarker(fs, markerPath).FileExists;
 
+    /// <summary>
+    /// Whether the database should be treated as already existing (so migrations should run against
+    /// it) once a reset attempt has had a chance to run. Pure function so the tricky case — a reset
+    /// was requested but its own safety guard refused it — can be unit-tested without touching disk.
+    /// </summary>
+    /// <param name="dirExistedBeforeReset">Whether the DB directory existed before attempting a reset.</param>
+    /// <param name="resetWasPendingBefore"><see cref="IsResetPending"/>, read before attempting a reset.</param>
+    /// <param name="resetWasPendingAfter"><see cref="IsResetPending"/>, read again after attempting a reset.</param>
+    /// <remarks>
+    /// <see cref="ResetIfRequested"/> only ever clears the marker as its last step, once it actually
+    /// deleted the database — if its guard refuses instead, it throws before reaching that point and
+    /// the marker survives. So "pending before, no longer pending after" is the only reliable signal
+    /// that a reset really ran; treating "marker present" alone as "no model" (as an earlier version
+    /// of this logic did) makes a refused reset fall through to <c>InitialSetup</c> on a database
+    /// that still has a schema version, which throws.
+    /// </remarks>
+    public static bool ModelExistsAfterReset(bool dirExistedBeforeReset, bool resetWasPendingBefore, bool resetWasPendingAfter)
+    {
+        var resetRan = resetWasPendingBefore && !resetWasPendingAfter;
+        return dirExistedBeforeReset && !resetRan;
+    }
+
     /// <summary>Deletes the <c>.nx</c> archives and the database if a reset was requested. Returns true if it did.</summary>
     /// <param name="archivesRoot">Where the <c>.nx</c> archives live.</param>
     /// <param name="mnemonicDbPath">The database directory to delete.</param>

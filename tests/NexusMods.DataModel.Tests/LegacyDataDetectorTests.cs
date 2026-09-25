@@ -41,7 +41,13 @@ public class LegacyDataDetectorTests : IDisposable
         _root.CreateDirectory();
         _root.Combine("a.nx").Create().Dispose();
         var fs = new InMemoryFileSystem();
-        LegacyDataDetector.ResetIfRequested(_root, _root.Combine("db"), fs).Should().BeFalse();
+        // Explicit temp markerPath/dataDirectoryRoot: fs is already an isolated in-memory
+        // filesystem (never touches real disk on its own), but every call here is spelled out so
+        // none of this test's arguments could ever be mistaken for, or accidentally fall back to,
+        // a real path.
+        var markerPath = _root.Combine("reset-marker");
+        var dataDirectoryRoot = _root.Combine("data-root");
+        LegacyDataDetector.ResetIfRequested(_root, _root.Combine("db"), fs, markerPath, dataDirectoryRoot).Should().BeFalse();
         _root.Combine("a.nx").FileExists.Should().BeTrue();
     }
 
@@ -159,6 +165,24 @@ public class LegacyDataDetectorTests : IDisposable
         act.Should().Throw<InvalidOperationException>();
         archivesRoot.DirectoryExists().Should().BeTrue();
         nested.DirectoryExists().Should().BeTrue();
+    }
+
+    [Theory]
+    // No marker: pass-through, unaffected by whether a reset was ever considered.
+    [InlineData(true, false, false, true)] // existing DB, no reset requested -> MigrateAll
+    [InlineData(false, false, false, false)] // fresh install, no reset requested -> InitialSetup
+    // Marker present and the reset actually ran (ResetIfRequested cleared it after deleting the DB
+    // dir): the database is now empty regardless of whether it existed before -> InitialSetup.
+    [InlineData(true, true, false, false)]
+    // Marker present but the reset was refused by its own safety guard (still pending afterwards):
+    // nothing was deleted, the existing DB must still be migrated, not re-initialized (which would
+    // throw "already has a schema version").
+    [InlineData(true, true, true, true)]
+    public void ModelExistsAfterReset_DecidesInitialSetupVsMigrate(
+        bool dirExistedBeforeReset, bool resetWasPendingBefore, bool resetWasPendingAfter, bool expected)
+    {
+        LegacyDataDetector.ModelExistsAfterReset(dirExistedBeforeReset, resetWasPendingBefore, resetWasPendingAfter)
+            .Should().Be(expected);
     }
 }
 
