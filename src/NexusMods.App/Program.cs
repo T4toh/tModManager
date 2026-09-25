@@ -47,6 +47,7 @@ public class Program
             var basePath = fs.GetKnownPath(fs.OS.IsLinux ? KnownPath.XDG_DATA_HOME : KnownPath.LocalApplicationDataDirectory);
             if (DataDirectoryMigration.MigrateLegacyDataDirectory(basePath))
                 Console.Error.WriteLine($"Migrated data directory to {basePath.Combine(ApplicationConstants.DataDirectoryName)}");
+            DataDirectoryMigration.CopyUpstreamDataOnce(basePath);
         }
         catch (Exception e)
         {
@@ -241,6 +242,16 @@ public class Program
         var pid = process.Id;
         var canConnect = await CanConnectToProcess(logger, port, timeout: TimeSpan.FromSeconds(6), services: serviceProvider);
         if (canConnect) return true;
+
+        // The PID in the sync file outlives a crash and gets reused: never kill a process that isn't tModManager
+        string processName;
+        try { processName = process.ProcessName; }
+        catch (Exception) { return false; }
+        if (processName != Process.GetCurrentProcess().ProcessName)
+        {
+            logger.LogWarning("PID `{PID}` from the sync file now belongs to `{Name}`, not tModManager; leaving it alone", pid, processName);
+            return false;
+        }
 
         logger.LogWarning("Unable to connect to old process with PID `{PID}` on port `{Port}`, force closing process", pid, port);
 

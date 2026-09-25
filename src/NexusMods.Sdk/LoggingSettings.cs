@@ -132,8 +132,7 @@ public record LoggingSettings : ISettings
         };
     }
     
-    // NOTE: OSX ".App" is apparently special, using _ instead of . to prevent weirdness
-    private static string GetBaseDirectoryName(IOSInformation os) => os.IsOSX ? "NexusMods_App/Logs" : "NexusMods.App/Logs";
+    private static string GetBaseDirectoryName(IOSInformation os) => $"{ApplicationConstants.DataDirectoryName}/Logs";
 
     private static KnownPath BaseKnownPath(IOSInformation os)
     {

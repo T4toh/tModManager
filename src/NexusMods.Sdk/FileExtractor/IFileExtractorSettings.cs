@@ -42,7 +42,8 @@ public record FileExtractorSettings : ISettings
 
         return new FileExtractorSettings
         {
-            TempFolderLocation = new ConfigurablePath(baseKnownPath, "NexusMods.App/Temp"),
+            // Own folder: the temp folder is wiped on shutdown, and the official app uses NexusMods.App/Temp
+            TempFolderLocation = new ConfigurablePath(baseKnownPath, $"{ApplicationConstants.DataDirectoryName}/Temp"),
         };
     }
 }
