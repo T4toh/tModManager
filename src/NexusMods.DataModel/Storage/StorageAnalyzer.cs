@@ -134,14 +134,6 @@ internal class StorageAnalyzer : IStorageAnalyzer
     /// <inheritdoc />
     public Task DeletePhysicalFilesAsync(CancellationToken cancellationToken = default)
     {
-        // Delete all files in the downloads folder
-        var downloadsPath = _settingsManager.Get<DownloadsSettings>().Folder.ToPath(_fileSystem);
-        if (downloadsPath.DirectoryExists())
-        {
-            foreach (var file in downloadsPath.EnumerateFiles())
-                file.Delete();
-        }
-
         // Delete all timestamped subdirectories under CyberpunkBackups
         var cyberpunkBackupsPath = GetCyberpunkBackupsPath();
         if (cyberpunkBackupsPath.DirectoryExists())
@@ -150,6 +142,16 @@ internal class StorageAnalyzer : IStorageAnalyzer
                 subDir.DeleteDirectory(recursive: true);
         }
 
+        return Task.CompletedTask;
+    }
+
+    /// <inheritdoc />
+    public Task DeleteDownloadsAsync(CancellationToken cancellationToken = default)
+    {
+        var downloads = _settingsManager.Get<DownloadsSettings>().Folder.ToPath(_fileSystem);
+        if (downloads.DirectoryExists())
+            foreach (var file in downloads.EnumerateFiles("*", recursive: false))
+                file.Delete();
         return Task.CompletedTask;
     }
 }

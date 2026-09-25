@@ -23,14 +23,19 @@ public interface IStorageAnalyzer
     Task RunDeepCleanOnAllLoadoutsAsync(CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Deletes all .nx archive files from every configured archive location.
+    /// Deletes all archive chunks from the store's content-addressed archive location.
     /// </summary>
     Task DeleteArchivesAsync(CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Deletes all files in the downloads folder and all timestamped backup directories
-    /// under CyberpunkBackups, freeing disk space occupied by downloaded mod archives
-    /// and mod-file snapshots created by the Deep Clean tool.
+    /// Deletes all timestamped backup directories under CyberpunkBackups, freeing disk space
+    /// occupied by mod-file snapshots created by the Deep Clean tool. Never touches the
+    /// downloads folder.
     /// </summary>
     Task DeletePhysicalFilesAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Borra las descargas originales. Solo por acción explícita del usuario.
+    /// </summary>
+    Task DeleteDownloadsAsync(CancellationToken cancellationToken = default);
 }

@@ -139,8 +139,8 @@ public class InstallCollectionDownloadJob : IJobDefinitionWithStart<InstallColle
         var libraryFile = GetLibraryFile(Item, Connection.Db);
 
         // Validate the archive physically exists on disk — the DB may say "downloaded"
-        // but the .nx archive could have been deleted (garbage collection, manual cleanup, etc.)
-        // For archives, check ALL children since they may be spread across different .nx files.
+        // but the store entry could have been deleted (garbage collection, manual cleanup, etc.)
+        // For archives, check ALL children since they may be spread across different downloads.
         var archiveMissing = false;
         if (libraryFile.TryGetAsLibraryArchive(out var checkArchive))
         {
@@ -332,7 +332,7 @@ public class InstallCollectionDownloadJob : IJobDefinitionWithStart<InstallColle
         // (happens when mod author updated the file on Nexus after the collection was created)
         ConcurrentDictionary<RelativePath, HashMapping> pathIndex = new();
 
-        // Track children that failed due to missing .nx entries for re-extraction
+        // Track children that failed due to missing store entries for re-extraction
         ConcurrentBag<LibraryArchiveFileEntry.ReadOnly> failedChildren = new();
 
         Logger.LogInformation("[REPLICATED] Starting MD5 hashing for '{ModName}' — {Total} files in archive", CollectionMod.Name, totalChildren);
