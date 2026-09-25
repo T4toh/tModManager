@@ -1,3 +1,5 @@
+using NexusMods.Paths;
+
 namespace NexusMods.DataModel.Storage;
 
 /// <summary>
@@ -23,14 +25,45 @@ public interface IStorageAnalyzer
     Task RunDeepCleanOnAllLoadoutsAsync(CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Deletes all .nx archive files from every configured archive location.
+    /// Same as <see cref="RunDeepCleanOnAllLoadoutsAsync"/> but runs the deep clean tool directly, without the
+    /// apply/ingest synchronizations around it. For the legacy cleanup: those synchronizations would need the
+    /// old <c>.nx</c> archives, which can no longer be read.
+    /// </summary>
+    Task RunDeepCleanWithoutSyncOnAllLoadoutsAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Deletes all archive chunks from the store's content-addressed archive location.
     /// </summary>
     Task DeleteArchivesAsync(CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Deletes all files in the downloads folder and all timestamped backup directories
-    /// under CyberpunkBackups, freeing disk space occupied by downloaded mod archives
-    /// and mod-file snapshots created by the Deep Clean tool.
+    /// Deletes the timestamped backup directories under Backups, freeing disk space
+    /// occupied by mod-file snapshots created by the Deep Clean tool. With <paramref name="keepNewest"/>
+    /// the most recent snapshot (the one a Deep Clean just made) survives. Never touches the
+    /// downloads folder.
     /// </summary>
-    Task DeletePhysicalFilesAsync(CancellationToken cancellationToken = default);
+    Task DeletePhysicalFilesAsync(bool keepNewest = false, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Borra las descargas originales. Solo por acción explícita del usuario.
+    /// </summary>
+    Task DeleteDownloadsAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Cuenta y suma el tamaño de las descargas dejadas por el NexusMods.App original.
+    /// </summary>
+    Task<(int Count, Size Size)> GetLegacyDownloadsAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Mueve las descargas dejadas por el NexusMods.App original a la carpeta de descargas actual.
+    /// Mismo nombre y mismo contenido descarta el origen; mismo nombre y distinto contenido agrega
+    /// un sufijo. Devuelve la cantidad de archivos movidos.
+    /// </summary>
+    Task<int> MoveLegacyDownloadsAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Borra el prefix de Proton de Cyberpunk 2077 (<c>steamapps/compatdata/1091500</c>) bajo la
+    /// biblioteca de Steam indicada. No hace nada si la ruta no coincide con lo esperado.
+    /// </summary>
+    Task DeleteProtonPrefixAsync(AbsolutePath steamLibraryRoot, CancellationToken cancellationToken = default);
 }

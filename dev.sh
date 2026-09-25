@@ -14,8 +14,11 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 # StrawberryShake incluye herramientas net9 que necesitan rollforward a net10
 export DOTNET_ROLL_FORWARD=LatestMajor
 
-# Asegurar que dotnet tools globales esten en PATH
+# Asegurar que dotnet tools globales esten en PATH (y el SDK local en ~/.dotnet si existe)
 export PATH="$HOME/.dotnet/tools:$PATH"
+if [[ -x "$HOME/.dotnet/dotnet" ]]; then
+    export PATH="$HOME/.dotnet:$PATH" DOTNET_ROOT="$HOME/.dotnet"
+fi
 APP_PROJECT="$SCRIPT_DIR/src/NexusMods.App/NexusMods.App.csproj"
 APP_DIR="$SCRIPT_DIR/src/NexusMods.App"
 REDENGINE_TESTS="$SCRIPT_DIR/tests/Games/NexusMods.Games.RedEngine.Tests"
@@ -52,14 +55,40 @@ run_app() {
     dotnet run --project "$APP_PROJECT"
 }
 
+# Un proyecto por vez: `dotnet test` sobre la solucion entera corre todo en paralelo y casi congela la PC.
+# Mismo recorrido que tenia el CI: xUnit con `dotnet test`, TUnit (Sdk.Tests, Backend.Tests) con `dotnet run`.
+run_tests_sequential() {
+    local filter="$1"
+    local failed=()
+    dotnet build "$SCRIPT_DIR" -p:TreatWarningsAsErrors=true || return 1
+    for proj in $(grep -rL '<UsesTUnit>true' --include='*.Tests.csproj' "$SCRIPT_DIR/tests"); do
+        echo -e "${BLUE}== $(basename "$proj" .csproj)${NC}"
+        if [[ -n "$filter" ]]; then
+            dotnet test "$proj" --no-build --filter "$filter" || failed+=("$proj")
+        else
+            dotnet test "$proj" --no-build || failed+=("$proj")
+        fi
+    done
+    for proj in $(grep -rl '<UsesTUnit>true' --include='*.Tests.csproj' "$SCRIPT_DIR/tests"); do
+        echo -e "${BLUE}== $(basename "$proj" .csproj) (TUnit)${NC}"
+        dotnet run --project "$proj" --no-build || failed+=("$proj")
+    done
+    if (( ${#failed[@]} )); then
+        echo -e "${RED}Proyectos con fallas:${NC}"
+        printf '  %s\n' "${failed[@]}"
+        return 1
+    fi
+    echo -e "${GREEN}Todos los tests pasaron${NC}"
+}
+
 run_all_tests() {
-    echo -e "${GREEN}Ejecutando todos los tests...${NC}"
-    dotnet test "$SCRIPT_DIR"
+    echo -e "${GREEN}Ejecutando todos los tests (proyecto por proyecto)...${NC}"
+    run_tests_sequential ""
 }
 
 run_safe_tests() {
-    echo -e "${GREEN}Ejecutando tests (sin red/flakey)...${NC}"
-    dotnet test "$SCRIPT_DIR" --filter "RequiresNetworking!=True&FlakeyTest!=True"
+    echo -e "${GREEN}Ejecutando tests sin red/flakey (proyecto por proyecto)...${NC}"
+    run_tests_sequential "RequiresNetworking!=True&FlakeyTest!=True"
 }
 
 run_redengine_tests() {

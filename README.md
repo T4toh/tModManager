@@ -16,19 +16,19 @@ Usuarios free y supporter pueden descargar todos los mods de una colección con 
 
 Herramienta integrada en la página Storage Manager que:
 
-- Mueve carpetas de mods (`red4ext`, `r6/scripts`, `r6/tweaks`, `bin/x64/plugins`, `archive/pc/mod`, etc.) a `~/.local/share/NexusMods.App/CyberpunkBackups/<timestamp>/`
+- Mueve carpetas de mods (`red4ext`, `r6/scripts`, `r6/tweaks`, `bin/x64/plugins`, `archive/pc/mod`, etc.) a `~/.local/share/tModManager/Backups/<timestamp>/`
 - Elimina DLLs inyectadas (`d3d11.dll`, `winmm.dll`, `version.dll`, `powrprof.dll`)
-- Borra backups anteriores para evitar acumulación
+- Borra backups anteriores para evitar acumulación (conserva el nuevo y el anterior)
 - Elimina grupos de mods/colecciones de la DB (conserva archivos de librería para reinstalar sin re-descargar)
 - Re-escanea el directorio del juego
 
-El Storage Manager también permite limpiar archivos `.nx`, descargas y backups físicos de forma independiente.
+El Storage Manager también permite limpiar el store interno (`tModManager/DataModel/Archives`, se reconstruye desde Descargas), las descargas y los backups físicos de forma independiente. Si quedan datos del formato `.nx` anterior, un asistente guía la limpieza.
 
 ### Aislamiento del Sistema
 
 - **App ID:** `io.github.t4toh.tmodmanager` (convive con la versión oficial)
 - **Datos:** `~/.local/share/tModManager/` (DB y configuración independientes). Instalaciones previas en `NexusMods.App.Cyberpunk/` se migran solas al primer arranque
-- **Descargas compartidas:** Comparte carpeta de descargas con la versión oficial para no duplicar archivos
+- **Descargas propias:** Los archivos originales se guardan en `~/.local/share/tModManager/Downloads`; las descargas de la versión oficial se pueden mover ahí desde el asistente de limpieza
 - **Protocolo NXM:** Handler independiente para captura de enlaces `nxm://`
 
 ### Sin Telemetría
@@ -61,7 +61,7 @@ Detecta también carpetas redundantes en mods (ej. `Cyberpunk 2077/bin/...` dupl
 - **Pestaña "Mod List":** Detalle de cada mod en la colección (hashes, enlaces, copiar al portapapeles)
 - **Rescan de descargas:** Detección por MD5 de archivos ya descargados para evitar re-descargas
 - **Resiliencia:** Si el archivo de colección se borra del disco, se re-descarga automáticamente; la página carga sin crashear; Apply funciona con instalaciones parciales
-- **Validación de archivos:** Detecta archivos .nx faltantes (tras Deep Clean, GC) y muestra botón de descarga. Valida todos los hijos del archivo, no solo el primero
+- **Validación de archivos:** Si faltan archivos en el store (tras Deep Clean, GC o un borrado manual) se reextraen desde la descarga original; solo si esa descarga ya no está se muestra el botón de descarga. Valida todos los hijos del archivo, no solo el primero
 - **Fallback por ruta:** Si el MD5 de un archivo no coincide (mod actualizado), intenta mapeo por ruta relativa antes de fallar
 - **Advertencia de conflictos:** Avisa antes de instalar una colección si ya hay otra instalada
 

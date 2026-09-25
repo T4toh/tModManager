@@ -19,7 +19,9 @@ using NexusMods.Paths;
 using NexusMods.Sdk.FileStore;
 using NexusMods.Sdk.Games;
 using NexusMods.Sdk.Jobs;
+using NexusMods.Sdk.Library;
 using NexusMods.Sdk.Loadouts;
+using NexusMods.Sdk.Settings;
 
 namespace NexusMods.Collections;
 
@@ -99,11 +101,32 @@ public class InstallCollectionJob : IJobDefinitionWithStart<InstallCollectionJob
         if (!isFullyDownloaded) throw new InvalidOperationException("The collection hasn't fully been downloaded!");
 
         // Check if the collection package archive is still on disk.
-        // After a manual clean, the DB entry can survive but the NX archive gets deleted.
+        // After a manual clean, the DB entry can survive but the downloaded package was deleted.
         // Also handle the case where SourceCollection is invalid (library file missing when page was opened).
-        var collectionFileHash = SourceCollection.IsValid() ? SourceCollection.AsLibraryFile().Hash : Hash.Zero;
+        var downloads = ServiceProvider.GetRequiredService<ISettingsManager>().Get<DownloadsSettings>().Folder.ToPath(ServiceProvider.GetRequiredService<IFileSystem>());
+        var packageOnDisk = SourceCollection.IsValid()
+            && LibraryFile.DownloadPath.TryGetValue(SourceCollection.AsLibraryFile(), out var packageRel)
+            && downloads.Combine(packageRel).FileExists;
+
+        if (packageOnDisk)
+        {
+            // The package itself is on disk, but its extracted entries (collection.json, bundled and
+            // patch files) may still be missing from the file store after a manual clean — restore
+            // them from the package before anything tries to read them from the store.
+            var children = LibraryArchiveFileEntry.FindByParent(Connection.Db, SourceCollection.AsLibraryFile().Id)
+                .Select(entry => entry.AsLibraryFile().Hash);
+            await ServiceProvider.GetRequiredService<IDownloadReExtractor>()
+                .RestoreMissingAsync(FileStore, children, context.CancellationToken);
+
+            // If collection.json is still missing after restoring, the package can't be parsed;
+            // fall through to a fresh re-download like a fully-missing package.
+            var jsonEntry = NexusModsLibrary.GetCollectionJsonFile(SourceCollection);
+            if (!jsonEntry.IsValid() || !await FileStore.HaveFile(jsonEntry.AsLibraryFile().Hash))
+                packageOnDisk = false;
+        }
+
         NexusModsCollectionLibraryFile.ReadOnly sourceCollection = SourceCollection;
-        if (!SourceCollection.IsValid() || !await FileStore.HaveFile(collectionFileHash))
+        if (!SourceCollection.IsValid() || !packageOnDisk)
         {
             Logger.LogWarning("Collection archive for '{Name}' is missing from disk. Removing stale entry and re-downloading automatically...", RevisionMetadata.Collection.Name);
             // Remove the stale DB entry if it exists

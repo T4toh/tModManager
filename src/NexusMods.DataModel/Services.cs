@@ -1,5 +1,6 @@
 using System.Text.Json.Serialization;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using NexusMods.Sdk.Settings;
 using NexusMods.Abstractions.Diagnostics;
 using NexusMods.Abstractions.GC;
@@ -11,6 +12,7 @@ using NexusMods.Abstractions.Serialization.ExpressionGenerator;
 using NexusMods.DataModel.CommandLine.Verbs;
 using NexusMods.DataModel.Diagnostics;
 using NexusMods.DataModel.JsonConverters;
+using NexusMods.DataModel.LegacyData;
 using NexusMods.DataModel.SchemaVersions;
 using NexusMods.DataModel.Sorting;
 using NexusMods.DataModel.Synchronizer;
@@ -25,6 +27,7 @@ using NexusMods.MnemonicDB.Storage.RocksDbBackend;
 using NexusMods.Sdk;
 using NexusMods.Sdk.FileStore;
 using NexusMods.Sdk.Games;
+using NexusMods.Sdk.Library;
 using NexusMods.Sdk.Resources;
 
 using IFileSystem = NexusMods.Paths.IFileSystem;
@@ -51,6 +54,7 @@ public static class Services
 
         // Settings
         coll.AddSettings<DataModelSettings>();
+        coll.AddSettings<DownloadsSettings>();
 
         coll.AddSingleton<DatomStoreSettings>(sp =>
             {
@@ -59,7 +63,22 @@ public static class Services
                 var settings = settingsManager.Get<DataModelSettings>();
                 if (settings.UseInMemoryDataModel)
                     return DatomStoreSettings.InMemory;
-                
+
+                // The database can't be deleted while it's open, so a pending reset (requested by
+                // the legacy-cleanup wizard) has to run right here, before anything below opens it.
+                // The guard inside ResetIfRequested must never crash startup: log and skip instead,
+                // keeping the marker so the reset can still be retried on a later launch once
+                // whatever misconfigured the paths is fixed — otherwise every launch would crash.
+                try
+                {
+                    LegacyDataDetector.ResetIfRequested(settings.ArchiveLocations[0].ToPath(fileSystem), settings.MnemonicDBPath.ToPath(fileSystem), fileSystem);
+                }
+                catch (InvalidOperationException ex)
+                {
+                    sp.GetRequiredService<ILogger<DataModelSettings>>().LogError(ex,
+                        "No se pudo aplicar el reinicio pedido por el asistente de limpieza; se omite y se continúa arrancando normalmente");
+                }
+
                 var path = settings.MnemonicDBPath.ToPath(fileSystem);
                 if (!path.DirectoryExists())
                     path.CreateDirectory();

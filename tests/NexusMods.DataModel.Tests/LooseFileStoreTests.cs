@@ -234,4 +234,19 @@ public class LooseFileStoreTests : IDisposable
 
         _store.TotalSize().Should().Be(before);
     }
+
+    [Fact]
+    public async Task RootDeletedByHand_SweepsDoNotThrowAndBackupRecreatesIt()
+    {
+        await _store.BackupFiles([Entry("antes")]);
+        StoreRoot.DeleteDirectory(recursive: true);
+
+        _store.DeleteAllExcept(new HashSet<Hash>()).Should().Be(0);
+        _store.DeleteAll().Should().Be(0);
+        _store.TotalSize().Should().Be(Size.Zero);
+
+        var e = Entry("despues");
+        await _store.BackupFiles([e]);
+        (await _store.Load(e.Hash)).Should().Equal(Encoding.UTF8.GetBytes("despues"));
+    }
 }

@@ -24,7 +24,8 @@ public class StorageManagerPageFactory(IServiceProvider serviceProvider)
         return new StorageManagerPageViewModel(
             ServiceProvider.GetRequiredService<IWindowManager>(),
             ServiceProvider.GetRequiredService<IStorageAnalyzer>(),
-            ServiceProvider.GetRequiredService<IGarbageCollectorRunner>()
+            ServiceProvider.GetRequiredService<IGarbageCollectorRunner>(),
+            ServiceProvider
         );
     }
 

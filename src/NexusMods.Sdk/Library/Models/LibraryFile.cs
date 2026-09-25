@@ -33,4 +33,10 @@ public partial class LibraryFile : IModelDefinition
     /// Name of the file.
     /// </summary>
     public static readonly RelativePathAttribute FileName = new(Namespace, nameof(FileName));
+
+    /// <summary>
+    /// Path of the original download, relative to <see cref="DownloadsSettings.Folder"/>.
+    /// Only top-level files that live in the downloads folder have it.
+    /// </summary>
+    public static readonly RelativePathAttribute DownloadPath = new(Namespace, nameof(DownloadPath)) { IsOptional = true };
 }

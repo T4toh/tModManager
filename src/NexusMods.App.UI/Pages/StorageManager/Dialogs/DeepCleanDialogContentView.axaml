@@ -25,7 +25,7 @@
         <TextBlock Theme="{StaticResource BodySMNormalTheme}"
                    Foreground="{StaticResource NeutralSubduedBrush}"
                    TextWrapping="Wrap"
-                   Text="The following data will be permanently deleted:&#x0a;&#x0a;• All GameBackedUpFile entries from the database&#x0a;• All files in the Downloads folder&#x0a;• All CyberpunkBackups snapshots&#x0a;• Unused archive chunks (via Garbage Collection)" />
+                   Text="The following data will be permanently deleted:&#x0a;&#x0a;• All GameBackedUpFile entries from the database&#x0a;• Backups snapshots (Super Clean keeps the new one it makes of your mod files)&#x0a;• Unused archive chunks (via Garbage Collection)&#x0a;&#x0a;The Downloads folder is not touched. Use &quot;Borrar descargas&quot; in Storage Manager for that." />
 
         <Separator Margin="0,4" />
 
@@ -38,7 +38,7 @@
                 <TextBlock Theme="{StaticResource BodySMNormalTheme}"
                            Foreground="{StaticResource NeutralSubduedBrush}"
                            TextWrapping="Wrap"
-                           Text="Also runs the game-folder Deep Clean (disables all mods in every profile and moves mod files to backup), then deletes every .nx archive. All mods will need to be re-downloaded." />
+                           Text="Also runs the game-folder Deep Clean (disables all mods in every profile and moves mod files to a new Backups snapshot, which is kept), then deletes every archive chunk in the store. All mods will need to be re-extracted from their downloads or re-downloaded." />
             </StackPanel>
         </CheckBox>
 

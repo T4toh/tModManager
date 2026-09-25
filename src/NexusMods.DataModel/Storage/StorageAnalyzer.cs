@@ -1,9 +1,12 @@
 using Microsoft.Extensions.Logging;
 using NexusMods.Abstractions.Loadouts;
+using NexusMods.DataModel.LegacyData;
 using NexusMods.MnemonicDB.Abstractions;
 using NexusMods.MnemonicDB.Abstractions.TxFunctions;
 using NexusMods.Paths;
+using NexusMods.Sdk;
 using NexusMods.Sdk.Jobs;
+using NexusMods.Sdk.Library;
 using NexusMods.Sdk.Loadouts;
 using NexusMods.Sdk.Settings;
 
@@ -38,18 +41,24 @@ internal class StorageAnalyzer : IStorageAnalyzer
         _jobMonitor = jobMonitor;
         _logger = logger;
         _fileStore = fileStore;
+        LegacyDownloadsFolderProvider = () => LegacyDataDetector.LegacyDownloadsFolder(fileSystem);
+        // keep in sync with CyberpunkDeepCleanTool.BackupsRoot — DataModel must not reference a game project
+        BackupsFolderProvider = () => fileSystem.GetKnownPath(KnownPath.XDG_DATA_HOME)
+            .Combine(ApplicationConstants.DataDirectoryName)
+            .Combine("Backups");
     }
 
-    private AbsolutePath GetCyberpunkBackupsPath() =>
-        _fileSystem.GetKnownPath(KnownPath.XDG_DATA_HOME)
-            .Combine("NexusMods.App")
-            .Combine("CyberpunkBackups");
+    /// <summary>Test seam: overridden in tests so they never touch the real <c>~/.local/share</c>.</summary>
+    internal Func<AbsolutePath> LegacyDownloadsFolderProvider { get; set; }
+
+    /// <summary>Test seam, same purpose as <see cref="LegacyDownloadsFolderProvider"/>: Deep Clean's <c>Backups</c> folder.</summary>
+    internal Func<AbsolutePath> BackupsFolderProvider { get; set; }
+
+    private const string CyberpunkSteamAppId = "1091500";
 
     /// <inheritdoc />
     public Task<StorageStats> GetStorageStatsAsync(CancellationToken cancellationToken = default)
     {
-        var settings = _settingsManager.Get<DataModelSettings>();
-
         // Sum sizes of the files the store owns (foreign files under the archive location are not counted)
         var archivesSize = _fileStore.TotalSize().Value;
 
@@ -58,7 +67,7 @@ internal class StorageAnalyzer : IStorageAnalyzer
         var backedUpCount = GameBackedUpFile.All(db).Count();
 
         // Sum sizes of all files in the downloads folder
-        var downloadsPath = settings.DownloadsFolder.ToPath(_fileSystem);
+        var downloadsPath = _settingsManager.Get<DownloadsSettings>().Folder.ToPath(_fileSystem);
         var downloadsSize = 0UL;
         if (downloadsPath.DirectoryExists())
         {
@@ -67,8 +76,8 @@ internal class StorageAnalyzer : IStorageAnalyzer
                 .Aggregate(0UL, (acc, file) => acc + file.FileInfo.Size.Value);
         }
 
-        // Sum sizes of all files under CyberpunkBackups (timestamped subdirs)
-        var cyberpunkBackupsPath = GetCyberpunkBackupsPath();
+        // Sum sizes of all files under Backups (timestamped Deep Clean snapshots)
+        var cyberpunkBackupsPath = BackupsFolderProvider();
         var cyberpunkBackupsSize = 0UL;
         if (cyberpunkBackupsPath.DirectoryExists())
         {
@@ -89,7 +98,14 @@ internal class StorageAnalyzer : IStorageAnalyzer
     }
 
     /// <inheritdoc />
-    public async Task RunDeepCleanOnAllLoadoutsAsync(CancellationToken cancellationToken = default)
+    public Task RunDeepCleanOnAllLoadoutsAsync(CancellationToken cancellationToken = default) =>
+        RunDeepClean(skipSync: false, cancellationToken);
+
+    /// <inheritdoc />
+    public Task RunDeepCleanWithoutSyncOnAllLoadoutsAsync(CancellationToken cancellationToken = default) =>
+        RunDeepClean(skipSync: true, cancellationToken);
+
+    private async Task RunDeepClean(bool skipSync, CancellationToken cancellationToken)
     {
         var db = _connection.Db;
         var loadouts = Loadout.All(db).Where(l => l.IsVisible()).ToArray();
@@ -103,7 +119,10 @@ internal class StorageAnalyzer : IStorageAnalyzer
                 continue;
             }
             _logger.LogInformation("Running Deep Clean on loadout {Name}", loadout.Name);
-            await _toolManager.RunTool(tool, loadout, _jobMonitor, cancellationToken);
+            if (skipSync)
+                await tool.StartJob(loadout, _jobMonitor, cancellationToken);
+            else
+                await _toolManager.RunTool(tool, loadout, _jobMonitor, cancellationToken);
         }
     }
 
@@ -133,25 +152,129 @@ internal class StorageAnalyzer : IStorageAnalyzer
     }
 
     /// <inheritdoc />
-    public Task DeletePhysicalFilesAsync(CancellationToken cancellationToken = default)
+    public Task DeletePhysicalFilesAsync(bool keepNewest = false, CancellationToken cancellationToken = default)
     {
-        // Delete all files in the downloads folder
-        var settings = _settingsManager.Get<DataModelSettings>();
-        var downloadsPath = settings.DownloadsFolder.ToPath(_fileSystem);
-        if (downloadsPath.DirectoryExists())
-        {
-            foreach (var file in downloadsPath.EnumerateFiles())
+        var backups = BackupsFolderProvider();
+        if (!backups.DirectoryExists()) return Task.CompletedTask;
+
+        // Snapshot folders are named yyyyMMdd_HHmmss, so ordinal order is chronological.
+        var snapshots = backups.EnumerateDirectories(recursive: false)
+            .OrderByDescending(dir => dir.FileName.ToString(), StringComparer.Ordinal)
+            .Skip(keepNewest ? 1 : 0);
+        foreach (var snapshot in snapshots)
+            snapshot.DeleteDirectory(recursive: true);
+
+        return Task.CompletedTask;
+    }
+
+    /// <inheritdoc />
+    public Task DeleteDownloadsAsync(CancellationToken cancellationToken = default)
+    {
+        var downloads = _settingsManager.Get<DownloadsSettings>().Folder.ToPath(_fileSystem);
+        if (downloads.DirectoryExists())
+            foreach (var file in downloads.EnumerateFiles("*", recursive: false).Where(f => !IsPartialDownload(f)))
                 file.Delete();
-        }
+        return Task.CompletedTask;
+    }
 
-        // Delete all timestamped subdirectories under CyberpunkBackups
-        var cyberpunkBackupsPath = GetCyberpunkBackupsPath();
-        if (cyberpunkBackupsPath.DirectoryExists())
+    /// <summary>
+    /// A file <see cref="DownloadsFolder.TryClaimAsync"/> left half-written (named
+    /// <c>&lt;name&gt;.tmp-&lt;guid&gt;</c>) after an interrupted move/copy. Never counted or moved:
+    /// it isn't a real download, and touching it could race an in-flight write.
+    /// </summary>
+    private static bool IsPartialDownload(AbsolutePath file) =>
+        file.FileName.ToString().Contains(".tmp-", StringComparison.Ordinal);
+
+    /// <inheritdoc />
+    public Task<(int Count, Size Size)> GetLegacyDownloadsAsync(CancellationToken cancellationToken = default)
+    {
+        var folder = LegacyDownloadsFolderProvider();
+        if (!folder.DirectoryExists()) return Task.FromResult((0, Size.Zero));
+
+        // Nothing is "pending" if the legacy folder already IS the current downloads folder
+        // (configured that way directly, or one is a symlink to the other): there's nothing to move.
+        var to = _settingsManager.Get<DownloadsSettings>().Folder.ToPath(_fileSystem);
+        if (RealPath.Resolve(folder) == RealPath.Resolve(to)) return Task.FromResult((0, Size.Zero));
+
+        var files = folder.EnumerateFiles("*", recursive: false).Where(f => !IsPartialDownload(f)).ToArray();
+        var size = files.Aggregate(0UL, (acc, file) => acc + file.FileInfo.Size.Value);
+        return Task.FromResult((files.Length, Size.From(size)));
+    }
+
+    /// <inheritdoc />
+    public async Task<int> MoveLegacyDownloadsAsync(CancellationToken cancellationToken = default)
+    {
+        var from = LegacyDownloadsFolderProvider();
+        if (!from.DirectoryExists()) return 0;
+
+        var to = _settingsManager.Get<DownloadsSettings>().Folder.ToPath(_fileSystem);
+
+        // Same physical folder (configured directly to the same path, or one is a symlink to the
+        // other): moving would just delete the only copy of every file. Do nothing.
+        if (RealPath.Resolve(from) == RealPath.Resolve(to))
         {
-            foreach (var subDir in cyberpunkBackupsPath.EnumerateDirectories())
-                subDir.DeleteDirectory(recursive: true);
+            _logger.LogWarning("La carpeta de descargas antigua y la actual son la misma ({Path}); no se mueve nada", from);
+            return 0;
         }
 
+        to.CreateDirectory();
+
+        var moved = 0;
+        foreach (var file in from.EnumerateFiles("*", recursive: false).Where(f => !IsPartialDownload(f)).ToArray())
+        {
+            var name = DownloadsFolder.SanitizeFileName(file.FileName.ToString());
+            var target = to.Combine(name);
+
+            // Cheap path: rename directly when nothing is in the way. Only falls back to a copy
+            // when the name clashes, or the move fails because source and destination are on
+            // different filesystems (cross-device rename isn't atomic-renameable).
+            if (!target.FileExists)
+            {
+                try
+                {
+                    File.Move(file.ToString(), target.ToString());
+                    moved++;
+                    continue;
+                }
+                catch (IOException)
+                {
+                    // Most likely source and destination are on different filesystems (rename can't
+                    // cross a device boundary). Fall through to the copy+delete path below, which
+                    // also correctly handles the rare race where something claimed `target` first.
+                }
+            }
+
+            var placed = await DownloadsFolder.PlaceAsync(file, to, name, cancellationToken);
+
+            // PlaceAsync may hand back the source file itself (e.g. a single aliased file even
+            // though the folders differ): never delete the only copy of a file.
+            if (RealPath.Resolve(placed) != RealPath.Resolve(file))
+                file.Delete();
+            moved++;
+        }
+
+        return moved;
+    }
+
+    /// <inheritdoc />
+    public Task DeleteProtonPrefixAsync(AbsolutePath steamLibraryRoot, CancellationToken cancellationToken = default)
+    {
+        var steamApps = steamLibraryRoot.Combine("steamapps");
+        if (!steamApps.DirectoryExists())
+        {
+            _logger.LogWarning("No se encontró steamapps en {Root}; no se borra el prefix de Proton", steamLibraryRoot);
+            return Task.CompletedTask;
+        }
+
+        var prefix = steamApps.Combine($"compatdata/{CyberpunkSteamAppId}");
+        if (!prefix.ToString().EndsWith($"steamapps/compatdata/{CyberpunkSteamAppId}", StringComparison.Ordinal))
+        {
+            _logger.LogWarning("Ruta de prefix inesperada {Prefix}; no se borra", prefix);
+            return Task.CompletedTask;
+        }
+
+        if (prefix.DirectoryExists())
+            prefix.DeleteDirectory(recursive: true);
         return Task.CompletedTask;
     }
 }

@@ -9,6 +9,7 @@ using NexusMods.Abstractions.Loadouts.Synchronizers;
 using NexusMods.Abstractions.NexusModsLibrary;
 using NexusMods.Games.AdvancedInstaller;
 using NexusMods.MnemonicDB.Abstractions;
+using NexusMods.Sdk.FileStore;
 using NexusMods.Sdk.Jobs;
 using NexusMods.Sdk.Loadouts;
 using NexusMods.Sdk.Library;
@@ -93,7 +94,9 @@ internal class InstallLoadoutItemJob : IJobDefinitionWithStart<InstallLoadoutIte
         }
 
         await context.YieldAsync();
-        
+
+        await RestoreMissingArchiveEntries(context.CancellationToken);
+
         var loadout = Loadout.Load(Connection.Db, LoadoutId);
 
         var installers = Installer is not null
@@ -127,6 +130,24 @@ internal class InstallLoadoutItemJob : IJobDefinitionWithStart<InstallLoadoutIte
         };
 
         return new InstallLoadoutItemJobResult(null, loadoutGroup);
+    }
+
+    /// <summary>
+    /// Installers read the item's files straight from the store; after a GC, Deep Clean or a manual wipe
+    /// put them back from the original download first, so every install path gets re-extraction.
+    /// </summary>
+    private async Task RestoreMissingArchiveEntries(CancellationToken ct)
+    {
+        if (!LibraryItem.TryGetAsLibraryFile(out var file)) return;
+        var hashes = file.TryGetAsLibraryArchive(out var archive)
+            ? archive.Children.Select(child => child.AsLibraryFile().Hash).ToArray()
+            : [file.Hash];
+
+        var reExtractor = ServiceProvider.GetRequiredService<IDownloadReExtractor>();
+        var fileStore = ServiceProvider.GetRequiredService<IFileStore>();
+        var (missing, restored) = await reExtractor.RestoreMissingAsync(fileStore, hashes, ct);
+        if (missing > 0)
+            Logger.LogInformation("Faltaban {Missing} archivos de '{Name}' en el store; {Restored} reextraídos desde Descargas", missing, LibraryItem.Name, restored);
     }
 
     private async ValueTask<LoadoutItemGroup.New?> ExecuteInstallersAsync(

@@ -3,6 +3,7 @@ using JetBrains.Annotations;
 using NexusMods.Abstractions.GC;
 using NexusMods.App.UI.Dialog;
 using NexusMods.App.UI.Dialog.Enums;
+using NexusMods.App.UI.Helpers;
 using NexusMods.App.UI.Pages.StorageManager.Dialogs;
 using NexusMods.App.UI.Windows;
 using NexusMods.App.UI.WorkspaceSystem;
@@ -28,12 +29,15 @@ internal class StorageManagerPageViewModel : APageViewModel<IStorageManagerPageV
 
     public ReactiveCommand<Unit> RunGarbageCollectionCommand { get; }
     public ReactiveCommand<Unit> DeepCleanCommand { get; }
+    public ReactiveCommand<Unit> DeleteDownloadsCommand { get; }
+    public ReactiveCommand<Unit> DeleteProtonPrefixCommand { get; }
     public ReactiveCommand<Unit> RefreshCommand { get; }
 
     public StorageManagerPageViewModel(
         IWindowManager windowManager,
         IStorageAnalyzer storageAnalyzer,
-        IGarbageCollectorRunner gcRunner) : base(windowManager)
+        IGarbageCollectorRunner gcRunner,
+        IServiceProvider serviceProvider) : base(windowManager)
     {
         TabTitle = "Storage Manager";
         TabIcon = IconValues.HardDrive;
@@ -86,10 +90,89 @@ internal class StorageManagerPageViewModel : APageViewModel<IStorageManagerPageV
                 if (nukeMode)
                     await storageAnalyzer.RunDeepCleanOnAllLoadoutsAsync(ct);
                 await storageAnalyzer.DeleteAllBackedUpFilesAsync(ct);
-                await storageAnalyzer.DeletePhysicalFilesAsync(ct);
+                // Super Clean just moved the mod files into a new snapshot: keep it, drop the older ones.
+                await storageAnalyzer.DeletePhysicalFilesAsync(keepNewest: nukeMode, ct);
                 if (nukeMode)
                     await storageAnalyzer.DeleteArchivesAsync(ct);
                 await gcRunner.RunAsync();
+                await RefreshStatsAsync(storageAnalyzer, ct);
+            }
+            finally
+            {
+                IsBusy = false;
+            }
+        });
+
+        DeleteDownloadsCommand = new ReactiveCommand<Unit>(async (_, ct) =>
+        {
+            if (IsBusy) return;
+
+            var dialog = DialogFactory.CreateStandardDialog(
+                title: "Borrar descargas",
+                new StandardDialogParameters
+                {
+                    Text = "Se borran los archivos originales de tModManager/Downloads. Vas a tener que volver a bajarlos para reinstalar o reconstruir el store.",
+                },
+                buttonDefinitions:
+                [
+                    new DialogButtonDefinition("Cancelar", ButtonDefinitionId.Cancel, ButtonAction.Reject),
+                    new DialogButtonDefinition("Borrar", ButtonDefinitionId.Accept, ButtonAction.Accept, ButtonStyling.Destructive),
+                ]
+            );
+
+            var result = await windowManager.ShowDialog(dialog, DialogWindowType.Modal);
+            if (result.ButtonId != ButtonDefinitionId.Accept) return;
+
+            IsBusy = true;
+            try
+            {
+                await storageAnalyzer.DeleteDownloadsAsync(ct);
+                await RefreshStatsAsync(storageAnalyzer, ct);
+            }
+            finally
+            {
+                IsBusy = false;
+            }
+        });
+
+        DeleteProtonPrefixCommand = new ReactiveCommand<Unit>(async (_, ct) =>
+        {
+            if (IsBusy) return;
+
+            var steamLibraryRoot = SteamPaths.LibraryRoot(serviceProvider);
+            if (steamLibraryRoot is null)
+            {
+                await windowManager.ShowDialog(
+                    DialogFactory.CreateStandardDialog(
+                        title: "Prefix de Proton",
+                        new StandardDialogParameters { Text = "No se encontró la instalación de Steam del juego." },
+                        buttonDefinitions: [DialogStandardButtons.Ok]
+                    ),
+                    DialogWindowType.Modal
+                );
+                return;
+            }
+
+            var dialog = DialogFactory.CreateStandardDialog(
+                title: "Borrar prefix de Proton",
+                new StandardDialogParameters
+                {
+                    Text = "Se borra steamapps/compatdata/1091500. Steam lo recrea al lanzar el juego. Se pierden los saves que no estén sincronizados con la nube y toda la configuración del prefix. Cerrá el juego antes de continuar.",
+                },
+                buttonDefinitions:
+                [
+                    new DialogButtonDefinition("Cancelar", ButtonDefinitionId.Cancel, ButtonAction.Reject),
+                    new DialogButtonDefinition("Borrar", ButtonDefinitionId.Accept, ButtonAction.Accept, ButtonStyling.Destructive),
+                ]
+            );
+
+            var result = await windowManager.ShowDialog(dialog, DialogWindowType.Modal);
+            if (result.ButtonId != ButtonDefinitionId.Accept) return;
+
+            IsBusy = true;
+            try
+            {
+                await storageAnalyzer.DeleteProtonPrefixAsync(steamLibraryRoot.Value, ct);
                 await RefreshStatsAsync(storageAnalyzer, ct);
             }
             finally

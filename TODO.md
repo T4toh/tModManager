@@ -1,49 +1,36 @@
 # TODO
 
-## 📍 Estado y próximos pasos (2026-09-22)
+## 📍 Estado y próximos pasos (2026-09-25)
 
-Mergeado hoy en `main`: limpieza (0 warnings), rename a **tModManager**, repo `T4toh/tModManager`, herencia upstream borrada, CI verde en ubuntu (1175 xUnit + 94 TUnit).
+Mergeado: eliminación de `.nx` en 3 PRs (#42 store por hash + GC, #43 descargas propias, #45 asistente de limpieza + Deep Clean reforzado) y #44 (snapshot de RedMod). Sin CI: los workflows de GitHub se sacaron, **la verificación es local** (`./dev.sh` opción 4, un proyecto por vez). Nada de esto se probó todavía con la app abierta: solo build + tests.
 
-Primera tarde en Linux con la app real (2026-09-22), 6 PRs (#30-#36): login OAuth y colección funcionan sin juego manejado. Fixes: `GameLocatorSettings` vacío (#31), tests pisando `.desktop` (#32) y `Temp/` (#33), metadata sin juego manejado + modal de excepciones solo en Debug (#34), página de colección sin loadout para bajar antes de tener el juego (#35), watchdog de descargas colgadas (#36). **Checklist completo, el juego corre modeado desde la app. Siguiente: desacoplar Cyberpunk del core.**
+### Mañana: probar todo en esta PC (Linux, juego real)
 
-### Checklist de prueba en Linux
+Antes de arrancar: backup de saves (`steamapps/compatdata/1091500/pfx/drive_c/users/steamuser/Saved Games/CD Projekt Red/Cyberpunk 2077/`) y de `~/.local/share/tModManager/` (el asistente borra la base y los `.nx`).
 
-**Completado el 2026-09-22 con el juego real:** build Release, login OAuth, handler nxm, manejar juego (primer sync borró 14 restos de mods con backup), instalar colección "Welcome to Night City 2.31a" (283 mods, 1757 archivos, 0 sin mapear, `SimpleOverlayModInstaller` para todo), Apply (1913 archivos en 1,8 s, 0 errores), lanzar el juego desde la app: Redscript/CET/RED4ext sin errores, jugable. Pasos 1-6 abajo quedan como referencia para la próxima máquina.
+1. **Build y suite local.** `git pull && ./dev.sh` → opción 4 (tests sin red/flakey, proyecto por proyecto). Esperado: todo verde. Después `dotnet build -c Release` o AppImage (opción 10).
+2. **Asistente de datos viejos** (hay 285 `.nx` en `DataModel/Archives`, tiene que aparecer al abrir):
+   - Paso 1 aviso → Siguiente.
+   - Paso 2: muestra cantidad/tamaño de `NexusMods.App/Downloads` → Siguiente las **mueve** a `tModManager/Downloads` (chequear que el origen quede vacío y los nombres se conserven).
+   - Paso 3: Deep Clean (backup en `tModManager/Backups/<timestamp>/`). Probar sin tildar el prefix de Proton. Si falla, anotar el error y probar "Continuar sin limpiar".
+   - Paso 4: "Verificar integridad en Steam" (abre Steam) → esperar que termine → "Reiniciar".
+   - Al volver: sin asistente, app vacía (base nueva), no quedan `*.nx`.
+3. **Gestionar el juego e instalar "Welcome to Night City".** Anotar cuántos mods reutiliza el MD5 rescan (descargas rescatadas) y cuántos baja. Nada debería bajarse dos veces.
+4. **Aplicar y lanzar el juego** desde la app: Redscript, CET y RED4ext sin errores, jugable.
+5. **Disco:** `find ~/.local/share/tModManager -name '*.nx'` vacío; existe `DataModel/Archives/XX/<hash>`; `Downloads/` con los nombres de Nexus.
+6. **Store borrado a mano:** con la app cerrada, borrar `DataModel/Archives/`; abrir, Aplicar → se reextrae todo desde Descargas. Repetir con la app **abierta** (borrar y aplicar): no tiene que fallar el sync.
+7. **Reinstalar la colección después de borrar el store:** no tiene que volver a bajar nada de Nexus.
+8. **Storage Manager:** Deep Clean → `Downloads/` intacta y el backup nuevo presente en `tModManager/Backups`. "Borrar descargas" pide confirmación. "Borrar prefix de Proton" solo con el juego cerrado (opcional, pierde saves no sincronizados).
+9. **Logs:** `~/.local/state/NexusMods.App/Logs/nexusmods.app.main.current.log`. Pegar cualquier excepción en la sesión.
 
+Notas: login desde un build de `bin/` necesita `/etc/dotnet/install_location` apuntando a `~/.dotnet` (ya está en esta PC). Si algo crashea solo en Debug con `Assertion failed`, es un `Debug.Assert`: anotar cuál.
 
-Antes de arrancar: backup de `~/.local/share/NexusMods.App.Cyberpunk/` (la migración hace `mv`, no copia).
+### Pendiente después de probar
 
-1. **Build Release** (los `Debug.Assert` no corren en Release; si algo crashea acá es bug real):
-   ```bash
-   git pull && dotnet build -c Release
-   dotnet run -c Release --project src/NexusMods.App/NexusMods.App.csproj
-   ```
-   Alternativa: AppImage con `./dev.sh` opción 10 (ya usa `-c Release`).
-   Login desde un build de `bin/` (framework-dependent): el `.desktop` que registra la app lanza el apphost sin `DOTNET_ROOT`. Si el SDK está en `~/.dotnet` hace falta, una vez:
-   ```bash
-   sudo sh -c 'mkdir -p /etc/dotnet && echo $HOME/.dotnet > /etc/dotnet/install_location'
-   ```
-   Si no, el callback `nxm://` muere con `You must install .NET to run this application` y el login expira a los 3 min. El AppImage no lo sufre (2026-09-22, verificado: login OK tras el fix).
-   No correr `dotnet test` completo con la app registrada como handler antes de mergear #32: los tests reescribían el `.desktop` con `Exec=dotnet %u`.
-2. **Migración de data dir.** Al primer arranque stderr debe mostrar `Migrated data directory to .../tModManager`. Verificar:
-   ```bash
-   ls ~/.local/share/ | grep -i -e tModManager -e Cyberpunk   # solo tModManager
-   ```
-   La app tiene que abrir con el juego, loadouts y colecciones que ya tenías. Si aparece vacía, la migración falló: revisar stderr y el dir viejo.
-3. **Handler nxm.** Después de que la app registre el handler (arranque normal):
-   ```bash
-   ls ~/.local/share/applications/ | grep -e cyberpunk -e tmodmanager   # solo io.github.t4toh.tmodmanager.desktop (+ .sh si el path necesita escape)
-   xdg-mime query default x-scheme-handler/nxm                          # io.github.t4toh.tmodmanager.desktop
-   ```
-   Click en "Mod manager download" en Nexus → tiene que abrir tModManager, no el binario viejo.
-4. **Sanity funcional.** Instalar un mod, Apply, lanzar el juego desde la app. Storage Manager abre. Descargar colección chica sin premium.
-5. **Crashes esporádicos.** Si crashea en Release: log en `~/.local/state/NexusMods.App/Logs/nexusmods.app.main.current.log` (sí, todavía va al dir de la app oficial, ver deuda abajo). Pegar el stacktrace en la próxima sesión. Si solo crashea en Debug (`./dev.sh` opción 2) y el log dice `Assertion failed`, es un `Debug.Assert`: anotar cuál.
-6. **Ventana.** Título y overlay de bienvenida dicen "tModManager". `StartupWMClass=tModManager` debería agrupar bien la ventana en el dock.
-
-### Después de probar
-
-- [ ] Reportar resultado del checklist (qué falló, logs).
-- [ ] **Desacoplar Cyberpunk del core** (ver sección Multi-juego). Rama nueva desde `main`, con CI detrás.
+- [ ] **Una descarga con contenido cambiado se da por bajada.** `CollectionDownloader.ValidateStatusAsync` solo mira que exista el archivo de `DownloadPath`; si el contenido cambió, la reextracción lo rechaza (hash) y la instalación de un mod suelto (`InstallLoadoutItemJob.RestoreMissingArchiveEntries`) solo loguea y deja correr los instaladores (puede instalar con layout incorrecto). Arreglo de una línea: tirar error claro cuando `restored < missing`
+- [ ] **Super Clean con varios loadouts** crea un snapshot por loadout y `keepNewest` conserva solo el último. El orden de snapshots es por nombre (hora local): un cambio de horario o una carpeta ajena en `Backups/` puede elegir mal
+- [ ] `InstallCollectionDownloadJob.TryReExtractMissingFiles` pasa `default` en vez del token del job a `RestoreAsync`
+- [ ] **Desacoplar Cyberpunk del core** (ver sección Multi-juego). Rama nueva desde `main`, verificada con la suite local.
 
 ## ✅ Completado
 
@@ -114,8 +101,9 @@ Decidido 2026-09-24. Todas son GPL-3.0 como tModManager: se pueden vendorizar (c
 - **MnemonicDB** (la base: loadouts, mods, colecciones): repo archivado 2025-11. Quedamos en **0.28.2**, la última que usó la app oficial en producción. **No subir a 0.50+**: es una reescritura de API publicada dos semanas antes de archivar, ninguna app real la usó. Si hace falta tocarla, vendorizar el tag `v0.28.2`. Depende de RocksDB 9.10 y DuckDB (vigilar sus advisories). Largo plazo opcional: reemplazar por SQLite (~286 archivos la usan)
 - **NexusMods.Paths** (`AbsolutePath`, `GamePath`, filesystem en memoria para tests): sin commits desde 2025-10. Congelada en **0.22.5**. Ojo: 0.22 trae su propio `ChunkedStream`/`IChunkedStreamSource` (este último en el namespace global); usamos el nuestro de `NexusMods.Sdk.IO`, calificado
 - **NexusMods.Hashing.xxHash3**: reemplazable por `XxHash3` de `System.IO.Hashing` (paquete oficial de Microsoft). Hacerlo junto con la eliminación de `.nx`, porque los hashes también se guardan en la base
-- **NexusMods.Archives.Nx**: se elimina, ver abajo
-- [ ] **Eliminar `.nx` file store** (siguiente trabajo grande después de desacoplar Cyberpunk): el formato de almacenamiento de Nexus no nos aporta nada; hoy guardamos el zip descargado **y** una copia `.nx` (doble espacio) y de ahí sale toda la clase de bugs "archivos perdidos tras Deep Clean". El archivo original (.zip/.7z) pasa a ser la fuente de verdad y la validación queda en "¿existe el archivo?". Toca `NxFileStore`, `GarbageCollection.*` (3 proyectos), Deep Clean, validación de colecciones y `Paths.Extensions.Nx`. Sale también `NexusMods.Archives.Nx`
+- [x] **Eliminar `.nx` file store** (2026-09-24, PRs #42, #43, #45; falta la prueba con la app, ver arriba): reemplazado por `LooseFileStore` (content-addressed, `Archives/<2-hex>/<hash>`) + GC por barrido (`LiveHashes`). Descargas de primera clase en `tModManager/Downloads` con `LibraryFile.DownloadPath` y reextracción vía `IDownloadReExtractor`. Asistente de limpieza guiada para datos viejos (`.nx`, DB vieja), Deep Clean reforzado, borrado del prefix de Proton. Salen `NxFileStore`, los tres proyectos `GarbageCollection.*`, `NexusMods.Archives.Nx` y `NexusMods.Paths.Extensions.Nx`
+  - [ ] **Archivos locales fuera de Descargas:** lo que se agrega con `AddLocalFile` desde otra carpeta (`ManualDownloadRequiredOverlay.cs`, `LibraryViewModel.cs` "agregar desde archivo") no se copia a `tModManager/Downloads`, así que queda sin `DownloadPath`: no se puede reextraer si se borra del store ni es portable. Copiarlo (o moverlo) a Descargas antes de agregarlo
+  - [ ] **Backups viejos de NexusMods.App:** `LegacyDataDetector.LegacyBackupsFolder` no se usa; `~/.local/share/NexusMods.App/CyberpunkBackups` nunca se cuenta ni se ofrece borrar. El asistente de limpieza podría mostrarlo y ofrecer borrarlo
 - Activas, no requieren acción: `FomodInstaller` (Nexus, commits 2026-09), `GameFinder` y `TransparentValueObjects` (erri120)
 
 ## 🎮 Multi-juego (después de limpieza)
@@ -123,7 +111,7 @@ Decidido 2026-09-24. Todas son GPL-3.0 como tModManager: se pueden vendorizar (c
 Intento anterior falló por acoplamiento a Cyberpunk filtrado fuera de `Games.RedEngine` (~35 archivos). Orden:
 
 - [x] **Renombrar app a tModManager:** app ID `io.github.t4toh.tmodmanager`, data dir `~/.local/share/tModManager/` con migración automática desde `NexusMods.App.Cyberpunk/`, `.desktop` viejo se borra al registrar el handler nxm. Pendiente: renombrar el repo GitHub `cp2077-mm` → `tModManager` (manual, GitHub redirige)
-- [x] **CI propio:** GitHub Actions habilitado, `.github/workflows/ci.yaml` (ubuntu, `dotnet build -warnaserror`, xUnit vía `dotnet test` con filtro, TUnit vía `dotnet run`). Primera corrida verde: 1175 tests xUnit + 94 TUnit en ~4.5 min. Único arreglo necesario: ordenar hijos antes de `Verify` en `PathBasedInstallerTests` (orden de enumeración difiere entre ext4 y APFS)
+- [x] ~~**CI propio:**~~ sacado el 2026-09-25 (fallaba y se prefiere probar local; la suite equivalente es `./dev.sh` opción 4). Era: GitHub Actions, `.github/workflows/ci.yaml` (ubuntu, `dotnet build -warnaserror`, xUnit vía `dotnet test` con filtro, TUnit vía `dotnet run`). Primera corrida verde: 1175 tests xUnit + 94 TUnit en ~4.5 min. Único arreglo necesario: ordenar hijos antes de `Verify` en `PathBasedInstallerTests` (orden de enumeración difiere entre ext4 y APFS)
 - [ ] **Desacoplar Cyberpunk del core:** mover refs detrás de `IGame`. Sitios: `DataModel/Storage/StorageAnalyzer.cs`, `DataModel/DataModelSettings.cs`, `SchemaVersions/_0010_FixDeepCleanDisabledItems.cs`, `Sdk/FileExtractor/Signatures.cs`, `Abstractions.Games/SortOrder/*`, UI (`StorageManager`, `EssentialMods`, `MyGames`, `Welcome`, `ManualAddGame`, `GameWidget`), `SingleProcess/CliSettings.cs`, `App/Services.cs`, `App/Program.cs`
 - [ ] **Juegos a agregar, en orden** (pedido 2026-09-24; recién cuando agregar un juego sea posible, o sea después del desacople):
   1. **Skyrim, la versión más nueva en Steam** (Special/Anniversary Edition): SKSE, `plugins.txt`/load order, FOMOD (ya existe), Proton. Fallout 4 comparte motor y queda casi gratis después
@@ -138,7 +126,7 @@ Hecho el 2026-09-22 (rama `feat/rename-tmodmanager`): borrados `.github/` comple
 
 - [x] **Renombrar repo GitHub** `cp2077-mm` → `tModManager` (2026-09-22, GitHub redirige la URL vieja). URLs actualizadas en `metainfo.xml` y `app.pupnet.conf`
 - [x] **Limpieza GitHub** (2026-09-22): borrados 3 deployments fallidos + environment `test` (los disparó un workflow de release de upstream el 2026-02-09 sobre la rama `remove-stuff`, antes de borrar `.github/`); borrados los 51 tags heredados de upstream (`v0.0.1`..`v0.21.1`, `0.6.1-temp`), quedan solo los 6 del fork con release (`v0.22.0`..`v0.23.4`); wiki y projects deshabilitados. El workflow dinámico "Dependabot Updates" desaparece solo. `dev.sh` opción 10 pasa `--app-version` desde el último tag git (antes el AppImage salía siempre como 1.0.0)
-- [ ] **Issue templates propios** (bug + feature) si hace falta, cuando haya CI
+- [ ] **Issue templates propios** (bug + feature) si hace falta
 
 ## 🐛 Errores conocidos y deuda
 
@@ -150,10 +138,18 @@ Estado al 2026-09-22:
 
 Encontrado el 2026-09-22 con el juego real (instalación anterior modeada, restaurada por Steam con solo 20 MB de descarga):
 
-- [ ] **Deep Clean no cubre todo.** Restos que quedaron tras un Deep Clean previo y hubo que mover a mano (`~/.local/share/NexusMods.App/CyberpunkBackups/manual_*`): 108 archivos sueltos en la raíz del juego (readmes e "item codes" que un instalador folderless dejó ahí), `r6/audioware/` (100 MB), `r6/input/` (XMLs de input_loader), `r6/config/cybercmd/`, `r6/config/redsUserHints/`, `r6/publishing/`, `r6/logs/`. Agregar esas rutas a `CyberpunkDeepCleanTool` y, para la raíz, mover todo archivo que no sea vanilla (`launcher-configuration.json`, `REDprelauncher.exe`, `REDlauncher-*.msi`, `*.dll`). El primer sync de Manage encontró 14 más que tampoco cubre: INIs de mods en `engine/config/platform/pc/` (`AllowHighestAILOD.ini`, `BabyDriverV2.ini`, `input_loader.ini`), `engine/config/base/scripts.ini`, `r6/cache/final.redscripts.*`, `r6/cache/input*.xml`, `tools/redmod/tweaks/**/devices.tweak` (tweak de mod en carpeta vanilla), `bin/x64/CyberPunk.bat`
-- [ ] **Instaladores dejan readmes en la raíz del juego.** Los 108 `.txt/.png/.jpg` de arriba son documentación de mods deployada como archivo de juego. Vortex los manda a una carpeta aparte (`SpecialExtraFiles`); nosotros deberíamos ignorarlos o no deployarlos. Confirmado con la colección real: Apply dejó 4 readmes en la raíz (`FlatlinedExit_readme.txt`, `ItemRecordsFixes_readme.txt`, `Slaughtomatic_*_readme.txt`)
+- [x] **Deep Clean no cubre todo.** Cubierto (2026-09-24, `.nx` removal PR 3): `CyberpunkDeepCleanTool` ahora mueve la raíz del juego (todo archivo no vanilla), `r6/audioware/`, `r6/input/`, `r6/config/cybercmd/`, `r6/config/redsUserHints/`, `r6/publishing/` (diffado archivo por archivo, no wholesale: la base ya tiene vanilla ahí), `r6/logs/`, INIs de `engine/config/platform/pc/`, `engine/config/base/scripts.ini`, `r6/cache/final.redscripts*`, `r6/cache/input*.xml`, `tools/redmod/tweaks/**/devices.tweak`, `bin/x64/CyberPunk.bat`, todo contra el set vanilla de `IFileHashesService`.
+- [ ] **Instaladores dejan readmes en la raíz del juego.** Deep Clean ahora limpia esos readmes/imágenes después del hecho (item de arriba), pero los instaladores los siguen deployando ahí. Vortex los manda a una carpeta aparte (`SpecialExtraFiles`); nosotros deberíamos ignorarlos o no deployarlos. Confirmado con la colección real: Apply dejó 4 readmes en la raíz (`FlatlinedExit_readme.txt`, `ItemRecordsFixes_readme.txt`, `Slaughtomatic_*_readme.txt`)
 - [ ] **OAuth client_id propio.** `Auth/OAuth.cs:21` usa `"nma"`, el client de la app oficial; Nexus podría revocarlo. Registrar uno para tModManager si Nexus lo permite (probablemente no den clients a forks). Anotado 2026-09-24
 - [ ] **Tests no deben tocar estado real del usuario.** Ya pasó dos veces (`.desktop` en #32, `Temp/` en #33). Revisar el resto de `AddDefaultServicesForTesting` + `AddOSInterop` real: `xdg-settings set` sigue corriendo en tests
+
+Encontrado el 2026-09-24 en la eliminación de `.nx` (revisiones de implementación):
+
+- [ ] **Doble apertura con un reset pendiente.** Dos lanzamientos dentro de la ventana de migración pueden actuar ambos como main; el segundo puede borrar la base recién creada por el primero (se pierde solo esa sesión). Arreglo: lock exclusivo sobre el marker de reset, o reclamar el slot de instancia única antes de resolver `MigrationService`
+- [ ] **`CleanupUnresponsiveProcesses` (heredado de upstream) mata con SIGKILL** el PID anotado en el archivo de sync si el heartbeat tarda más de 6s (un main ocupado, o un PID reusado)
+- [ ] **Storage Manager: botones sin `CanExecute` atado a `IsBusy`** (solo guard dentro del cuerpo); el botón de cerrar ventana sigue activo mientras corre un paso del asistente
+- [ ] **Deep Clean: `Directory.Move` falla entre filesystems** (librería de Steam en otro disco que `~/.local/share`) → esas carpetas quedan logueadas y sin mover; el `final.redscripts.bk` de redscript viejo se mueve pero un `final.redscripts` modeado se queda (Steam verify lo arregla)
+- [ ] **Collections: `PackageReExtractionTests` reimplementa la secuencia restore-then-parse** en vez de correr `InstallCollectionJob` (hace falta un fixture de `CollectionRevisionMetadata` sin red)
 
 ### Otros TODO relevantes en código
 
@@ -167,3 +163,4 @@ Encontrado el 2026-09-22 con el juego real (instalación anterior modeada, resta
 - `NexusMods.Abstractions.Games/SortOrder/ASortOrderVariety.cs:147,190` — sin retry ante data race en transacción
 - `NexusMods.Games.RedEngine/Cyberpunk2077/Emitters/PatternBasedDependencyEmitter.cs:75` — usar index scan ordenado
 - `NexusMods.App.UI/Settings/ExperimentalSettings.cs:19` — remover para GA
+- `NexusMods.Backend/FileExtractor/FileExtractor.cs` (`ExtractAllAsync`) — traga la cancelación de cada intento de extractor y relanza `FileExtractionException` en vez de `OperationCanceledException`; el re-extractor lo esquiva con `ThrowIfCancellationRequested` explícito

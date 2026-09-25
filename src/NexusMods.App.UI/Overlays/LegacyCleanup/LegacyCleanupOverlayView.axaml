@@ -1,0 +1,114 @@
+<reactive:ReactiveUserControl
+    x:TypeArguments="overlays:ILegacyCleanupOverlayViewModel"
+    xmlns="https://github.com/avaloniaui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    xmlns:reactive="http://reactiveui.net"
+    xmlns:overlays="clr-namespace:NexusMods.App.UI.Overlays"
+    xmlns:controls="clr-namespace:NexusMods.App.UI.Controls"
+    mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="600"
+    x:Class="NexusMods.App.UI.Overlays.LegacyCleanupOverlayView">
+
+    <Border MinWidth="576" MaxWidth="576"
+            Background="{StaticResource SurfaceLowBrush}"
+            CornerRadius="8"
+            Padding="24"
+            BorderBrush="{StaticResource StrokeTranslucentWeakBrush}"
+            BorderThickness="2"
+            BoxShadow="{StaticResource DropShadowMD}">
+
+        <StackPanel HorizontalAlignment="Center" Spacing="24">
+            <TextBlock Theme="{StaticResource BodyXLBoldTheme}"
+                       TextAlignment="Center"
+                       Foreground="{StaticResource NeutralStrongBrush}"
+                       Text="Nueva forma de guardar tus mods" />
+
+            <StackPanel x:Name="Step1Panel">
+                <TextBlock Theme="{StaticResource BodyMDNormalTheme}"
+                           TextWrapping="Wrap"
+                           Foreground="{StaticResource NeutralSubduedBrush}"
+                           Text="tModManager ya no usa el formato .nx. Hay que empezar de cero: se borran la librería y los loadouts. Tus descargas se conservan." />
+            </StackPanel>
+
+            <StackPanel x:Name="Step2Panel">
+                <TextBlock x:Name="LegacyDownloadsTextBlock"
+                           Theme="{StaticResource BodyMDNormalTheme}"
+                           TextWrapping="Wrap"
+                           Foreground="{StaticResource NeutralSubduedBrush}" />
+            </StackPanel>
+
+            <StackPanel x:Name="Step3Panel" Spacing="16">
+                <TextBlock Theme="{StaticResource BodyMDNormalTheme}"
+                           TextWrapping="Wrap"
+                           Foreground="{StaticResource NeutralSubduedBrush}"
+                           Text="Se limpia la carpeta del juego (backup en tModManager/Backups). Después conviene verificar los archivos en Steam." />
+                <CheckBox x:Name="DeleteProtonPrefixCheckBox">
+                    <TextBlock TextWrapping="Wrap"
+                               Text="Borrar también el prefix de Proton (se pierden saves no sincronizados con la nube y la configuración del prefix)" />
+                </CheckBox>
+            </StackPanel>
+
+            <StackPanel x:Name="Step4Panel" Spacing="16">
+                <TextBlock x:Name="CleanedTextBlock"
+                           Theme="{StaticResource BodyMDNormalTheme}"
+                           TextWrapping="Wrap"
+                           Foreground="{StaticResource NeutralSubduedBrush}"
+                           Text="Listo, la carpeta del juego quedó limpia (backup en tModManager/Backups). Conviene verificar ahora los archivos en Steam." />
+                <TextBlock x:Name="NotCleanedTextBlock"
+                           Theme="{StaticResource BodyMDNormalTheme}"
+                           TextWrapping="Wrap"
+                           Foreground="{StaticResource NeutralSubduedBrush}"
+                           Text="La carpeta del juego no se limpió: pueden quedar archivos de mods viejos. Es muy recomendable verificar ahora los archivos en Steam." />
+                <controls:StandardButton x:Name="ButtonVerifySteam"
+                                         HorizontalAlignment="Center"
+                                         Text="Verificar integridad en Steam"
+                                         Type="Secondary"
+                                         Fill="Strong"
+                                         Size="Small" />
+                <TextBlock Theme="{StaticResource BodyMDNormalTheme}"
+                           TextWrapping="Wrap"
+                           Foreground="{StaticResource NeutralSubduedBrush}"
+                           Text="Después, &quot;Reiniciar&quot; borra los datos viejos: la app se reinicia y arranca limpia. Gestioná el juego e instalá tu colección." />
+            </StackPanel>
+
+            <TextBlock x:Name="BusyTextBlock"
+                       Theme="{StaticResource BodyMDNormalTheme}"
+                       TextAlignment="Center"
+                       Foreground="{StaticResource NeutralSubduedBrush}"
+                       Text="Trabajando…" />
+
+            <TextBlock x:Name="MessageTextBlock"
+                       Theme="{StaticResource BodyMDNormalTheme}"
+                       TextWrapping="Wrap"
+                       Foreground="{StaticResource DangerStrongBrush}" />
+
+            <StackPanel Spacing="16">
+                <Border Height="1" Background="{StaticResource SurfaceMidBrush}" />
+
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Center"
+                            Spacing="{StaticResource Spacing-4}">
+                    <controls:StandardButton x:Name="ButtonQuit"
+                                             Text="Salir"
+                                             Type="Tertiary"
+                                             Fill="Weak"
+                                             Size="Small" />
+
+                    <controls:StandardButton x:Name="ButtonSkipCleanup"
+                                             Text="Continuar sin limpiar"
+                                             Type="Secondary"
+                                             Fill="Weak"
+                                             Size="Small" />
+
+                    <controls:StandardButton x:Name="ButtonNext"
+                                             Text="Siguiente"
+                                             Type="Primary"
+                                             Fill="Strong"
+                                             Size="Small" />
+                </StackPanel>
+            </StackPanel>
+        </StackPanel>
+
+    </Border>
+
+</reactive:ReactiveUserControl>

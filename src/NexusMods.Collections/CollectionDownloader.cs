@@ -588,8 +588,9 @@ public class CollectionDownloader
     }
 
     /// <summary>
-    /// Validates that a status reporting "InLibrary" or "Installed" actually has its archive files on disk.
-    /// If the archive is missing, downgrades the status to "NotDownloaded" so the UI
+    /// Validates that a status reporting "InLibrary" or "Installed" actually has its files on disk: either
+    /// the original download (in <see cref="DownloadsSettings.Folder"/>) or every entry in the file store.
+    /// If both are missing, downgrades the status to "NotDownloaded" so the UI
     /// shows the download button and the user can re-download.
     /// </summary>
     public async ValueTask<CollectionDownloadStatus> ValidateStatusAsync(CollectionDownloadStatus status)
@@ -614,6 +615,10 @@ public class CollectionDownloader
         }
 
         if (!libraryItem.TryGetAsLibraryFile(out var libraryFile)) return status;
+
+        // The original download is still on disk: whatever is missing from the store is re-extracted
+        // from it at install time, so the item is downloaded.
+        if (IsDownloadOnDisk(libraryFile)) return status;
 
         try
         {
@@ -649,6 +654,14 @@ public class CollectionDownloader
         }
 
         return status;
+    }
+
+    private bool IsDownloadOnDisk(LibraryFile.ReadOnly libraryFile)
+    {
+        if (!LibraryFile.DownloadPath.TryGetValue(libraryFile, out var relativePath)) return false;
+        var downloads = _serviceProvider.GetRequiredService<ISettingsManager>().Get<DownloadsSettings>().Folder
+            .ToPath(_serviceProvider.GetRequiredService<IFileSystem>());
+        return downloads.Combine(relativePath).FileExists;
     }
 
     /// <summary>
@@ -765,8 +778,8 @@ public class CollectionDownloader
         _logger.LogInformation("Starting rescan of Downloads folder for collection `{CollectionName}`", revision.Collection.Name);
         
         var fs = _serviceProvider.GetRequiredService<IFileSystem>();
-        var downloadsFolder = GetDownloadsFolder(fs);
-        if (!downloadsFolder.DirectoryExists()) 
+        var downloadsFolder = _serviceProvider.GetRequiredService<ISettingsManager>().Get<DownloadsSettings>().Folder.ToPath(fs);
+        if (!downloadsFolder.DirectoryExists())
         {
             _logger.LogWarning("Downloads folder does not exist: `{Path}`", downloadsFolder);
             return;
@@ -854,11 +867,17 @@ public class CollectionDownloader
                                 libraryFileId = existingDatoms[0].E;
                                 libraryFile = new LibraryFile.ReadOnly(db, libraryFileId);
                                 
-                                // Update DB if filename changed
-                                if (libraryFile.FileName != currentFile.FileName)
+                                // Update DB if the filename changed (extension fix above), and point
+                                // DownloadPath at this file when it is missing or its file is gone
+                                // (renamed above, or an entry from before DownloadPath existed).
+                                var fixName = libraryFile.FileName != currentFile.FileName;
+                                var fixPath = !LibraryFile.DownloadPath.TryGetValue(libraryFile, out var downloadPath)
+                                    || !downloadsFolder.Combine(downloadPath).FileExists;
+                                if (fixName || fixPath)
                                 {
                                     using var txName = _connection.BeginTransaction();
-                                    txName.Add(libraryFileId, LibraryFile.FileName, currentFile.FileName);
+                                    if (fixName) txName.Add(libraryFileId, LibraryFile.FileName, currentFile.FileName);
+                                    if (fixPath) txName.Add(libraryFileId, LibraryFile.DownloadPath, currentFile.RelativeTo(downloadsFolder));
                                     await txName.Commit();
                                 }
                             }
@@ -914,18 +933,6 @@ public class CollectionDownloader
             return string.Empty;
         }
         catch { return string.Empty; }
-    }
-
-    private static AbsolutePath GetDownloadsFolder(IFileSystem fs)
-    {
-        var basePath = fs.OS.MatchPlatform(
-            onWindows: () => KnownPath.LocalApplicationDataDirectory,
-            onLinux: () => KnownPath.XDG_DATA_HOME,
-            onOSX: () => KnownPath.LocalApplicationDataDirectory
-        );
-
-        var dirName = fs.OS.IsOSX ? "NexusMods_App" : "NexusMods.App";
-        return fs.GetKnownPath(basePath).Combine(dirName).Combine("Downloads");
     }
 
     /// <summary>
