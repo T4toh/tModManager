@@ -43,6 +43,12 @@ public static class SafePath
     }
 
     /// <summary>
+    /// True when <paramref name="path"/> itself is a symbolic link (to a file or a directory, dangling or not).
+    /// </summary>
+    public static bool IsSymlink(AbsolutePath path) =>
+        path.FileSystem is not InMemoryFileSystem && new FileInfo(path.ToString()).LinkTarget is not null;
+
+    /// <summary>
     /// Recursively lists the files under <paramref name="directory"/> without entering symlinked directories.
     /// File symlinks are listed (as the link) so callers see them and unlink them instead of writing through them.
     /// Names that alias a path outside <paramref name="directory"/> (backslashes read back as separators) are dropped.

@@ -73,7 +73,7 @@ internal class StorageAnalyzer : IStorageAnalyzer
         if (downloadsPath.DirectoryExists())
         {
             downloadsSize = downloadsPath
-                .EnumerateFiles()
+                .EnumerateFiles("*", recursive: false)
                 .Aggregate(0UL, (acc, file) => acc + file.FileInfo.Size.Value);
         }
 
@@ -110,6 +110,13 @@ internal class StorageAnalyzer : IStorageAnalyzer
     {
         var db = _connection.Db;
         var loadouts = Loadout.All(db).Where(l => l.IsVisible()).ToArray();
+
+        // ponytail: one loadout only. Each synced run makes its own snapshot and prunes older ones, so with 3+
+        // loadouts the first snapshot (the only one holding unmanaged files) is deleted. Keep all snapshots of a
+        // run before lifting this.
+        if (!skipSync && loadouts.Length > 1)
+            throw new InvalidOperationException($"Super Clean con {loadouts.Length} loadouts no es seguro todavía: borrá los loadouts que no uses y volvé a intentar.");
+
         foreach (var loadout in loadouts)
         {
             var tool = _toolManager.GetTools(loadout)
@@ -172,9 +179,16 @@ internal class StorageAnalyzer : IStorageAnalyzer
     public Task DeleteDownloadsAsync(CancellationToken cancellationToken = default)
     {
         var downloads = _settingsManager.Get<DownloadsSettings>().Folder.ToPath(_fileSystem);
-        if (downloads.DirectoryExists())
-            foreach (var file in downloads.EnumerateFiles("*", recursive: false).Where(f => !IsPartialDownload(f)))
-                file.Delete();
+        if (!downloads.DirectoryExists()) return Task.CompletedTask;
+
+        // Only the downloads the library recorded: the folder is configurable and may hold the user's own files
+        foreach (var libraryFile in LibraryFile.All(_connection.Db))
+        {
+            if (!LibraryFile.DownloadPath.TryGetValue(libraryFile, out var relativePath)) continue;
+            var file = downloads.Combine(relativePath);
+            if (!SafePath.IsStrictlyInside(downloads, file) || !file.FileExists || IsPartialDownload(file)) continue;
+            file.Delete();
+        }
         return Task.CompletedTask;
     }
 

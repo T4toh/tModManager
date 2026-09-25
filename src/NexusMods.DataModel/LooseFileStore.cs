@@ -4,6 +4,7 @@ using NexusMods.Paths;
 using NexusMods.Sdk.FileStore;
 using NexusMods.Sdk.Settings;
 using NexusMods.Sdk.Threading;
+using NexusMods.Sdk.IO;
 
 namespace NexusMods.DataModel;
 
@@ -109,7 +110,7 @@ public sealed class LooseFileStore : IFileStore
             f.Dest.Parent.CreateDirectory();
             // Create() writes through a symlink; a dangling or unindexed link at the destination would put
             // the content wherever it points. Replace the link itself instead.
-            if (f.Dest.FileSystem is not InMemoryFileSystem && new FileInfo(f.Dest.ToString()).LinkTarget is not null)
+            if (SafePath.IsSymlink(f.Dest))
                 File.Delete(f.Dest.ToString());
             if (f.Hash == EmptyFile)
             {
@@ -186,12 +187,14 @@ public sealed class LooseFileStore : IFileStore
     {
         // The root may have been deleted by hand while the app runs: nothing owned, nothing to do.
         if (!_root.DirectoryExists()) yield break;
-        foreach (var dir in _root.EnumerateDirectories())
+        // Top level only and never through a link: both enumerations are recursive by default and follow
+        // symlinks, which let the sweep reach (and delete) hash-named files anywhere below or behind the root
+        foreach (var dir in _root.EnumerateDirectories(recursive: false))
         {
             var dirName = dir.FileName.ToString();
-            if (!IsTwoHexChars(dirName)) continue;
+            if (!IsTwoHexChars(dirName) || SafePath.IsSymlink(dir)) continue;
 
-            foreach (var file in dir.EnumerateFiles())
+            foreach (var file in dir.EnumerateFiles("*", recursive: false))
             {
                 var name = file.FileName.ToString();
                 if (name.Contains(TmpMarker, StringComparison.Ordinal))
@@ -250,11 +253,11 @@ public sealed class LooseFileStore : IFileStore
             file.Delete();
 
         if (!_root.DirectoryExists()) return owned.Length;
-        foreach (var dir in _root.EnumerateDirectories())
+        foreach (var dir in _root.EnumerateDirectories(recursive: false))
         {
             var dirName = dir.FileName.ToString();
-            if (!IsTwoHexChars(dirName)) continue;
-            if (!dir.EnumerateFiles().Any() && !dir.EnumerateDirectories().Any())
+            if (!IsTwoHexChars(dirName) || SafePath.IsSymlink(dir)) continue;
+            if (!dir.EnumerateFiles("*", recursive: false).Any() && !dir.EnumerateDirectories(recursive: false).Any())
                 dir.DeleteDirectory(recursive: false);
         }
 

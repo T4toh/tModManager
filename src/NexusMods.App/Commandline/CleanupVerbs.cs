@@ -7,6 +7,7 @@ using NexusMods.Abstractions.Loadouts;
 using NexusMods.Sdk.Settings;
 using NexusMods.CrossPlatform;
 using NexusMods.DataModel;
+using NexusMods.DataModel.Storage;
 using NexusMods.MnemonicDB.Abstractions;
 using NexusMods.Paths;
 using NexusMods.Sdk.FileExtractor;
@@ -32,7 +33,8 @@ internal static class CleanupVerbs
         [Injected] IConnection conn,
         [Injected] ISettingsManager settingsManager,
         [Injected] IFileSystem fileSystem,
-        [Injected] ISynchronizerService syncService)
+        [Injected] ISynchronizerService syncService,
+        [Injected] IStorageAnalyzer storageAnalyzer)
     {
         // Step 1: Revert the managed games to their original state
         var db = conn.Db;
@@ -74,25 +76,42 @@ internal static class CleanupVerbs
                 loggingSettings.SlimProcessLogFilePath.ToPath(fileSystem),
             ];
 
-            var appDirectories = new[]
+            // The storage location is a folder the user picked (it can be ~/Mods or a whole disk): only the files the
+            // store owns are deleted, and the folder itself only if that leaves it empty
+            await storageAnalyzer.DeleteArchivesAsync();
+            foreach (var archiveRoot in dataModelSettings.ArchiveLocations.Select(path => path.ToPath(fileSystem)))
             {
-                dataModelSettings.MnemonicDBPath.ToPath(fileSystem),
-                fileExtractorSettings.TempFolderLocation.ToPath(fileSystem),
-                LoggingSettings.GetLogBaseFolder(OSInformation.Shared, fileSystem),
+                if (archiveRoot.DirectoryExists() && !archiveRoot.EnumerateFiles("*", recursive: false).Any() && !archiveRoot.EnumerateDirectories(recursive: false).Any())
+                    archiveRoot.DeleteDirectory(recursive: false);
+            }
 
-                // The DataModel folder.
-                DataModelSettings.GetStandardDataModelFolder(fileSystem),
+            // The DB path comes from a settings file too: delete it only when it really is a database
+            var dbPath = dataModelSettings.MnemonicDBPath.ToPath(fileSystem);
+            if (dbPath.DirectoryExists() && !DataModelSettings.LooksLikeRocksDb(dbPath))
+                await renderer.Text("Skipping {0}: it doesn't look like the app's database", dbPath);
 
-                // Local Application Data (where all app files default to).
-                DataModelSettings.GetLocalApplicationDataDirectory(fileSystem),
-            }.Concat(dataModelSettings.ArchiveLocations.Select(path => path.ToPath(fileSystem)));
+            // Backups (Deep Clean snapshots, possibly the only copy of mod files moved out of the game) and
+            // Downloads (the original archives) are the user's data: keep them
+            var dataDirectory = DataModelSettings.GetLocalApplicationDataDirectory(fileSystem);
+            string[] kept = ["Backups", "Downloads"];
+            var dataDirectoryEntries = dataDirectory.DirectoryExists()
+                ? dataDirectory.EnumerateDirectories(recursive: false).Where(dir => !kept.Contains(dir.FileName.ToString()))
+                : [];
+
+            var appDirectories = new[]
+                {
+                    fileExtractorSettings.TempFolderLocation.ToPath(fileSystem),
+                    LoggingSettings.GetLogBaseFolder(OSInformation.Shared, fileSystem),
+                }
+                .Concat(DataModelSettings.LooksLikeRocksDb(dbPath) ? [dbPath] : [])
+                .Concat(dataDirectoryEntries);
 
             if (fileSystem.OS.IsUnix())
                 await DeleteRemainingFilesUnix(renderer, appFiles, appDirectories);
             else
                 await DeleteRemainingFilesWindows(appFiles, appDirectories);
 
-            await renderer.Text("Application uninstalled successfully");
+            await renderer.Text("Application uninstalled successfully. Kept your backups and downloads in {0}", dataDirectory);
             return 0;
         }
         catch (Exception ex)

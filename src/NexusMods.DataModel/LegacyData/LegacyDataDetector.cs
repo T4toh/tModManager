@@ -93,6 +93,10 @@ public static class LegacyDataDetector
             throw new InvalidOperationException(
                 $"Me niego a reiniciar: la ruta de la base de datos ({mnemonicDbPath}) es, o contiene, el directorio de datos o la carpeta de archivos; borrarla perdería mucho más que la base.");
 
+        // Checked before deleting anything: the DB path comes from a settings file and could point anywhere
+        if (mnemonicDbPath.DirectoryExists() && !DataModelSettings.LooksLikeRocksDb(mnemonicDbPath))
+            throw new InvalidOperationException($"Me niego a reiniciar: {mnemonicDbPath} no parece una base de datos (faltan CURRENT/IDENTITY)");
+
         if (archivesRoot.DirectoryExists())
             foreach (var nx in archivesRoot.EnumerateFiles("*.nx", recursive: false)) nx.Delete();
         if (mnemonicDbPath.DirectoryExists()) mnemonicDbPath.DeleteDirectoryNoFollow();

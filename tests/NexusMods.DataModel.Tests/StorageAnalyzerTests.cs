@@ -1,5 +1,6 @@
 using FluentAssertions;
 using Microsoft.Extensions.DependencyInjection;
+using NexusMods.Abstractions.Library;
 using NexusMods.DataModel.Storage;
 using NexusMods.Games.TestFramework;
 using NexusMods.Paths;
@@ -12,25 +13,28 @@ namespace NexusMods.DataModel.Tests;
 public class StorageAnalyzerTests(ITestOutputHelper helper) : ACyberpunkIsolatedGameTest<StorageAnalyzerTests>(helper)
 {
     [Fact]
-    public async Task DeleteDownloadsAsync_DeletesTopLevelFilesOnly_SubfoldersSurvive()
+    public async Task DeleteDownloadsAsync_DeletesOnlyDownloadsTheLibraryRecorded()
     {
+        // The downloads folder is configurable: pointed at ~/Downloads it holds the user's own files too
         var storageAnalyzer = ServiceProvider.GetRequiredService<IStorageAnalyzer>();
+        var libraryService = ServiceProvider.GetRequiredService<ILibraryService>();
         var downloads = ServiceProvider.GetRequiredService<ISettingsManager>().Get<DownloadsSettings>().Folder.ToPath(FileSystem);
         downloads.CreateDirectory();
 
-        var topLevelFile = downloads.Combine("mod.zip");
-        await File.WriteAllTextAsync(topLevelFile.ToString(), "archive contents");
+        var recorded = downloads.Combine("mod.txt");
+        await File.WriteAllTextAsync(recorded.ToString(), "mod contents");
+        await libraryService.AddLocalFile(recorded);
 
-        var subDir = downloads.Combine("subdir");
-        subDir.CreateDirectory();
-        var nestedFile = subDir.Combine("nested.txt");
+        var usersOwn = downloads.Combine("tax-return.pdf");
+        await File.WriteAllTextAsync(usersOwn.ToString(), "not a mod");
+        var nestedFile = downloads.Combine("subdir/nested.txt");
+        nestedFile.Parent.CreateDirectory();
         await File.WriteAllTextAsync(nestedFile.ToString(), "should survive");
 
         await storageAnalyzer.DeleteDownloadsAsync();
 
-        topLevelFile.FileExists.Should().BeFalse();
-        downloads.DirectoryExists().Should().BeTrue();
-        subDir.DirectoryExists().Should().BeTrue();
+        recorded.FileExists.Should().BeFalse();
+        usersOwn.FileExists.Should().BeTrue();
         nestedFile.FileExists.Should().BeTrue();
     }
 
@@ -90,5 +94,18 @@ public class StorageAnalyzerTests(ITestOutputHelper helper) : ACyberpunkIsolated
         backups.Combine("20260101_000000").DirectoryExists().Should().BeFalse();
         canary.FileExists.Should().BeTrue();
         stats.CyberpunkBackupsSize.Value.Should().Be(0, "the size walk must not count files behind a symlink");
+    }
+
+    [Fact]
+    public async Task RunDeepCleanOnAllLoadouts_WithSeveralLoadouts_RefusesBeforeTouchingAnything()
+    {
+        // Never run this without the guard: Deep Clean writes its backups to the real XDG data folder
+        var analyzer = ServiceProvider.GetRequiredService<IStorageAnalyzer>();
+        await CreateLoadout();
+        await CreateLoadout();
+
+        var act = () => analyzer.RunDeepCleanOnAllLoadoutsAsync();
+
+        await act.Should().ThrowAsync<InvalidOperationException>().WithMessage("*loadouts*");
     }
 }
