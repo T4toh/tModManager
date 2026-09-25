@@ -11,6 +11,7 @@ using NexusMods.Paths;
 using NexusMods.Sdk.FileExtractor;
 using NexusMods.Sdk.Jobs;
 using NexusMods.Sdk.Library;
+using NexusMods.Sdk.Settings;
 
 namespace NexusMods.Library;
 
@@ -44,56 +45,37 @@ internal class AddDownloadJob : IJobDefinitionWithStart<AddDownloadJob, LibraryF
         if (downloadedPath.FileExists && downloadedPath.FileInfo.Size == Size.Zero)
             throw new InvalidOperationException($"La descarga del archivo '{downloadedPath.FileName}' resultó en un archivo vacío (0 bytes). Es posible que la URL haya expirado o el servidor haya rechazado la petición.");
 
-        // Preserve a copy of the original downloaded file
-        await PreserveOriginalFile(context.CancellationToken);
+        // Preserve a copy of the original downloaded file, importing from that copy so
+        // AddLibraryFileJob records LibraryFile.DownloadPath for it.
+        var preserved = await PreserveOriginalFile(context.CancellationToken);
 
         await context.YieldAsync();
         using var tx = Connection.BeginTransaction();
 
-        var libraryFile = await AddLibraryFileJob.Create(ServiceProvider, tx, DownloadJob.Result);
+        var libraryFile = await AddLibraryFileJob.Create(ServiceProvider, tx, preserved ?? DownloadJob.Result);
         await DownloadJob.JobDefinition.AddMetadata(tx, libraryFile);
 
         var transactionResult = await tx.Commit();
         return transactionResult.Remap(libraryFile);
     }
 
-    private async Task PreserveOriginalFile(CancellationToken ct)
+    private async Task<AbsolutePath?> PreserveOriginalFile(CancellationToken ct)
     {
         try
         {
             var downloadedFilePath = DownloadJob.Result;
-            if (!downloadedFilePath.FileExists) return;
+            if (!downloadedFilePath.FileExists) return null;
 
-            var fs = ServiceProvider.GetRequiredService<IFileSystem>();
-            var downloadsFolder = GetDownloadsFolder(fs);
-
-            if (!downloadsFolder.DirectoryExists())
-                downloadsFolder.CreateDirectory();
-
-            var destFileName = await GetMeaningfulFileNameAsync(downloadedFilePath, ct);
-            var destPath = downloadsFolder.Combine(destFileName);
-
-            // Avoid overwriting existing files
-            if (destPath.FileExists)
-            {
-                var stem = destPath.GetFileNameWithoutExtension();
-                var extStr = destPath.Extension.ToString();
-                var counter = 1;
-                do
-                {
-                    destPath = downloadsFolder.Combine($"{stem}_{counter}{extStr}");
-                    counter++;
-                } while (destPath.FileExists);
-            }
-
-            await using var source = downloadedFilePath.Read();
-            await using var dest = destPath.Create();
-            await source.CopyToAsync(dest, ct);
+            var settings = ServiceProvider.GetRequiredService<ISettingsManager>().Get<DownloadsSettings>();
+            var folder = settings.Folder.ToPath(ServiceProvider.GetRequiredService<IFileSystem>());
+            var name = await GetMeaningfulFileNameAsync(downloadedFilePath, ct);
+            return await DownloadsFolder.PlaceAsync(downloadedFilePath, folder, name, ct);
         }
         catch (Exception ex)
         {
             var logger = ServiceProvider.GetService<ILogger<AddDownloadJob>>();
             logger?.LogWarning(ex, "No se pudo preservar el archivo original descargado");
+            return null;
         }
     }
 
@@ -201,17 +183,5 @@ internal class AddDownloadJob : IJobDefinitionWithStart<AddDownloadJob, LibraryF
         }
 
         return filename;
-    }
-
-    private static AbsolutePath GetDownloadsFolder(IFileSystem fs)
-    {
-        var basePath = fs.OS.MatchPlatform(
-            onWindows: () => KnownPath.LocalApplicationDataDirectory,
-            onLinux: () => KnownPath.XDG_DATA_HOME,
-            onOSX: () => KnownPath.LocalApplicationDataDirectory
-        );
-
-        var dirName = fs.OS.IsOSX ? "NexusMods_App" : "NexusMods.App";
-        return fs.GetKnownPath(basePath).Combine(dirName).Combine("Downloads");
     }
 }

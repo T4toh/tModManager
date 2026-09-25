@@ -47,6 +47,10 @@ public class Startup
                         new ConfigurablePath(baseKnownPath, $"{baseDirectory}/Archives"),
                     ],
                 })
+                .OverrideSettingsForTests<DownloadsSettings>(settings => settings with
+                {
+                    Folder = new ConfigurablePath(baseKnownPath, $"{baseDirectory}/Downloads"),
+                })
                 .AddFileExtractors()
                 // Keep the temp folder out of the user's real XDG_STATE_HOME: TemporaryFileManager deletes it on dispose
                 .OverrideSettingsForTests<FileExtractorSettings>(settings => settings with

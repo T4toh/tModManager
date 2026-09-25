@@ -25,6 +25,7 @@ using NexusMods.MnemonicDB.Storage.RocksDbBackend;
 using NexusMods.Sdk;
 using NexusMods.Sdk.FileStore;
 using NexusMods.Sdk.Games;
+using NexusMods.Sdk.Library;
 using NexusMods.Sdk.Resources;
 
 using IFileSystem = NexusMods.Paths.IFileSystem;
@@ -51,6 +52,7 @@ public static class Services
 
         // Settings
         coll.AddSettings<DataModelSettings>();
+        coll.AddSettings<DownloadsSettings>();
 
         coll.AddSingleton<DatomStoreSettings>(sp =>
             {

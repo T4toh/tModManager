@@ -4,6 +4,7 @@ using NexusMods.MnemonicDB.Abstractions;
 using NexusMods.MnemonicDB.Abstractions.TxFunctions;
 using NexusMods.Paths;
 using NexusMods.Sdk.Jobs;
+using NexusMods.Sdk.Library;
 using NexusMods.Sdk.Loadouts;
 using NexusMods.Sdk.Settings;
 
@@ -48,8 +49,6 @@ internal class StorageAnalyzer : IStorageAnalyzer
     /// <inheritdoc />
     public Task<StorageStats> GetStorageStatsAsync(CancellationToken cancellationToken = default)
     {
-        var settings = _settingsManager.Get<DataModelSettings>();
-
         // Sum sizes of the files the store owns (foreign files under the archive location are not counted)
         var archivesSize = _fileStore.TotalSize().Value;
 
@@ -58,7 +57,7 @@ internal class StorageAnalyzer : IStorageAnalyzer
         var backedUpCount = GameBackedUpFile.All(db).Count();
 
         // Sum sizes of all files in the downloads folder
-        var downloadsPath = settings.DownloadsFolder.ToPath(_fileSystem);
+        var downloadsPath = _settingsManager.Get<DownloadsSettings>().Folder.ToPath(_fileSystem);
         var downloadsSize = 0UL;
         if (downloadsPath.DirectoryExists())
         {
@@ -135,15 +134,6 @@ internal class StorageAnalyzer : IStorageAnalyzer
     /// <inheritdoc />
     public Task DeletePhysicalFilesAsync(CancellationToken cancellationToken = default)
     {
-        // Delete all files in the downloads folder
-        var settings = _settingsManager.Get<DataModelSettings>();
-        var downloadsPath = settings.DownloadsFolder.ToPath(_fileSystem);
-        if (downloadsPath.DirectoryExists())
-        {
-            foreach (var file in downloadsPath.EnumerateFiles())
-                file.Delete();
-        }
-
         // Delete all timestamped subdirectories under CyberpunkBackups
         var cyberpunkBackupsPath = GetCyberpunkBackupsPath();
         if (cyberpunkBackupsPath.DirectoryExists())
@@ -152,6 +142,16 @@ internal class StorageAnalyzer : IStorageAnalyzer
                 subDir.DeleteDirectory(recursive: true);
         }
 
+        return Task.CompletedTask;
+    }
+
+    /// <inheritdoc />
+    public Task DeleteDownloadsAsync(CancellationToken cancellationToken = default)
+    {
+        var downloads = _settingsManager.Get<DownloadsSettings>().Folder.ToPath(_fileSystem);
+        if (downloads.DirectoryExists())
+            foreach (var file in downloads.EnumerateFiles("*", recursive: false))
+                file.Delete();
         return Task.CompletedTask;
     }
 }

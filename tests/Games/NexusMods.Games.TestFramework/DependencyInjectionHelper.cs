@@ -83,6 +83,10 @@ public static class DependencyInjectionHelper
             {
                 HashDatabaseLocation = new ConfigurablePath(baseKnownPath, $"{baseDirectory}/FileHashes"),
             })
+            .OverrideSettingsForTests<DownloadsSettings>(settings => settings with
+            {
+                Folder = new ConfigurablePath(baseKnownPath, $"{baseDirectory}/Downloads"),
+            })
             .AddSettingsManager()
             .AddFileExtractors();
         

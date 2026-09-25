@@ -7,7 +7,7 @@ namespace NexusMods.DataModel.Storage;
 /// </summary>
 public record StorageStats
 {
-    /// <summary>Total size on disk of all Nx archive files (.nx) used by the mod manager.</summary>
+    /// <summary>Total size on disk of all archive chunks in the content-addressed store.</summary>
     public Size ArchivesSize { get; init; }
 
     /// <summary>Number of original game files that have been backed up (GC roots).</summary>

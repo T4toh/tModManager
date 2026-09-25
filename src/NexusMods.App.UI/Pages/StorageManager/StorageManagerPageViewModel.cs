@@ -28,6 +28,7 @@ internal class StorageManagerPageViewModel : APageViewModel<IStorageManagerPageV
 
     public ReactiveCommand<Unit> RunGarbageCollectionCommand { get; }
     public ReactiveCommand<Unit> DeepCleanCommand { get; }
+    public ReactiveCommand<Unit> DeleteDownloadsCommand { get; }
     public ReactiveCommand<Unit> RefreshCommand { get; }
 
     public StorageManagerPageViewModel(
@@ -90,6 +91,38 @@ internal class StorageManagerPageViewModel : APageViewModel<IStorageManagerPageV
                 if (nukeMode)
                     await storageAnalyzer.DeleteArchivesAsync(ct);
                 await gcRunner.RunAsync();
+                await RefreshStatsAsync(storageAnalyzer, ct);
+            }
+            finally
+            {
+                IsBusy = false;
+            }
+        });
+
+        DeleteDownloadsCommand = new ReactiveCommand<Unit>(async (_, ct) =>
+        {
+            if (IsBusy) return;
+
+            var dialog = DialogFactory.CreateStandardDialog(
+                title: "Borrar descargas",
+                new StandardDialogParameters
+                {
+                    Text = "Se borran los archivos originales de tModManager/Downloads. Vas a tener que volver a bajarlos para reinstalar o reconstruir el store.",
+                },
+                buttonDefinitions:
+                [
+                    new DialogButtonDefinition("Cancelar", ButtonDefinitionId.Cancel, ButtonAction.Reject),
+                    new DialogButtonDefinition("Borrar", ButtonDefinitionId.Accept, ButtonAction.Accept, ButtonStyling.Destructive),
+                ]
+            );
+
+            var result = await windowManager.ShowDialog(dialog, DialogWindowType.Modal);
+            if (result.ButtonId != ButtonDefinitionId.Accept) return;
+
+            IsBusy = true;
+            try
+            {
+                await storageAnalyzer.DeleteDownloadsAsync(ct);
                 await RefreshStatsAsync(storageAnalyzer, ct);
             }
             finally

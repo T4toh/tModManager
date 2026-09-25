@@ -51,6 +51,11 @@ public class Startup
             {
                 UseInMemoryDataModel = true,
             })
+            // Keep downloads out of the user's real XDG_DATA_HOME
+            .OverrideSettingsForTests<DownloadsSettings>(settings => settings with
+            {
+                Folder = new ConfigurablePath(KnownPath.EntryDirectory, $"Downloads-{Guid.NewGuid()}"),
+            })
             .AddLogging(builder => builder.AddXunitOutput()
                 .SetMinimumLevel(LogLevel.Debug))
             .Validate();

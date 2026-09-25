@@ -13,6 +13,7 @@ using NexusMods.Sdk;
 using NexusMods.Sdk.FileStore;
 using NexusMods.Sdk.Games;
 using NexusMods.Sdk.Loadouts;
+using NexusMods.Sdk.Settings;
 using Xunit;
 using NexusMods.Sdk.Library;
 using Loadout = NexusMods.Sdk.Loadouts.Loadout;
@@ -30,6 +31,29 @@ public class LibraryServiceTests : ACyberpunkIsolatedGameTest<LibraryServiceTest
         _libraryService = ServiceProvider.GetRequiredService<ILibraryService>();
         _fileStore = ServiceProvider.GetRequiredService<IFileStore>();
         _connection = ServiceProvider.GetRequiredService<IConnection>();
+    }
+
+    [Fact]
+    public async Task AddingFileFromDownloadsFolder_RecordsDownloadPath()
+    {
+        var settings = ServiceProvider.GetRequiredService<ISettingsManager>().Get<DownloadsSettings>();
+        var downloads = settings.Folder.ToPath(FileSystem);
+        downloads.CreateDirectory();
+        var src = FileSystem.GetKnownPath(KnownPath.CurrentDirectory).Combine("Resources").Combine("data_7zip_lzma2.7z");
+        var inDownloads = downloads.Combine("mod-1-0.7z");
+        File.Copy(src.ToString(), inDownloads.ToString(), overwrite: true);
+
+        var local = await _libraryService.AddLocalFile(inDownloads);
+
+        local.AsLibraryFile().DownloadPath.Value.Should().Be((RelativePath)"mod-1-0.7z");
+    }
+
+    [Fact]
+    public async Task AddingFileOutsideDownloadsFolder_HasNoDownloadPath()
+    {
+        var src = FileSystem.GetKnownPath(KnownPath.CurrentDirectory).Combine("Resources").Combine("data_7zip_lzma2.7z");
+        var local = await _libraryService.AddLocalFile(src);
+        LibraryFile.DownloadPath.TryGetValue(local.AsLibraryFile(), out _).Should().BeFalse();
     }
 
     [Fact]
