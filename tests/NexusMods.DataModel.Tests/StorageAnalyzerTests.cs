@@ -69,4 +69,26 @@ public class StorageAnalyzerTests(ITestOutputHelper helper) : ACyberpunkIsolated
             .Should().BeEquivalentTo(keepNewest ? ["20260103_000000"] : Array.Empty<string>());
         if (keepNewest) backups.Combine("20260103_000000").Combine("mod.archive").FileExists.Should().BeTrue();
     }
+
+    [Fact]
+    public async Task DeletePhysicalFilesAsync_DoesNotFollowSymlinksOutOfTheBackup()
+    {
+        // Deep Clean moves mod folders as-is, so a backup can hold a symlink to a folder elsewhere.
+        var analyzer = (StorageAnalyzer)ServiceProvider.GetRequiredService<IStorageAnalyzer>();
+        var backups = TemporaryFileManager.CreateFolder().Path;
+        var outside = TemporaryFileManager.CreateFolder().Path;
+        var canary = outside.Combine("sub/canary.txt");
+        canary.Parent.CreateDirectory();
+        await File.WriteAllTextAsync(canary.ToString(), "must survive");
+        analyzer.BackupsFolderProvider = () => backups;
+        backups.Combine("20260101_000000").CreateDirectory();
+        File.CreateSymbolicLink(backups.Combine("20260101_000000/linked-mod").ToString(), outside.ToString());
+
+        var stats = await analyzer.GetStorageStatsAsync();
+        await analyzer.DeletePhysicalFilesAsync();
+
+        backups.Combine("20260101_000000").DirectoryExists().Should().BeFalse();
+        canary.FileExists.Should().BeTrue();
+        stats.CyberpunkBackupsSize.Value.Should().Be(0, "the size walk must not count files behind a symlink");
+    }
 }

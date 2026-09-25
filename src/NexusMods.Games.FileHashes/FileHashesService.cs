@@ -495,7 +495,7 @@ internal sealed class FileHashesService : IFileHashesService, IDisposable, IHost
         // Cleanup old databases
         foreach (var databaseInfo in existingDatabases.Skip(1))
         {
-            databaseInfo.Path.DeleteDirectory(true);
+            databaseInfo.Path.DeleteDirectoryNoFollow();
         }
 
         var forceUpdate = false;

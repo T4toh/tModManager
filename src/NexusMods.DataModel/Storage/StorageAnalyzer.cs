@@ -9,6 +9,7 @@ using NexusMods.Sdk.Jobs;
 using NexusMods.Sdk.Library;
 using NexusMods.Sdk.Loadouts;
 using NexusMods.Sdk.Settings;
+using NexusMods.Sdk.IO;
 
 namespace NexusMods.DataModel.Storage;
 
@@ -81,9 +82,9 @@ internal class StorageAnalyzer : IStorageAnalyzer
         var cyberpunkBackupsSize = 0UL;
         if (cyberpunkBackupsPath.DirectoryExists())
         {
-            cyberpunkBackupsSize = cyberpunkBackupsPath
-                .EnumerateFiles(recursive: true)
-                .Aggregate(0UL, (acc, file) => acc + file.FileInfo.Size.Value);
+            cyberpunkBackupsSize = (ulong)new DirectoryInfo(cyberpunkBackupsPath.ToString())
+                .EnumerateFiles("*", NoFollowDelete.RecurseWithoutSymlinks)
+                .Sum(file => file.Length);
         }
 
         var stats = new StorageStats
@@ -162,7 +163,7 @@ internal class StorageAnalyzer : IStorageAnalyzer
             .OrderByDescending(dir => dir.FileName.ToString(), StringComparer.Ordinal)
             .Skip(keepNewest ? 1 : 0);
         foreach (var snapshot in snapshots)
-            snapshot.DeleteDirectory(recursive: true);
+            snapshot.DeleteDirectoryNoFollow();
 
         return Task.CompletedTask;
     }
@@ -274,7 +275,7 @@ internal class StorageAnalyzer : IStorageAnalyzer
         }
 
         if (prefix.DirectoryExists())
-            prefix.DeleteDirectory(recursive: true);
+            prefix.DeleteDirectoryNoFollow();
         return Task.CompletedTask;
     }
 }

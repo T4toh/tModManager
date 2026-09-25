@@ -1,4 +1,5 @@
 using NexusMods.Paths;
+using NexusMods.Sdk.IO;
 
 namespace NexusMods.DataModel.LegacyData;
 
@@ -94,7 +95,7 @@ public static class LegacyDataDetector
 
         if (archivesRoot.DirectoryExists())
             foreach (var nx in archivesRoot.EnumerateFiles("*.nx", recursive: false)) nx.Delete();
-        if (mnemonicDbPath.DirectoryExists()) mnemonicDbPath.DeleteDirectory(recursive: true);
+        if (mnemonicDbPath.DirectoryExists()) mnemonicDbPath.DeleteDirectoryNoFollow();
         marker.Delete();
         return true;
     }

@@ -12,6 +12,7 @@ using NexusMods.Paths;
 using NexusMods.Sdk.FileExtractor;
 using NexusMods.Sdk.Loadouts;
 using NexusMods.Sdk.ProxyConsole;
+using NexusMods.Sdk.IO;
 
 namespace NexusMods.App.Commandline;
 
@@ -143,7 +144,7 @@ internal static class CleanupVerbs
 
             try
             {
-                directory.DeleteDirectory(recursive: true);
+                directory.DeleteDirectoryNoFollow();
                 await renderer.Text("Deleted directory: {0}", directory);
             }
             catch (Exception e)

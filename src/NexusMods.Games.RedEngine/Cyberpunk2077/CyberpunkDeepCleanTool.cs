@@ -12,6 +12,7 @@ using NexusMods.Sdk.Games;
 using NexusMods.Sdk.Jobs;
 using NexusMods.Sdk.Loadouts;
 using R3;
+using NexusMods.Sdk.IO;
 
 namespace NexusMods.Games.RedEngine.Cyberpunk2077;
 
@@ -99,12 +100,24 @@ public class CyberpunkDeepCleanTool : ITool
 
         var matcher = new Matcher();
         matcher.AddIncludePatterns(LooseFileGlobs);
-        var result = matcher.Execute(new DirectoryInfoWrapper(new DirectoryInfo(gameRoot.ToString())));
+        var root = gameRoot.ToString();
+        var result = matcher.Execute(new DirectoryInfoWrapper(new DirectoryInfo(root)));
         return result.Files
+            .Where(f => !IsUnderSymlink(root, f.Path))
             .Select(f => RelativePath.FromUnsanitizedInput(f.Path))
             .Where(rel => !vanillaPaths.Contains(rel.ToString()))
             .OrderBy(rel => rel.ToString(), StringComparer.Ordinal)
             .ToArray();
+    }
+
+    // Matcher descends into symlinked folders; a file reached through one lives outside the game folder.
+    private static bool IsUnderSymlink(string root, string relative)
+    {
+        for (var dir = Path.GetDirectoryName(Path.Combine(root, relative)); dir is not null && dir.Length > root.Length; dir = Path.GetDirectoryName(dir))
+        {
+            if (new DirectoryInfo(dir).LinkTarget is not null) return true;
+        }
+        return false;
     }
 
     /// <summary>
@@ -268,7 +281,7 @@ public class CyberpunkDeepCleanTool : ITool
             {
                 if (fullPath.DirectoryExists())
                 {
-                    fullPath.DeleteDirectory(true);
+                    fullPath.DeleteDirectoryNoFollow();
                     _logger.LogInformation("Deleted directory {Path}", relativePath);
                 }
                 else if (fullPath.FileExists)

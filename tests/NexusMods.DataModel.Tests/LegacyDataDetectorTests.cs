@@ -351,4 +351,24 @@ public class LegacyDownloadsMoveTests(ITestOutputHelper helper) : ACyberpunkIsol
         prefix.DirectoryExists().Should().BeFalse();
         steamLibraryRoot.Combine("steamapps").DirectoryExists().Should().BeTrue();
     }
+
+    [Fact]
+    public async Task DeleteProtonPrefixAsync_DoesNotFollowSymlinksOutOfThePrefix()
+    {
+        // Every Wine prefix ships dosdevices/z: -> /. Following it deletes the user's disk.
+        var analyzer = (StorageAnalyzer)ServiceProvider.GetRequiredService<IStorageAnalyzer>();
+        var steamLibraryRoot = TemporaryFileManager.CreateFolder().Path;
+        var outside = TemporaryFileManager.CreateFolder().Path;
+        var canary = outside.Combine("sub/canary.txt");
+        canary.Parent.CreateDirectory();
+        await File.WriteAllTextAsync(canary.ToString(), "must survive");
+        var prefix = steamLibraryRoot.Combine("steamapps/compatdata/1091500");
+        prefix.Combine("pfx/dosdevices").CreateDirectory();
+        File.CreateSymbolicLink(prefix.Combine("pfx/dosdevices/z:").ToString(), outside.ToString());
+
+        await analyzer.DeleteProtonPrefixAsync(steamLibraryRoot);
+
+        prefix.DirectoryExists().Should().BeFalse();
+        canary.FileExists.Should().BeTrue();
+    }
 }

@@ -187,6 +187,7 @@ Defined in `NexusMods.App.Cli` using attributes:
 - Centralized NuGet versions in `Directory.Packages.props`; never put `Version=` on a `<PackageReference>`
 - Global analyzer rules in `.globalconfig` treated as errors (do not suppress): `CS4014` un-awaited task, `CS8509` non-exhaustive switch, `CA1069` duplicate enum values, `CA2211` visible non-constant static fields, `CA2021` incompatible `Cast`/`OfType`
 - Log messages and some UI strings are in Spanish (this is a personal fork)
+- **Never `AbsolutePath.DeleteDirectory(recursive: true)`**: NexusMods.Paths follows symlinked directories and deletes their targets (a Proton prefix's `dosdevices/z: -> /` wiped part of `$HOME` on 2026-09-25). Use `DeleteDirectoryNoFollow()` (`NexusMods.Sdk.IO`). Recursive enumeration (Paths `EnumerateFiles`, `SearchOption.AllDirectories`, globbing `Matcher`) follows symlinks too; use `NoFollowDelete.RecurseWithoutSymlinks` when the walk feeds a move or delete. Every destructive action gets a test with a symlink pointing outside
 
 ## What Was Removed (vs upstream)
 

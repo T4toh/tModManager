@@ -143,6 +143,12 @@ Encontrado el 2026-09-22 con el juego real (instalación anterior modeada, resta
 - [ ] **OAuth client_id propio.** `Auth/OAuth.cs:21` usa `"nma"`, el client de la app oficial; Nexus podría revocarlo. Registrar uno para tModManager si Nexus lo permite (probablemente no den clients a forks). Anotado 2026-09-24
 - [ ] **Tests no deben tocar estado real del usuario.** Ya pasó dos veces (`.desktop` en #32, `Temp/` en #33). Revisar el resto de `AddDefaultServicesForTesting` + `AddOSInterop` real: `xdg-settings set` sigue corriendo en tests
 
+Incidente 2026-09-25, primera prueba real del asistente de limpieza:
+
+- [x] **"Borrar prefix de Proton" borró parte de `~/.local/share`.** `DeleteDirectory(recursive: true)` de NexusMods.Paths sigue symlinks y el prefix trae `dosdevices/z: -> /`. Se cortó a los 13 s por un archivo de solo lectura de flatpak. Perdido: KWallet (`kwalletd`), baloo y todo lo de `.local/share` creado antes que `flatpak`; `klipper` y `kactivitymanagerd` rescatados de `/proc/*/fd`; repo flatpak del usuario dañado (`flatpak repair --user`). `@home` no tenía snapshots. Arreglado: `DeleteDirectoryNoFollow` en todos los borrados recursivos, Deep Clean ignora archivos detrás de symlinks, tamaño de backups sin seguir links, tests con symlink hacia afuera. Prevención: `sudo snapper -c home create-config /home`
+- [ ] **El escaneo de la carpeta del juego sigue symlinks.** `GameLocationsService` (`EnumerateFiles()` de Paths) entra en carpetas enlazadas: un link a otro disco dentro del juego mete esos archivos en el estado del disco y el synchronizer podría borrarlos después al sacar un mod/overrides. Revisar si el synchronizer puede borrar a través de un link y cortar la enumeración ahí
+- [ ] **7zz 21.03 (2021) empaquetado.** Rechaza links peligrosos (probado), pero es viejo: hay CVEs posteriores (p. ej. zstd, links en ZIP). Actualizar a 25.x
+
 Encontrado el 2026-09-24 en la eliminación de `.nx` (revisiones de implementación):
 
 - [ ] **Doble apertura con un reset pendiente.** Dos lanzamientos dentro de la ventana de migración pueden actuar ambos como main; el segundo puede borrar la base recién creada por el primero (se pierde solo esa sesión). Arreglo: lock exclusivo sobre el marker de reset, o reclamar el slot de instancia única antes de resolver `MigrationService`

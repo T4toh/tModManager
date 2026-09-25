@@ -3,6 +3,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using NexusMods.Games.RedEngine.Cyberpunk2077;
 using NexusMods.Paths;
 using NexusMods.Sdk.Games;
+using NexusMods.Sdk.IO;
 using Xunit;
 
 namespace NexusMods.Games.RedEngine.Tests;
@@ -10,7 +11,12 @@ namespace NexusMods.Games.RedEngine.Tests;
 public class CyberpunkDeepCleanToolTests : IDisposable
 {
     private readonly AbsolutePath _game = FileSystem.Shared.GetKnownPath(KnownPath.TempDirectory).Combine($"cp-{Guid.NewGuid():N}");
-    public void Dispose() { if (_game.DirectoryExists()) _game.DeleteDirectory(true); }
+    private readonly AbsolutePath _outside = FileSystem.Shared.GetKnownPath(KnownPath.TempDirectory).Combine($"cp-outside-{Guid.NewGuid():N}");
+    public void Dispose()
+    {
+        foreach (var dir in new[] { _game, _outside })
+            if (dir.DirectoryExists()) dir.DeleteDirectoryNoFollow();
+    }
 
     private void Touch(string rel) { var p = _game.Combine(rel); p.Parent.CreateDirectory(); p.Create().Dispose(); }
 
@@ -142,5 +148,20 @@ public class CyberpunkDeepCleanToolTests : IDisposable
         _game.Combine("20260102_000000").DirectoryExists().Should().BeFalse();
         _game.Combine("20260103_000000").DirectoryExists().Should().BeTrue();
         _game.Combine("20260104_000000").DirectoryExists().Should().BeTrue();
+    }
+
+    [Fact]
+    public void LooseFiles_UnderASymlinkedFolder_AreNotFound()
+    {
+        // A symlink inside the game folder can point anywhere; Deep Clean must never move files out of its target.
+        _outside.CreateDirectory();
+        _outside.Combine("user-file.txt").Create().Dispose();
+        Touch("r6/publishing/mod.txt");
+        File.CreateSymbolicLink(_game.Combine("r6/publishing/linked").ToString(), _outside.ToString());
+        var vanilla = new HashSet<GamePath> { new(LocationId.Game, "some/vanilla.file") };
+
+        var found = CyberpunkDeepCleanTool.FindLooseModFiles(_game, vanilla).Select(p => p.ToString());
+
+        found.Should().BeEquivalentTo("r6/publishing/mod.txt");
     }
 }
