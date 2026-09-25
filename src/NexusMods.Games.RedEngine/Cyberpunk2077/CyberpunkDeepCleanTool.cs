@@ -1,9 +1,13 @@
+using Microsoft.Extensions.FileSystemGlobbing;
+using Microsoft.Extensions.FileSystemGlobbing.Abstractions;
 using Microsoft.Extensions.Logging;
 using NexusMods.Abstractions.Collections;
+using NexusMods.Abstractions.Games.FileHashes;
 using NexusMods.Abstractions.Loadouts;
 using NexusMods.MnemonicDB.Abstractions;
 using NexusMods.MnemonicDB.Abstractions.TxFunctions;
 using NexusMods.Paths;
+using NexusMods.Sdk;
 using NexusMods.Sdk.Games;
 using NexusMods.Sdk.Jobs;
 using NexusMods.Sdk.Loadouts;
@@ -17,13 +21,20 @@ public class CyberpunkDeepCleanTool : ITool
     private readonly ILogger<CyberpunkDeepCleanTool> _logger;
     private readonly ISynchronizerService _synchronizerService;
     private readonly IConnection _connection;
+    private readonly IFileHashesService _fileHashes;
 
-    public CyberpunkDeepCleanTool(IFileSystem fileSystem, ILogger<CyberpunkDeepCleanTool> logger, ISynchronizerService synchronizerService, IConnection connection)
+    public CyberpunkDeepCleanTool(
+        IFileSystem fileSystem,
+        ILogger<CyberpunkDeepCleanTool> logger,
+        ISynchronizerService synchronizerService,
+        IConnection connection,
+        IFileHashesService fileHashes)
     {
         _fileSystem = fileSystem;
         _logger = logger;
         _synchronizerService = synchronizerService;
         _connection = connection;
+        _fileHashes = fileHashes;
     }
 
     public IEnumerable<GameId> GameIds => [Cyberpunk2077Game.GameId];
@@ -32,8 +43,7 @@ public class CyberpunkDeepCleanTool : ITool
     // Paths to move to a timestamped backup directory (mirrors the bash script by manavortex).
     // IMPORTANT: Only mod-specific paths are included here. The original bash script also moves
     // engine/config/base, engine/config/galaxy, engine/config/platform/pc, r6/cache, r6/config,
-    // and r6/input — but those are base game files. Steam users can restore them via "Verify game
-    // files", but we have no Steam, so we leave them untouched.
+    // and r6/input — but those are base game files, restorable via Steam's "Verify game files".
     private static readonly string[] PathsToMove =
     [
         "archive/pc/mod",
@@ -48,9 +58,85 @@ public class CyberpunkDeepCleanTool : ITool
         "bin/x64/powrprof.dll",
         "bin/x64/winmm.dll",
         "bin/x64/version.dll",
+        "r6/audioware",
+        "r6/input",
+        "r6/config/cybercmd",
+        "r6/config/redsUserHints",
+        "r6/publishing",
+        "r6/logs",
     ];
 
     private static readonly string[] PathsToDelete = ["V2077"];
+
+    // Files mods drop outside their own folders. Moved only when the game's file list says they are not vanilla.
+    private static readonly string[] LooseFileGlobs =
+    [
+        "*",                                   // game root, top level only
+        "engine/config/platform/pc/*.ini",
+        "engine/config/base/scripts.ini",
+        "r6/cache/final.redscripts*",
+        "r6/cache/input*.xml",
+        "tools/redmod/tweaks/**/devices.tweak",
+        "bin/x64/CyberPunk.bat",
+    ];
+
+    /// <summary>
+    /// Finds files matching <see cref="LooseFileGlobs"/> under <paramref name="gameRoot"/> that are not
+    /// part of the vanilla file set. Returns an empty list (never moves anything) when <paramref name="vanilla"/>
+    /// is empty, since that means the file-hash service has no data for the installed game version.
+    /// </summary>
+    internal static IReadOnlyList<RelativePath> FindLooseModFiles(AbsolutePath gameRoot, IReadOnlySet<GamePath> vanilla)
+    {
+        if (vanilla.Count == 0)
+            return [];
+
+        // Vanilla paths come from Steam depot manifests (Windows casing); compare case-insensitively
+        // so a vanilla file that differs only in case on the Linux disk is never treated as a leftover.
+        var vanillaPaths = vanilla.Select(gp => gp.Path.ToString()).ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        var matcher = new Matcher();
+        matcher.AddIncludePatterns(LooseFileGlobs);
+        var result = matcher.Execute(new DirectoryInfoWrapper(new DirectoryInfo(gameRoot.ToString())));
+        return result.Files
+            .Select(f => RelativePath.FromUnsanitizedInput(f.Path))
+            .Where(rel => !vanillaPaths.Contains(rel.ToString()))
+            .OrderBy(rel => rel.ToString(), StringComparer.Ordinal)
+            .ToArray();
+    }
+
+    /// <summary>
+    /// Root directory where Deep Clean backups are stored, outside the game folder.
+    /// </summary>
+    public static AbsolutePath BackupsRoot(IFileSystem fs) =>
+        fs.GetKnownPath(KnownPath.XDG_DATA_HOME).Combine(ApplicationConstants.DataDirectoryName).Combine("Backups");
+
+    private void MoveToBackup(AbsolutePath from, AbsolutePath to, ref bool backupCreated, AbsolutePath backupDir)
+    {
+        if (!from.DirectoryExists() && !from.FileExists) return;
+
+        if (!backupCreated)
+        {
+            backupDir.CreateDirectory();
+            backupCreated = true;
+        }
+
+        if (!to.Parent.DirectoryExists())
+            to.Parent.CreateDirectory();
+
+        try
+        {
+            if (from.DirectoryExists())
+                System.IO.Directory.Move(from.ToString(), to.ToString());
+            else
+                System.IO.File.Move(from.ToString(), to.ToString());
+
+            _logger.LogInformation("Moved {Path} to backup", from);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to move {Path} to backup", from);
+        }
+    }
 
     public async Task Execute(Loadout.ReadOnly loadout, CancellationToken cancellationToken)
     {
@@ -60,41 +146,25 @@ public class CyberpunkDeepCleanTool : ITool
         // Step 1: Move mod files to a timestamped backup directory outside the game folder.
         // Keeping backups outside the game folder prevents the sync from tracking or trying to restore them.
         var timestamp = DateTime.Now.ToString("yyyyMMdd_HHmmss");
-        var backupsRoot = _fileSystem.GetKnownPath(KnownPath.XDG_DATA_HOME)
-            .Combine("NexusMods.App")
-            .Combine("CyberpunkBackups");
+        var backupsRoot = BackupsRoot(_fileSystem);
         var backupDir = backupsRoot.Combine(RelativePath.FromUnsanitizedInput(timestamp));
         var backupCreated = false;
 
         foreach (var relativePath in PathsToMove)
         {
-            var fullPath = gamePath.Combine(RelativePath.FromUnsanitizedInput(relativePath));
-            if (!fullPath.DirectoryExists() && !fullPath.FileExists) continue;
-
-            if (!backupCreated)
-            {
-                backupDir.CreateDirectory();
-                backupCreated = true;
-            }
-
-            var destination = backupDir.Combine(RelativePath.FromUnsanitizedInput(relativePath));
-            if (!destination.Parent.DirectoryExists())
-                destination.Parent.CreateDirectory();
-
-            try
-            {
-                if (fullPath.DirectoryExists())
-                    System.IO.Directory.Move(fullPath.ToString(), destination.ToString());
-                else
-                    System.IO.File.Move(fullPath.ToString(), destination.ToString());
-
-                _logger.LogInformation("Moved {Path} to backup", relativePath);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Failed to move {Path} to backup", relativePath);
-            }
+            var rel = RelativePath.FromUnsanitizedInput(relativePath);
+            MoveToBackup(gamePath.Combine(rel), backupDir.Combine(rel), ref backupCreated, backupDir);
         }
+
+        var vanilla = _fileHashes.GetGameFiles((loadout.Installation.Store, loadout.LocatorIds.ToArray()))
+            .Select(f => f.Path).ToHashSet();
+        if (vanilla.Count == 0)
+        {
+            _logger.LogWarning(
+                "No se encontraron datos de archivos vanilla para esta versión del juego; se omite la búsqueda de archivos sueltos de mods");
+        }
+        foreach (var rel in FindLooseModFiles(gamePath, vanilla))
+            MoveToBackup(gamePath.Combine(rel), backupDir.Combine(rel), ref backupCreated, backupDir);
 
         foreach (var relativePath in PathsToDelete)
         {

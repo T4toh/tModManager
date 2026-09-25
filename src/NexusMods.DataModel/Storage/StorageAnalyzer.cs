@@ -3,6 +3,7 @@ using NexusMods.Abstractions.Loadouts;
 using NexusMods.MnemonicDB.Abstractions;
 using NexusMods.MnemonicDB.Abstractions.TxFunctions;
 using NexusMods.Paths;
+using NexusMods.Sdk;
 using NexusMods.Sdk.Jobs;
 using NexusMods.Sdk.Library;
 using NexusMods.Sdk.Loadouts;
@@ -41,10 +42,11 @@ internal class StorageAnalyzer : IStorageAnalyzer
         _fileStore = fileStore;
     }
 
+    // keep in sync with CyberpunkDeepCleanTool.BackupsRoot — DataModel must not reference a game project
     private AbsolutePath GetCyberpunkBackupsPath() =>
         _fileSystem.GetKnownPath(KnownPath.XDG_DATA_HOME)
-            .Combine("NexusMods.App")
-            .Combine("CyberpunkBackups");
+            .Combine(ApplicationConstants.DataDirectoryName)
+            .Combine("Backups");
 
     /// <inheritdoc />
     public Task<StorageStats> GetStorageStatsAsync(CancellationToken cancellationToken = default)
