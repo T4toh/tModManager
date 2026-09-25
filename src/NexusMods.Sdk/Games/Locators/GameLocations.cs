@@ -5,6 +5,7 @@ using System.Diagnostics.CodeAnalysis;
 using DynamicData.Kernel;
 using JetBrains.Annotations;
 using NexusMods.Paths;
+using NexusMods.Sdk.IO;
 
 namespace NexusMods.Sdk.Games;
 
@@ -83,7 +84,17 @@ public readonly struct GameLocations : IReadOnlyDictionary<LocationId, GameLocat
             .MinBy(gamePath => gamePath.Path.Path.Length);
     }
 
-    public AbsolutePath ToAbsolutePath(GamePath gamePath) => _locations[gamePath.LocationId].Path.Combine(gamePath.Path);
+    /// <summary>
+    /// Resolves <paramref name="gamePath"/> to a path inside its location. Throws when the path has a <c>..</c>
+    /// segment: paths from mods and collections (FOMOD destinations, collection.json) can carry one and
+    /// <c>Combine</c> keeps it, so this is the one check every synchronizer write and delete goes through.
+    /// </summary>
+    public AbsolutePath ToAbsolutePath(GamePath gamePath)
+    {
+        if (SafePath.HasParentSegment(gamePath.Path))
+            throw new InvalidOperationException($"La ruta `{gamePath}` apunta fuera de la carpeta del juego; no se escribe ni se borra nada ahí");
+        return _locations[gamePath.LocationId].Path.Combine(gamePath.Path);
+    }
 
     /// <inheritdoc cref="IEnumerable{T}.GetEnumerator"/>
     public FrozenDictionary<LocationId, GameLocationDescriptor>.Enumerator GetEnumerator() => _locations.GetEnumerator();

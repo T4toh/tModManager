@@ -107,6 +107,10 @@ public sealed class LooseFileStore : IFileStore
         await Parallel.ForEachAsync(list, token, async (f, ct) =>
         {
             f.Dest.Parent.CreateDirectory();
+            // Create() writes through a symlink; a dangling or unindexed link at the destination would put
+            // the content wherever it points. Replace the link itself instead.
+            if (f.Dest.FileSystem is not InMemoryFileSystem && new FileInfo(f.Dest.ToString()).LinkTarget is not null)
+                File.Delete(f.Dest.ToString());
             if (f.Hash == EmptyFile)
             {
                 f.Dest.Create().Dispose();

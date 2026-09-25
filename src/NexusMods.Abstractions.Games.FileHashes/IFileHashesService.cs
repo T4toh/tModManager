@@ -65,3 +65,20 @@ public interface IFileHashesService
 /// Tuple of many <see cref="LocatorId"/> and <see cref="Sdk.VanityVersion"/>.
 /// </summary>
 public record struct VersionData(LocatorId[] LocatorIds, VanityVersion VanityVersion);
+
+/// <summary>
+/// Extension methods for <see cref="IFileHashesService"/>.
+/// </summary>
+public static class FileHashesServiceExtensions
+{
+    /// <summary>
+    /// The locator IDs (or all of them when empty) with no known vanilla files. Without that list the synchronizer
+    /// sees every original game file as a leftover, so resetting or cleaning the game folder would delete the game.
+    /// This is always the case for a manually added game, and for Steam after a patch the hash database doesn't know.
+    /// </summary>
+    public static LocatorId[] UnknownLocatorIds(this IFileHashesService service, GameStore store, LocatorId[] locatorIds)
+    {
+        if (locatorIds.Length == 0) return [LocatorId.From("(none)")];
+        return locatorIds.Where(id => !service.GetGameFiles((store, [id])).Any()).ToArray();
+    }
+}

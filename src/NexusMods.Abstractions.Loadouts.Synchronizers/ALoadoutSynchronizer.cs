@@ -477,6 +477,7 @@ public partial class ALoadoutSynchronizer : ILoadoutSynchronizer
         using var tx = Connection.BeginTransaction();
         var gameMetadataId = loadout.InstallationId;
         var locations = loadout.InstallationInstance.Locations;
+        EnsureDiskChangesStayInside(syncTree, locations);
         HashSet<GamePath> foldersWithDeletedFiles = [];
         EntityId? overridesGroup = null;
 
@@ -557,6 +558,31 @@ public partial class ALoadoutSynchronizer : ILoadoutSynchronizer
 
 
         return loadout;
+    }
+
+    private void EnsureVanillaDataKnown(GameStore store, LocatorId[] locatorIds, string operation)
+    {
+        var unknown = _fileHashService.UnknownLocatorIds(store, locatorIds);
+        if (unknown.Length == 0) return;
+        throw new InvalidOperationException(
+            $"No se puede {operation}: no hay lista de archivos originales para esta versión del juego ({store}: {string.Join(", ", unknown)}). " +
+            "Sin esa lista tModManager borraría archivos del juego, así que no hace nada.");
+    }
+
+    /// <summary>
+    /// Throws before anything touches the disk when a write or delete would land outside its location: a <c>..</c>
+    /// segment (<see cref="GameLocations.ToAbsolutePath"/> throws) or a folder in between that is a symlink.
+    /// </summary>
+    private static void EnsureDiskChangesStayInside(Dictionary<GamePath, SyncNode> syncTree, GameLocations locations)
+    {
+        const Actions diskChanges = Actions.DeleteFromDisk | Actions.ExtractToDisk | Actions.WriteIntrinsic;
+        foreach (var (path, node) in syncTree)
+        {
+            if ((node.Actions & diskChanges) == 0) continue;
+            var resolved = locations.ToAbsolutePath(path);
+            if (SafePath.IsUnderSymlink(locations[path.LocationId].Path.ToString(), resolved.ToString()))
+                throw new InvalidOperationException($"`{path}` está dentro de una carpeta que es un symlink; tModManager no escribe ni borra a través de links");
+        }
     }
 
     private async Task ActionWriteIntrinsics(Dictionary<GamePath, SyncNode> syncTree, GameLocations gameLocations, IMainTransaction tx, Loadout.ReadOnly loadout, SynchronizeLoadoutJob? job)
@@ -702,6 +728,7 @@ public partial class ALoadoutSynchronizer : ILoadoutSynchronizer
 
         var metadata = _gameRegistry.ForceGetMetadata(gameInstallation);
         var locations = gameInstallation.Locations;
+        EnsureDiskChangesStayInside(syncTree, locations);
 
         HashSet<GamePath> foldersWithDeletedFiles = [];
 
@@ -1056,6 +1083,11 @@ public partial class ALoadoutSynchronizer : ILoadoutSynchronizer
         
         // Update locator IDs before building the sync tree
         loadout = await UpdateLocatorIds(loadout);
+
+        // A Steam patch the hash database doesn't know drops the vanilla files from the Game layer: syncing would
+        // then delete every original game file as a leftover
+        if (loadout.Installation.Store == GameStore.Steam)
+            EnsureVanillaDataKnown(loadout.Installation.Store, loadout.LocatorIds.ToArray(), "aplicar el loadout");
         
         // If we are swapping loadouts, then we need to synchronize the previous loadout first to ingest
         // any changes, then we can apply the new loadout.
@@ -1428,6 +1460,9 @@ public partial class ALoadoutSynchronizer : ILoadoutSynchronizer
 
     public async Task ResetToOriginalGameState(GameInstallation installation, LocatorId[] locatorIds)
     {
+        // The reset deletes everything that isn't in the vanilla list: with no list, that's the whole game
+        EnsureVanillaDataKnown(installation.LocatorResult.Store, locatorIds, "restaurar la carpeta del juego");
+
         var gameState = _fileHashService.GetGameFiles((installation.LocatorResult.Store, locatorIds));
         var metadata = await ReindexState(installation);
 

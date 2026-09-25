@@ -1,3 +1,4 @@
+using System.IO.Enumeration;
 using NexusMods.Paths;
 
 namespace NexusMods.Sdk.IO;
@@ -39,5 +40,26 @@ public static class SafePath
             if (new DirectoryInfo(dir).LinkTarget is not null) return true;
         }
         return false;
+    }
+
+    /// <summary>
+    /// Recursively lists the files under <paramref name="directory"/> without entering symlinked directories.
+    /// File symlinks are listed (as the link) so callers see them and unlink them instead of writing through them.
+    /// Names that alias a path outside <paramref name="directory"/> (backslashes read back as separators) are dropped.
+    /// </summary>
+    public static IEnumerable<AbsolutePath> EnumerateFilesNoFollow(AbsolutePath directory)
+    {
+        // The in-memory filesystem used by tests has no symlinks and no real path behind it
+        if (directory.FileSystem is InMemoryFileSystem) return directory.EnumerateFiles();
+
+        var options = new EnumerationOptions { RecurseSubdirectories = true, IgnoreInaccessible = true, AttributesToSkip = 0 };
+        var entries = new FileSystemEnumerable<string>(directory.ToString(), (ref FileSystemEntry entry) => entry.ToFullPath(), options)
+        {
+            ShouldIncludePredicate = (ref FileSystemEntry entry) => !entry.IsDirectory,
+            ShouldRecursePredicate = (ref FileSystemEntry entry) => (entry.Attributes & FileAttributes.ReparsePoint) == 0,
+        };
+        return entries
+            .Select(directory.FileSystem.FromUnsanitizedFullPath)
+            .Where(path => IsStrictlyInside(directory, path));
     }
 }

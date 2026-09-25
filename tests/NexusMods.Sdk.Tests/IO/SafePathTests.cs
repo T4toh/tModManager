@@ -51,4 +51,33 @@ public class SafePathTests
             Directory.Delete(outside, recursive: true);
         }
     }
+
+    [Test]
+    public async Task EnumerateFilesNoFollow_SkipsLinkedFolders_ListsFileLinksAndDotfiles()
+    {
+        var root = Directory.CreateTempSubdirectory("safepath-").FullName;
+        var outside = Directory.CreateTempSubdirectory("safepath-outside-").FullName;
+        try
+        {
+            Directory.CreateDirectory(Path.Combine(root, "r6"));
+            File.WriteAllText(Path.Combine(root, "r6/mod.reds"), "");
+            File.WriteAllText(Path.Combine(root, ".hidden"), "");
+            File.WriteAllText(Path.Combine(outside, "user-file.txt"), "");
+            File.CreateSymbolicLink(Path.Combine(root, "linked-dir"), outside);
+            File.CreateSymbolicLink(Path.Combine(root, "linked-file"), Path.Combine(outside, "user-file.txt"));
+            File.CreateSymbolicLink(Path.Combine(root, "loop"), root);
+
+            var found = SafePath.EnumerateFilesNoFollow(FileSystem.Shared.FromUnsanitizedFullPath(root))
+                .Select(p => Path.GetRelativePath(root, p.ToString()))
+                .Order()
+                .ToArray();
+
+            await Assert.That(found).IsEquivalentTo(new[] { ".hidden", "linked-file", "r6/mod.reds" });
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+            Directory.Delete(outside, recursive: true);
+        }
+    }
 }
