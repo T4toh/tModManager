@@ -90,7 +90,8 @@ internal class StorageManagerPageViewModel : APageViewModel<IStorageManagerPageV
                 if (nukeMode)
                     await storageAnalyzer.RunDeepCleanOnAllLoadoutsAsync(ct);
                 await storageAnalyzer.DeleteAllBackedUpFilesAsync(ct);
-                await storageAnalyzer.DeletePhysicalFilesAsync(ct);
+                // Super Clean just moved the mod files into a new snapshot: keep it, drop the older ones.
+                await storageAnalyzer.DeletePhysicalFilesAsync(keepNewest: nukeMode, ct);
                 if (nukeMode)
                     await storageAnalyzer.DeleteArchivesAsync(ct);
                 await gcRunner.RunAsync();

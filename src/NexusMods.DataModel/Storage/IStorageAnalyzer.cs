@@ -37,11 +37,12 @@ public interface IStorageAnalyzer
     Task DeleteArchivesAsync(CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Deletes all timestamped backup directories under CyberpunkBackups, freeing disk space
-    /// occupied by mod-file snapshots created by the Deep Clean tool. Never touches the
+    /// Deletes the timestamped backup directories under Backups, freeing disk space
+    /// occupied by mod-file snapshots created by the Deep Clean tool. With <paramref name="keepNewest"/>
+    /// the most recent snapshot (the one a Deep Clean just made) survives. Never touches the
     /// downloads folder.
     /// </summary>
-    Task DeletePhysicalFilesAsync(CancellationToken cancellationToken = default);
+    Task DeletePhysicalFilesAsync(bool keepNewest = false, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Borra las descargas originales. Solo por acción explícita del usuario.

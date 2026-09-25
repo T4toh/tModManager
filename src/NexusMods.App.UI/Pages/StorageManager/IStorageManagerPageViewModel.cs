@@ -14,7 +14,7 @@ public interface IStorageManagerPageViewModel : IPageViewModelInterface
     /// <summary>Human-readable total size of the downloads folder.</summary>
     string DownloadsFolderSizeText { get; }
 
-    /// <summary>Human-readable total size of the CyberpunkBackups folder.</summary>
+    /// <summary>Human-readable total size of the Backups folder (Deep Clean snapshots).</summary>
     string CyberpunkBackupsSizeText { get; }
 
     /// <summary>True while GC or Deep Clean is running.</summary>

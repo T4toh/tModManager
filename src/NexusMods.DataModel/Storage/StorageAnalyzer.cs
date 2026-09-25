@@ -42,18 +42,19 @@ internal class StorageAnalyzer : IStorageAnalyzer
         _logger = logger;
         _fileStore = fileStore;
         LegacyDownloadsFolderProvider = () => LegacyDataDetector.LegacyDownloadsFolder(fileSystem);
+        // keep in sync with CyberpunkDeepCleanTool.BackupsRoot — DataModel must not reference a game project
+        BackupsFolderProvider = () => fileSystem.GetKnownPath(KnownPath.XDG_DATA_HOME)
+            .Combine(ApplicationConstants.DataDirectoryName)
+            .Combine("Backups");
     }
 
     /// <summary>Test seam: overridden in tests so they never touch the real <c>~/.local/share</c>.</summary>
     internal Func<AbsolutePath> LegacyDownloadsFolderProvider { get; set; }
 
-    private const string CyberpunkSteamAppId = "1091500";
+    /// <summary>Test seam, same purpose as <see cref="LegacyDownloadsFolderProvider"/>: Deep Clean's <c>Backups</c> folder.</summary>
+    internal Func<AbsolutePath> BackupsFolderProvider { get; set; }
 
-    // keep in sync with CyberpunkDeepCleanTool.BackupsRoot — DataModel must not reference a game project
-    private AbsolutePath GetCyberpunkBackupsPath() =>
-        _fileSystem.GetKnownPath(KnownPath.XDG_DATA_HOME)
-            .Combine(ApplicationConstants.DataDirectoryName)
-            .Combine("Backups");
+    private const string CyberpunkSteamAppId = "1091500";
 
     /// <inheritdoc />
     public Task<StorageStats> GetStorageStatsAsync(CancellationToken cancellationToken = default)
@@ -75,8 +76,8 @@ internal class StorageAnalyzer : IStorageAnalyzer
                 .Aggregate(0UL, (acc, file) => acc + file.FileInfo.Size.Value);
         }
 
-        // Sum sizes of all files under CyberpunkBackups (timestamped subdirs)
-        var cyberpunkBackupsPath = GetCyberpunkBackupsPath();
+        // Sum sizes of all files under Backups (timestamped Deep Clean snapshots)
+        var cyberpunkBackupsPath = BackupsFolderProvider();
         var cyberpunkBackupsSize = 0UL;
         if (cyberpunkBackupsPath.DirectoryExists())
         {
@@ -151,15 +152,17 @@ internal class StorageAnalyzer : IStorageAnalyzer
     }
 
     /// <inheritdoc />
-    public Task DeletePhysicalFilesAsync(CancellationToken cancellationToken = default)
+    public Task DeletePhysicalFilesAsync(bool keepNewest = false, CancellationToken cancellationToken = default)
     {
-        // Delete all timestamped subdirectories under CyberpunkBackups
-        var cyberpunkBackupsPath = GetCyberpunkBackupsPath();
-        if (cyberpunkBackupsPath.DirectoryExists())
-        {
-            foreach (var subDir in cyberpunkBackupsPath.EnumerateDirectories())
-                subDir.DeleteDirectory(recursive: true);
-        }
+        var backups = BackupsFolderProvider();
+        if (!backups.DirectoryExists()) return Task.CompletedTask;
+
+        // Snapshot folders are named yyyyMMdd_HHmmss, so ordinal order is chronological.
+        var snapshots = backups.EnumerateDirectories(recursive: false)
+            .OrderByDescending(dir => dir.FileName.ToString(), StringComparer.Ordinal)
+            .Skip(keepNewest ? 1 : 0);
+        foreach (var snapshot in snapshots)
+            snapshot.DeleteDirectory(recursive: true);
 
         return Task.CompletedTask;
     }
@@ -169,7 +172,7 @@ internal class StorageAnalyzer : IStorageAnalyzer
     {
         var downloads = _settingsManager.Get<DownloadsSettings>().Folder.ToPath(_fileSystem);
         if (downloads.DirectoryExists())
-            foreach (var file in downloads.EnumerateFiles("*", recursive: false))
+            foreach (var file in downloads.EnumerateFiles("*", recursive: false).Where(f => !IsPartialDownload(f)))
                 file.Delete();
         return Task.CompletedTask;
     }
