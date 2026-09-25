@@ -40,7 +40,7 @@ Pending work, technical debt, and known-error status live in `TODO.md`. Update i
 
 ## Architecture
 
-### Solution Structure (78 projects: 47 src + 30 test + 1 benchmarks)
+### Solution Structure (71 projects: 44 src + 26 test + 1 benchmarks)
 
 The solution (`NexusMods.App.sln`) is organized into layers:
 
@@ -48,7 +48,7 @@ The solution (`NexusMods.App.sln`) is organized into layers:
 - **`NexusMods.App.UI`** — Avalonia views and ViewModels (MVVM with ReactiveUI/R3).
 - **`NexusMods.App.Cli`** — CLI commands using `[Verb]`/`[Option]`/`[Injected]` attributes.
 - **`NexusMods.Backend`** — Core services: Linux interop, file extraction, game locators (Steam + manual), `SignatureChecker` (magic bytes).
-- **`NexusMods.DataModel`** — MnemonicDB-based persistence, synchronizer service, loadout manager, `StorageAnalyzer` (Deep Clean + storage management).
+- **`NexusMods.DataModel`** — MnemonicDB-based persistence, synchronizer service, loadout manager, `StorageAnalyzer` (Deep Clean + storage management). `LooseFileStore`: content-addressed file store (`Archives/<2-hex>/<hash>`, `.git/objects` layout); GC is a sweep (`GarbageCollectorRunner` + `LiveHashes.Collect`) that deletes every unreferenced file, with a 1h grace period for young/temp files.
 - **`NexusMods.Library`** — Mod library management (add/remove/install from library). Empty file detection on download.
 - **`NexusMods.Collections`** — Nexus Mods collection download and installation. MD5 rescan, free-user download via curl.
 - **`NexusMods.Sdk`** — Shared utilities, `WineParser` (Lutris/WINEDLLOVERRIDES), `Md5Value`, settings infrastructure.
@@ -67,7 +67,7 @@ The solution (`NexusMods.App.sln`) is organized into layers:
 - **OS Interop:** `LinuxInterop` only (no Windows/macOS).
 - **App ID:** `io.github.t4toh.tmodmanager`
 - **Data Directory:** `~/.local/share/tModManager/` (isolated from official app). The pre-rename directory `NexusMods.App.Cyberpunk` is moved here once at startup (`DataModelSettings.MigrateLegacyDataDirectory`), and the old `com.cyberpunk2077.modmanager.desktop` handler is removed when the nxm handler is registered.
-- **Downloads:** Shared with official NexusMods.App to avoid re-downloads.
+- **Downloads:** Own folder, `tModManager/Downloads` (`DownloadsSettings`), no longer shared with the official app.
 
 ### Fork-Specific Features
 
@@ -75,17 +75,17 @@ These are custom features not present in upstream:
 
 1. **Cookie-based free downloads** (`FirefoxCookieReader.cs`, `NexusApiClient.cs`): Reads Firefox session cookies and invokes `curl` to bypass Cloudflare TLS fingerprinting. Allows free/supporter users to download collection mods without premium API. Firefox only: copies `cookies.sqlite` to a temp file and reads it via P/Invoke to `libsqlite3.so.0`. Calls to `GenerateDownloadUrl` are serialized (semaphore) to avoid Cloudflare challenge pages; the CDN download itself runs in parallel. Chrome/Chromium would need Secret Service decryption (see README).
 
-2. **Deep Clean tool** (`CyberpunkDeepCleanTool.cs`, `StorageAnalyzer.cs`): Moves mod directories to timestamped backup in `CyberpunkBackups/`, cleans old backups, removes mod groups from DB, rescans game folder. Accessed via Storage Manager page.
+2. **Deep Clean tool** (`CyberpunkDeepCleanTool.cs`, `StorageAnalyzer.cs`): Moves mod directories to a timestamped backup under `tModManager/Backups/`, cleans old backups, removes mod groups from DB, rescans game folder. Also moves non-vanilla loose files (game root, `r6/cache`, `engine/config`, redmod tweaks, etc.) checked file-by-file against `IFileHashesService`'s vanilla set — except `r6/publishing`, which is skipped wholesale (the base depot ships vanilla files there too) and only diffed per-file. Accessed via Storage Manager page.
 
-3. **Storage Manager** (`IStorageAnalyzer`): Exposes `DeleteAllBackedUpFilesAsync`, `RunDeepCleanOnAllLoadoutsAsync`, `DeleteArchivesAsync`, `DeletePhysicalFilesAsync` for granular storage cleanup.
+3. **Storage Manager** (`IStorageAnalyzer`): Exposes `DeleteAllBackedUpFilesAsync`, `RunDeepCleanOnAllLoadoutsAsync` (and a no-sync variant for the legacy wizard), `DeleteArchivesAsync`, `DeletePhysicalFilesAsync` (backups only, never touches Downloads), `DeleteDownloadsAsync` (explicit, separate action), and `DeleteProtonPrefixAsync` (`steamapps/compatdata/1091500`) for granular storage cleanup.
 
 4. **Essential mods diagnostics** (`EssentialMods.cs`, `CoreModsDiagnosticEmitter.cs`): Tracks 7 essential CP2077 mods (Redscript, RED4ext, CET, ArchiveXL, TweakXL, Codeware, Equipment-EX). Diagnostic emitters check for missing mods, redundant folder structures, Wine prefix requirements, and pattern-based dependencies.
 
-5. **MD5 rescan + collection resilience** (`CollectionDownloader.cs`, `NexusMods.Collections`): Scans downloads folder to match existing files by MD5 hash, avoiding re-downloads. If the MD5 does not match (mod updated), falls back to relative-path mapping. Missing collection archives on disk are re-downloaded; missing `.nx` entries (after Deep Clean / GC) are detected across all archive children and re-extracted from the parent archive. Apply works with partial installs. Warns before installing a collection when another is already installed.
+5. **MD5 rescan + collection resilience** (`CollectionDownloader.cs`, `NexusMods.Collections`): Scans downloads folder to match existing files by MD5 hash, avoiding re-downloads. If the MD5 does not match (mod updated), falls back to relative-path mapping. Missing collection archives on disk are re-downloaded; missing store entries are re-extracted by `IDownloadReExtractor`, which walks up to the top-level `LibraryFile.DownloadPath` and decompresses it again. Apply works with partial installs. Warns before installing a collection when another is already installed.
 
 6. **Telemetry removal**: Matomo, Mixpanel, and OpenTelemetry completely removed (no stubs remain).
 
-7. **App isolation**: Custom app ID, independent data directory, independent NXM protocol handler. Shared downloads folder.
+7. **App isolation**: Custom app ID, independent data directory, independent NXM protocol handler. Downloads: `tModManager/Downloads` (`DownloadsSettings`), own folder, no longer shared with the official app.
 
 8. **Wine/Lutris support** (`WineParser.cs`, `WinePrefixRequirementsEmitter.cs`): Parses Lutris YAML configs, detects DLL overrides, reads winetricks.log.
 

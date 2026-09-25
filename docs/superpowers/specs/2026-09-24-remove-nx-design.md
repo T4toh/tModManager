@@ -1,6 +1,6 @@
 # Eliminar el `.nx` file store
 
-Fecha: 2026-09-24 · Estado: aprobado en conversación, pendiente de revisión escrita
+Fecha: 2026-09-24 · Estado: implementado (PRs #42, #43 y PR 3 pendiente de abrir)
 
 ## Objetivo
 
@@ -210,3 +210,36 @@ Tres PRs apilados, un solo release después de la prueba punta a punta:
 El PR 1 solo no lee datos viejos; no se publica nada hasta tener los tres y la prueba en verde.
 Al cerrar: actualizar `CLAUDE.md` (Fork-Specific Features 2, 3, 5 y 7; test framework) y `TODO.md`
 (sección de dependencias de Nexus y errores conocidos de Deep Clean).
+
+## Cambios respecto del diseño
+
+Lo que quedó implementado difiere del diseño original en estos puntos:
+
+- **`r6/publishing` no se mueve entero.** El diseño lo listaba junto a `r6/audioware`, `r6/input`, etc.
+  como carpeta para mover wholesale. En la práctica el depot base de Steam ya publica archivos vanilla
+  ahí (`r6/publishing/*/*/additional-content/addonDescriptions.xml`, confirmado contra el manifiesto del
+  depot), así que `CyberpunkDeepCleanTool` lo excluyó de `PathsToMove` y lo agregó a `LooseFileGlobs`:
+  se diffa archivo por archivo contra el set vanilla de `IFileHashesService`, igual que la raíz del
+  juego, en vez de moverse entero.
+- **`LooseFileStore` tiene un período de gracia de 1 hora para el GC.** El diseño describía un barrido
+  simple (vivo vs. no vivo). La implementación agrega una ventana de 1h antes de borrar un archivo sin
+  referencia (o un temporal `.tmp-*` huérfano), para no correr contra un backup recién escrito cuyo
+  commit a la base todavía no aterrizó. El GC solo toca su propio layout (`XX/<hash>` de dos hex más
+  16 hex), nunca archivos o subcarpetas ajenas bajo `Archives/`.
+- **El asistente corre Deep Clean sin los syncs de aplicar/ingerir**, no el `RunDeepCleanOnAllLoadoutsAsync`
+  normal: esos syncs necesitarían leer los `.nx` viejos, que ya no se pueden abrir. `IStorageAnalyzer`
+  expone `RunDeepCleanWithoutSyncOnAllLoadoutsAsync` para este caso, usado solo desde el asistente.
+- **El paso de limpieza del asistente tiene una salida "Continuar sin limpiar".** Si el Deep Clean o el
+  borrado del prefix de Proton fallan, el usuario puede saltear ese paso y seguir al reseteo/reinicio en
+  vez de quedar trabado; el asistente registra que la limpieza se saltó.
+- **El reinicio espera a que el proceso viejo salga** antes de ejecutar el nuevo (`AppRestart.RestartAfterExit`):
+  un script de shell hace polling sobre el PID viejo (hasta ~60s) y recién ahí hace `exec` del ejecutable
+  nuevo, para que la base de datos nunca se abra desde dos procesos a la vez. Si el proceso viejo no
+  termina a tiempo, el script se rinde en vez de arrancar una segunda instancia en carrera; el marker de
+  reset queda puesto para el próximo arranque manual.
+- **El reset al arrancar se saltea si otra instancia principal podría seguir viva.** `Program.cs` corre
+  `CleanupUnresponsiveProcesses` antes de decidir si actuar como main; si esa comprobación no concluye
+  positivamente que no hay otra instancia (falla, da timeout, o encuentra una viva), este proceso nunca
+  resuelve `MigrationService` ni toca el reset pendiente, y en cambio reenvía los argumentos como una
+  segunda instancia. Evita que dos lanzamientos dentro de la ventana de migración borren la base el uno
+  al otro.
