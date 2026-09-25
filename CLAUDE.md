@@ -14,8 +14,8 @@ The upstream repository was discontinued. This fork removed support for other ga
 dotnet build                           # Build entire solution
 dotnet run --project src/NexusMods.App/NexusMods.App.csproj  # Run the app
 
-dotnet test                            # Run all tests
-dotnet test --filter "RequiresNetworking!=True&FlakeyTest!=True"  # Skip network/flakey tests (CI default)
+./dev.sh                               # option 4: full suite without network/flakey tests, one project at a time (option 3: all)
+dotnet test tests/NexusMods.DataModel.Tests --filter "RequiresNetworking!=True&FlakeyTest!=True"  # One project, skip network/flakey
 dotnet run --project tests/NexusMods.Sdk.Tests   # TUnit projects (Sdk.Tests, Backend.Tests) do not run under `dotnet test` on .NET 10
 dotnet test --filter "FullyQualifiedName~SomeTestClass.SomeMethod"  # Run a single test
 dotnet test tests/Games/NexusMods.Games.RedEngine.Tests  # Run RedEngine (CP2077) tests
@@ -28,9 +28,9 @@ dotnet build -p:UseSystemExtractor=true  # Use system 7z for extraction
 cd src/NexusMods.App && pupnet -y -k AppImage -p DefineConstants=INSTALLATION_METHOD_APPIMAGE   # output: Deploy/OUT/
 ```
 
-CI is `.github/workflows/ci.yaml` (ubuntu): `dotnet build -warnaserror`, then xUnit projects via `dotnet test` and the two TUnit projects (`Sdk.Tests`, `Backend.Tests`) via `dotnet run`. There is no lint/format step; `.globalconfig` analyzer errors (below) plus warnings-as-errors in CI are the gate. A full build currently produces **0 compiler warnings**; keep it that way (only `NU19xx` NuGet audit warnings from transitive packages remain).
+There is no CI (removed 2026-09-25); verification is local on Linux. `./dev.sh` options 3/4 build with `-p:TreatWarningsAsErrors=true`, then run each xUnit project with `dotnet test` and the two TUnit projects (`Sdk.Tests`, `Backend.Tests`) with `dotnet run`, sequentially. Never run `dotnet test` on the whole solution: it runs every project in parallel and nearly freezes the machine. There is no lint/format step; `.globalconfig` analyzer errors (below) plus warnings-as-errors are the gate. A full build currently produces **0 compiler warnings**; keep it that way (only `NU19xx` NuGet audit warnings from transitive packages remain).
 
-Building on macOS: the StrawberryShake code generator ships as a net9 tool, so run `DOTNET_ROLL_FORWARD=Major dotnet build` if only the net10 runtime is installed. Most tests require Linux (`LinuxInterop` asserts `IsLinux`); on macOS only the pure-logic test projects pass. Real test verification happens in CI or on a Linux box.
+Building on macOS: the StrawberryShake code generator ships as a net9 tool, so run `DOTNET_ROLL_FORWARD=Major dotnet build` if only the net10 runtime is installed. Most tests require Linux (`LinuxInterop` asserts `IsLinux`); on macOS only the pure-logic test projects pass. Real test verification happens on a Linux box.
 
 Test traits used for filtering: `RequiresNetworking`, `FlakeyTest`, `RequiresApiKey`.
 
@@ -178,7 +178,7 @@ Defined in `NexusMods.App.Cli` using attributes:
 - **NSubstitute** for mocking, **FluentAssertions** for assertions, **AutoFixture** for test data
 - **Verify** (snapshot testing) with `.verified.` files checked into source; never delete them manually. Stay on Verify 32.x: 33+ adds a build-breaking "SponsorCheck" license gate
 - **`AGameTest<TGame>`** base class in `NexusMods.Games.TestFramework` provides pre-configured DI with game installations, file stores, loadout managers
-- `NexusMods.StandardGameLocators.TestHelpers` stubs game detection for CI environments
+- `NexusMods.StandardGameLocators.TestHelpers` stubs game detection for test environments
 
 ## Code Style
 
