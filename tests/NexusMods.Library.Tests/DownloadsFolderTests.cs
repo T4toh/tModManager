@@ -93,4 +93,18 @@ public class DownloadsFolderTests : IDisposable
         dest.Parent.Should().Be(folder);
         dest.FileName.ToString().Should().Be(expectedName);
     }
+
+    [Theory]
+    [InlineData("..\\..\\evil.zip")]
+    [InlineData("../../evil.zip")]
+    [InlineData("sub\\evil.zip")]
+    public async Task Place_NameWithSeparators_StaysInsideTheFolder(string fileName)
+    {
+        var folder = _root.Combine("a/b/Downloads");
+
+        var dest = await DownloadsFolder.PlaceAsync(await Temp("a"), folder, fileName, default);
+
+        dest.Parent.Should().Be(folder);
+        dest.FileName.ToString().Should().Be("evil.zip");
+    }
 }

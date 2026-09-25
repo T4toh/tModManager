@@ -108,8 +108,13 @@ internal class AddLibraryFileJob : IJobDefinitionWithStart<AddLibraryFileJob, Li
 
             foreach (var extracted in extractedFiles)
             {
-                var subFile = await AnalyzeFile(context, extracted, isNestedFile: true);
+                // 7z extracts a name with backslashes as one literal file name and NexusMods.Paths reads them back as
+                // separators, so an entry named with backslash-separated ".." aliases a file outside the folder.
                 var path = extracted.RelativeTo(extractionFolder.Path);
+                if (SafePath.HasParentSegment(path) || !SafePath.IsStrictlyInside(extractionFolder.Path, extracted))
+                    throw new InvalidOperationException($"El archivo `{filePath.FileName}` tiene una entrada que apunta fuera de su carpeta: `{path}`");
+
+                var subFile = await AnalyzeFile(context, extracted, isNestedFile: true);
                 _ = new LibraryArchiveFileEntry.New(Transaction, subFile.Id)
                 {
                     Path = path,

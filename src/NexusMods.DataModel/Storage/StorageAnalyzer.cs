@@ -221,7 +221,8 @@ internal class StorageAnalyzer : IStorageAnalyzer
         to.CreateDirectory();
 
         var moved = 0;
-        foreach (var file in from.EnumerateFiles("*", recursive: false).Where(f => !IsPartialDownload(f)).ToArray())
+        // A name with backslashes is read back as separators and can alias a file outside `from`
+        foreach (var file in from.EnumerateFiles("*", recursive: false).Where(f => !IsPartialDownload(f) && SafePath.IsStrictlyInside(from, f)).ToArray())
         {
             var name = DownloadsFolder.SanitizeFileName(file.FileName.ToString());
             var target = to.Combine(name);

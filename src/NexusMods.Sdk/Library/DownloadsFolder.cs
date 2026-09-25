@@ -90,7 +90,9 @@ public static class DownloadsFolder
     /// </summary>
     public static string SanitizeFileName(string fileName)
     {
-        var name = Path.GetFileName(fileName);
+        // Path.GetFileName only splits on '/' on Linux, but NexusMods.Paths turns a backslash into '/' when the
+        // name is combined, so a backslash-separated "../../x" would place the file outside the folder.
+        var name = Path.GetFileName(fileName.Replace('\\', '/'));
         return string.IsNullOrEmpty(name) || name is "." or ".." ? $"download-{Guid.NewGuid():N}" : name;
     }
 }

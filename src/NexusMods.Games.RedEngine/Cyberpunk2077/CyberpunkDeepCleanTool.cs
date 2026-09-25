@@ -103,21 +103,12 @@ public class CyberpunkDeepCleanTool : ITool
         var root = gameRoot.ToString();
         var result = matcher.Execute(new DirectoryInfoWrapper(new DirectoryInfo(root)));
         return result.Files
-            .Where(f => !IsUnderSymlink(root, f.Path))
+            // Matcher descends into symlinked folders; a file reached through one lives outside the game folder
+            .Where(f => !SafePath.IsUnderSymlink(root, Path.Combine(root, f.Path)))
             .Select(f => RelativePath.FromUnsanitizedInput(f.Path))
             .Where(rel => !vanillaPaths.Contains(rel.ToString()))
             .OrderBy(rel => rel.ToString(), StringComparer.Ordinal)
             .ToArray();
-    }
-
-    // Matcher descends into symlinked folders; a file reached through one lives outside the game folder.
-    private static bool IsUnderSymlink(string root, string relative)
-    {
-        for (var dir = Path.GetDirectoryName(Path.Combine(root, relative)); dir is not null && dir.Length > root.Length; dir = Path.GetDirectoryName(dir))
-        {
-            if (new DirectoryInfo(dir).LinkTarget is not null) return true;
-        }
-        return false;
     }
 
     /// <summary>

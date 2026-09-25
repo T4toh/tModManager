@@ -107,11 +107,24 @@ public class SevenZipExtractor : IExtractor
                 fileNameOnDisk = fileName;
             }
 
+            // Names come straight from the archive listing: a rooted name makes Path.Combine return it as-is and
+            // `..` escapes the destination, so "fixing" such an entry deleted or moved folders anywhere on disk.
+            var source = System.IO.Path.Combine(nativePath, fileNameOnDisk);
+            if (!SafePath.IsStrictlyInside(nativePath, source))
+            {
+                _logger.LogWarning("Ignoring archive entry `{Name}` that points outside the extraction folder", fileName);
+                continue;
+            }
+
             var fixedFileName = PathsHelper.FixFileName(fileName);
             Debug.Assert(fixedFileName.All(c => !PathsHelper.IsInvalidChar(c)), message: $"`{fixedFileName}` should be fixed");
 
-            var source = System.IO.Path.Combine(nativePath, fileNameOnDisk);
             var destination = System.IO.Path.Combine(nativePath, fixedFileName);
+            if (!SafePath.IsStrictlyInside(nativePath, destination))
+            {
+                _logger.LogWarning("Ignoring archive entry `{Name}` that points outside the extraction folder", fileName);
+                continue;
+            }
 
             if (isDirectory)
             {

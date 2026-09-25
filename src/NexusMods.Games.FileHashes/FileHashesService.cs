@@ -285,6 +285,8 @@ internal sealed class FileHashesService : IFileHashesService, IDisposable, IHost
             foreach (var fileEntry in zipArchive.Entries)
             {
                 var destinationPath = extractionDirectory.Path.Combine(fileEntry.FullName);
+                if (!SafePath.IsStrictlyInside(extractionDirectory.Path, destinationPath))
+                    throw new InvalidDataException($"Hash database entry `{fileEntry.FullName}` points outside the extraction folder");
                 destinationPath.Parent.CreateDirectory();
 
                 await using var entryStream = fileEntry.Open();

@@ -1,4 +1,8 @@
+using System.Formats.Tar;
 using FluentAssertions;
+using Microsoft.Extensions.DependencyInjection;
+using NexusMods.Sdk.FileExtractor;
+using NexusMods.Sdk.IO;
 using NexusMods.Backend.FileExtractor.Extractors;
 using NexusMods.Hashing.xxHash3;
 using NexusMods.Hashing.xxHash3.Paths;
@@ -98,5 +102,32 @@ public class SevenZipExtractionTests : AFileExtractorTest
         ];
 
         actual.Should().BeEquivalentTo(expected);
+    }
+
+    [Test]
+    public async Task FixPaths_NeverTouchesEntriesOutsideTheDestination()
+    {
+        // A directory entry named "<absolute>/." or "../../<dir>/." ends in '.', so FixPaths tries to rename it.
+        // Without a containment check it recursively deleted that directory, wherever it was.
+        await using var root = TemporaryFileManager.CreateFolder();
+        var victim = root.Path.Combine("victim");
+        var canary = victim.Combine("sub/canary.txt");
+        canary.Parent.CreateDirectory();
+        await File.WriteAllTextAsync(canary.ToString(), "must survive");
+        var dest = root.Path.Combine("a/b/out");
+        dest.CreateDirectory();
+
+        var archive = root.Path.Combine("evil.tar");
+        await using (var stream = archive.Create())
+        await using (var writer = new TarWriter(stream))
+        {
+            foreach (var name in new[] { $"{victim}/.", "../../../victim/.", "ok/" })
+                await writer.WriteEntryAsync(new GnuTarEntry(TarEntryType.Directory, name));
+        }
+
+        var extractor = ServiceProvider.GetServices<IExtractor>().OfType<SevenZipExtractor>().Single();
+        await extractor.ExtractAllAsync(new NativeFileStreamFactory(archive), dest, CancellationToken.None);
+
+        await Assert.That(canary.FileExists).IsTrue();
     }
 }
