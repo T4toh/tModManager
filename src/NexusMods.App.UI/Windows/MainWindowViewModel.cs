@@ -90,6 +90,30 @@ public class MainWindowViewModel : AViewModel<IMainWindowViewModel>, IMainWindow
         {
             ConnectErrors(serviceProvider).DisposeWith(d);
 
+            this.WhenAnyValue(vm => vm.IsActive)
+                .Where(isActive => isActive)
+                .Select(_ => this)
+                .BindTo(_windowManager, manager => manager.ActiveWindow)
+                .DisposeWith(d);
+
+            overlayController.WhenAnyValue(oc => oc.CurrentOverlay)
+                .BindTo(this, vm => vm.CurrentOverlay)
+                .DisposeWith(d);
+
+            R3.Disposable.Create(this, vm =>
+            {
+                vm._windowManager.UnregisterWindow(vm);
+            }).DisposeWith(d);
+
+            // Leftover .nx data: only the guided cleanup runs (no welcome, update check, CLI handlers or
+            // restored workspaces) until the user finishes it, which restarts the app, or quits.
+            var legacyCleanup = LegacyCleanupOverlayViewModel.CreateIfNeeded(serviceProvider);
+            if (legacyCleanup is not null)
+            {
+                overlayController.Enqueue(legacyCleanup);
+                return;
+            }
+
             var welcomeOverlayViewModel = WelcomeOverlayViewModel.CreateIfNeeded(serviceProvider);
             if (welcomeOverlayViewModel is not null) overlayController.Enqueue(welcomeOverlayViewModel);
 
@@ -121,20 +145,10 @@ public class MainWindowViewModel : AViewModel<IMainWindowViewModel>, IMainWindow
                 .BindToVM(this, vm => vm.LeftMenu)
                 .DisposeWith(d);
 
-            this.WhenAnyValue(vm => vm.IsActive)
-                .Where(isActive => isActive)
-                .Select(_ => this)
-                .BindTo(_windowManager, manager => manager.ActiveWindow)
-                .DisposeWith(d);
-            
             // Enable automatic UserInfo refresh when window gains focus
             loginManager.RefreshOnObservable(
                 this.WhenAnyValue(vm => vm.IsActive).ToObservable()
             ).DisposeWith(d);
-            
-            overlayController.WhenAnyValue(oc => oc.CurrentOverlay)
-                .BindTo(this, vm => vm.CurrentOverlay)
-                .DisposeWith(d);
             
             eventBus
                 .ObserveMessages<CliMessages.CollectionAddStarted>()
@@ -272,11 +286,6 @@ public class MainWindowViewModel : AViewModel<IMainWindowViewModel>, IMainWindow
                     }
                 })  
                 .DisposeWith(d);
-
-            R3.Disposable.Create(this, vm =>
-            {
-                vm._windowManager.UnregisterWindow(vm);
-            }).DisposeWith(d);
 
             if (!_windowManager.RestoreWindowState(this))
             {

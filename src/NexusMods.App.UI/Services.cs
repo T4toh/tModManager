@@ -231,6 +231,7 @@ public static class Services
 
             .AddView<WelcomeOverlayView, IWelcomeOverlayViewModel>()
             .AddViewModel<WelcomeOverlayViewModel, IWelcomeOverlayViewModel>()
+            .AddView<LegacyCleanupOverlayView, ILegacyCleanupOverlayViewModel>()
             
             // Dialogs
             .AddView<DialogStandardContentView, IDialogStandardContentViewModel>()
