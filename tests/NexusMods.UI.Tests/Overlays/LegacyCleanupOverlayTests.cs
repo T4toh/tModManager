@@ -20,9 +20,9 @@ public class LegacyCleanupOverlayTests
         startInfo.FileName.Should().Be("/bin/sh");
         startInfo.UseShellExecute.Should().BeFalse();
         startInfo.Arguments.Should().BeEmpty();
-        startInfo.ArgumentList.Should().HaveCount(6);
+        startInfo.ArgumentList.Should().HaveCount(7);
         startInfo.ArgumentList[0].Should().Be("-c");
-        startInfo.ArgumentList.Skip(2).Should().Equal("/opt/my app/tModManager", "1234", "as-main-ui", "a b");
+        startInfo.ArgumentList.Skip(2).Should().Equal("/opt/my app/tModManager", "1234", "600", "as-main-ui", "a b");
     }
 
     [Fact]
@@ -53,6 +53,27 @@ public class LegacyCleanupOverlayTests
         waiter.WaitForExit(TimeSpan.FromSeconds(20)).Should().BeTrue();
         old.HasExited.Should().BeTrue();
         waiter.StandardOutput.ReadToEnd().Should().Be("started\n");
+    }
+
+    [Fact]
+    public void RestartScript_GivesUpInsteadOfRacingAnOldProcessThatNeverExits()
+    {
+        using var old = Process.Start("sleep", "30");
+        try
+        {
+            var startInfo = AppRestart.BuildStartInfo("/bin/echo", old.Id, ["started"], maxWaits: 3);
+            startInfo.RedirectStandardOutput = true;
+            using var waiter = Process.Start(startInfo)!;
+
+            waiter.WaitForExit(TimeSpan.FromSeconds(20)).Should().BeTrue();
+            waiter.ExitCode.Should().Be(1);
+            waiter.StandardOutput.ReadToEnd().Should().BeEmpty("the new process must never start while the old one lives");
+            old.HasExited.Should().BeFalse();
+        }
+        finally
+        {
+            old.Kill();
+        }
     }
 
     [Fact]
@@ -95,12 +116,12 @@ public class LegacyCleanupOverlayTests
         vm.CommandNext.Execute(Unit.Default);
         vm.Step.Value.Should().Be(3);
         storage.Received(1).MoveLegacyDownloadsAsync(Arg.Any<CancellationToken>());
-        storage.DidNotReceive().RunDeepCleanOnAllLoadoutsAsync(Arg.Any<CancellationToken>());
+        storage.DidNotReceive().RunDeepCleanWithoutSyncOnAllLoadoutsAsync(Arg.Any<CancellationToken>());
 
         vm.DeleteProtonPrefix.Value = true;
         vm.CommandNext.Execute(Unit.Default);
         vm.Step.Value.Should().Be(4);
-        storage.Received(1).RunDeepCleanOnAllLoadoutsAsync(Arg.Any<CancellationToken>());
+        storage.Received(1).RunDeepCleanWithoutSyncOnAllLoadoutsAsync(Arg.Any<CancellationToken>());
         storage.Received(1).DeleteProtonPrefixAsync(root, Arg.Any<CancellationToken>());
         restarts.Should().Be(0);
 
@@ -115,7 +136,7 @@ public class LegacyCleanupOverlayTests
     {
         var storage = Substitute.For<IStorageAnalyzer>();
         storage.GetLegacyDownloadsAsync(Arg.Any<CancellationToken>()).Returns(Task.FromResult((0, Size.Zero)));
-        storage.RunDeepCleanOnAllLoadoutsAsync(Arg.Any<CancellationToken>()).Returns(
+        storage.RunDeepCleanWithoutSyncOnAllLoadoutsAsync(Arg.Any<CancellationToken>()).Returns(
             _ => throw new IOException("disco lleno"),
             _ => Task.CompletedTask
         );
@@ -139,6 +160,71 @@ public class LegacyCleanupOverlayTests
         vm.Message.Value.Should().Contain("prefix de Proton no se borró");
         storage.DidNotReceiveWithAnyArgs().DeleteProtonPrefixAsync(default);
         restarts.Should().Be(0);
+    }
+
+    [Fact]
+    public void Wizard_AfterAFailedDeepClean_CanContinueToTheResetWithoutCleaning()
+    {
+        var storage = Substitute.For<IStorageAnalyzer>();
+        storage.GetLegacyDownloadsAsync(Arg.Any<CancellationToken>()).Returns(Task.FromResult((0, Size.Zero)));
+        storage.RunDeepCleanWithoutSyncOnAllLoadoutsAsync(Arg.Any<CancellationToken>()).Returns(_ => throw new IOException("MissingArchiveException"));
+        var restarts = 0;
+        var vm = CreateVm(storage, () => null, () => restarts++);
+        vm.CommandNext.Execute(Unit.Default);
+        vm.CommandNext.Execute(Unit.Default);
+
+        vm.CanSkipCleanup.Value.Should().BeFalse();
+        vm.CommandNext.Execute(Unit.Default);
+        vm.Step.Value.Should().Be(3);
+        vm.CanSkipCleanup.Value.Should().BeTrue();
+
+        vm.CommandSkipCleanup.Execute(Unit.Default);
+        vm.Step.Value.Should().Be(4);
+        vm.CleanupSkipped.Value.Should().BeTrue();
+        vm.Message.Value.Should().BeEmpty();
+
+        vm.CommandNext.Execute(Unit.Default);
+        restarts.Should().Be(1);
+    }
+
+    [Fact]
+    public void Wizard_RetryAfterAFailedProtonPrefix_DoesNotRunDeepCleanAgain()
+    {
+        var storage = Substitute.For<IStorageAnalyzer>();
+        storage.GetLegacyDownloadsAsync(Arg.Any<CancellationToken>()).Returns(Task.FromResult((0, Size.Zero)));
+        storage.DeleteProtonPrefixAsync(Arg.Any<AbsolutePath>(), Arg.Any<CancellationToken>()).Returns(
+            _ => throw new UnauthorizedAccessException("permiso denegado"),
+            _ => Task.CompletedTask
+        );
+        var root = FileSystem.Shared.FromUnsanitizedFullPath("/games/SteamLibrary");
+        var vm = CreateVm(storage, () => root, () => { });
+        vm.CommandNext.Execute(Unit.Default);
+        vm.CommandNext.Execute(Unit.Default);
+        vm.DeleteProtonPrefix.Value = true;
+
+        vm.CommandNext.Execute(Unit.Default);
+        vm.Step.Value.Should().Be(3);
+        vm.Message.Value.Should().Contain("permiso denegado");
+
+        vm.CommandNext.Execute(Unit.Default);
+        vm.Step.Value.Should().Be(4);
+        vm.CleanupSkipped.Value.Should().BeFalse();
+        storage.Received(1).RunDeepCleanWithoutSyncOnAllLoadoutsAsync(Arg.Any<CancellationToken>());
+        storage.Received(2).DeleteProtonPrefixAsync(root, Arg.Any<CancellationToken>());
+        storage.DidNotReceive().RunDeepCleanOnAllLoadoutsAsync(Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public void VerifySteam_ShowsAnErrorWhenSteamCantBeOpened()
+    {
+        var os = Substitute.For<IOSInterop>();
+        os.When(x => x.OpenUri(Arg.Any<Uri>())).Do(_ => throw new InvalidOperationException("sin portal"));
+        var vm = new LegacyCleanupOverlayViewModel(Substitute.For<IStorageAnalyzer>(), os, NullLogger.Instance, () => null, () => { }, () => { });
+
+        vm.CommandVerifySteam.Execute(Unit.Default);
+
+        os.Received(1).OpenUri(new Uri("steam://validate/1091500"));
+        vm.Message.Value.Should().Contain("sin portal");
     }
 
     private static LegacyCleanupOverlayViewModel CreateVm(IStorageAnalyzer storage, Func<AbsolutePath?> steamLibraryRoot, Action restart) => new(

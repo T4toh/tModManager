@@ -27,7 +27,10 @@ public class LegacyCleanupOverlayViewModel : AOverlayViewModel<ILegacyCleanupOve
     public BindableReactiveProperty<bool> DeleteProtonPrefix { get; } = new(false);
     public BindableReactiveProperty<bool> IsBusy { get; } = new(false);
     public BindableReactiveProperty<string> Message { get; } = new("");
+    public BindableReactiveProperty<bool> CanSkipCleanup { get; } = new(false);
+    public BindableReactiveProperty<bool> CleanupSkipped { get; } = new(false);
     public ReactiveCommand<Unit> CommandNext { get; }
+    public ReactiveCommand<Unit> CommandSkipCleanup { get; }
     public ReactiveCommand<Unit> CommandQuit { get; }
     public ReactiveCommand<Unit> CommandVerifySteam { get; }
 
@@ -39,8 +42,32 @@ public class LegacyCleanupOverlayViewModel : AOverlayViewModel<ILegacyCleanupOve
         Action resetAndRestart,
         Action quit)
     {
+        // Set once the Deep Clean ran, so a step-3 retry (e.g. after the Proton prefix failed) doesn't run it again.
+        var deepCleanDone = false;
+
         CommandQuit = IsBusy.Select(static busy => !busy).ToReactiveCommand<Unit>(_ => quit());
-        CommandVerifySteam = new ReactiveCommand<Unit>(_ => osInterop.OpenUri(new Uri(SteamValidateUri)));
+        CommandVerifySteam = new ReactiveCommand<Unit>(_ =>
+        {
+            try
+            {
+                osInterop.OpenUri(new Uri(SteamValidateUri));
+            }
+            catch (Exception e)
+            {
+                logger.LogError(e, "No se pudo abrir Steam para verificar los archivos");
+                Message.Value = $"No se pudo abrir Steam: {e.Message}. Verificá los archivos desde Steam: Propiedades > Archivos instalados.";
+            }
+        });
+
+        // After a failed step 3 the user can always move on to the reset, even if the game folder can't be cleaned.
+        CommandSkipCleanup = IsBusy.Select(static busy => !busy).ToReactiveCommand<Unit>(_ =>
+        {
+            CleanupSkipped.Value = !deepCleanDone;
+            CanSkipCleanup.Value = false;
+            Message.Value = "";
+            Step.Value = 4;
+        });
+
         CommandNext = IsBusy.Select(static busy => !busy).ToReactiveCommand<Unit>(
             executeAsync: async (_, cancellationToken) =>
             {
@@ -61,7 +88,13 @@ public class LegacyCleanupOverlayViewModel : AOverlayViewModel<ILegacyCleanupOve
                             await storage.MoveLegacyDownloadsAsync(cancellationToken);
                             break;
                         case 3:
-                            await storage.RunDeepCleanOnAllLoadoutsAsync(cancellationToken);
+                            if (!deepCleanDone)
+                            {
+                                // Without the apply/ingest syncs: those need the old .nx archives.
+                                await storage.RunDeepCleanWithoutSyncOnAllLoadoutsAsync(cancellationToken);
+                                deepCleanDone = true;
+                            }
+
                             if (DeleteProtonPrefix.Value)
                             {
                                 if (steamLibraryRoot() is { } root)
@@ -84,6 +117,7 @@ public class LegacyCleanupOverlayViewModel : AOverlayViewModel<ILegacyCleanupOve
                     // Stay on the same step so the user can retry; a failed step never lets the wizard advance.
                     logger.LogError(e, "Falló el paso {Step} de la limpieza de datos viejos", Step.Value);
                     Message.Value = $"Algo salió mal: {e.Message}. Podés reintentar este paso.";
+                    if (Step.Value == 3) CanSkipCleanup.Value = true;
                 }
                 finally
                 {

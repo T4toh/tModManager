@@ -1,4 +1,5 @@
 using FluentAssertions;
+using Microsoft.Extensions.Logging.Abstractions;
 using NexusMods.Games.RedEngine.Cyberpunk2077;
 using NexusMods.Paths;
 using NexusMods.Sdk.Games;
@@ -115,5 +116,27 @@ public class CyberpunkDeepCleanToolTests : IDisposable
 
         result.Vanilla.Should().BeEmpty();
         result.UnknownIds.Should().BeEquivalentTo([idUnknown]);
+    }
+
+    [Fact]
+    public void PruneOldBackups_WithoutANewBackup_KeepsEveryBackup()
+    {
+        _game.Combine("20260101_000000").Combine("mods").CreateDirectory();
+
+        CyberpunkDeepCleanTool.PruneOldBackups(_game, "20260102_000000", backupCreated: false, NullLogger.Instance);
+
+        _game.Combine("20260101_000000").Combine("mods").DirectoryExists().Should().BeTrue();
+    }
+
+    [Fact]
+    public void PruneOldBackups_AfterANewBackup_KeepsOnlyTheNewOne()
+    {
+        _game.Combine("20260101_000000").CreateDirectory();
+        _game.Combine("20260102_000000").CreateDirectory();
+
+        CyberpunkDeepCleanTool.PruneOldBackups(_game, "20260102_000000", backupCreated: true, NullLogger.Instance);
+
+        _game.Combine("20260101_000000").DirectoryExists().Should().BeFalse();
+        _game.Combine("20260102_000000").DirectoryExists().Should().BeTrue();
     }
 }

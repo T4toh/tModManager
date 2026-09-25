@@ -11,13 +11,16 @@ namespace NexusMods.App.UI.Overlays;
 /// </summary>
 public static class AppRestart
 {
-    // $0 = executable, $1 = PID to wait for, the rest = the executable's arguments.
-    // ponytail: gives up waiting after ~60s (e.g. an unreaped zombie); the new process then just defers to Program's
-    // "another main is alive" gate, and the reset marker stays for the next launch.
+    // $0 = executable, $1 = PID to wait for, $2 = max waits of 0.1s, the rest = the executable's arguments.
+    // If the old process is still alive after the cap, give up (exit) instead of starting a new process that would
+    // race it: the reset marker stays, so the next manual launch still resets.
     private const string WaitThenExec =
-        "pid=$1; shift; i=0; while kill -0 \"$pid\" 2>/dev/null && [ \"$i\" -lt 600 ]; do sleep 0.1; i=$((i+1)); done; exec \"$0\" \"$@\"";
+        "pid=$1; max=$2; shift 2; i=0; while kill -0 \"$pid\" 2>/dev/null; do [ \"$i\" -ge \"$max\" ] && exit 1; sleep 0.1; i=$((i+1)); done; exec \"$0\" \"$@\"";
 
-    internal static ProcessStartInfo BuildStartInfo(string executable, int pid, IEnumerable<string> args)
+    /// <summary>About 60s of waiting for the old process to exit.</summary>
+    private const int DefaultMaxWaits = 600;
+
+    internal static ProcessStartInfo BuildStartInfo(string executable, int pid, IEnumerable<string> args, int maxWaits = DefaultMaxWaits)
     {
         // Arguments go through ArgumentList (argv), never through a command string, so paths are never re-parsed by the shell.
         var startInfo = new ProcessStartInfo("/bin/sh") { UseShellExecute = false };
@@ -25,6 +28,7 @@ public static class AppRestart
         startInfo.ArgumentList.Add(WaitThenExec);
         startInfo.ArgumentList.Add(executable);
         startInfo.ArgumentList.Add(pid.ToString(CultureInfo.InvariantCulture));
+        startInfo.ArgumentList.Add(maxWaits.ToString(CultureInfo.InvariantCulture));
         foreach (var arg in args) startInfo.ArgumentList.Add(arg);
         return startInfo;
     }

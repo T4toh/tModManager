@@ -25,6 +25,13 @@ public interface IStorageAnalyzer
     Task RunDeepCleanOnAllLoadoutsAsync(CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// Same as <see cref="RunDeepCleanOnAllLoadoutsAsync"/> but runs the deep clean tool directly, without the
+    /// apply/ingest synchronizations around it. For the legacy cleanup: those synchronizations would need the
+    /// old <c>.nx</c> archives, which can no longer be read.
+    /// </summary>
+    Task RunDeepCleanWithoutSyncOnAllLoadoutsAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// Deletes all archive chunks from the store's content-addressed archive location.
     /// </summary>
     Task DeleteArchivesAsync(CancellationToken cancellationToken = default);

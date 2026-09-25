@@ -50,10 +50,16 @@
             </StackPanel>
 
             <StackPanel x:Name="Step4Panel" Spacing="16">
-                <TextBlock Theme="{StaticResource BodyMDNormalTheme}"
+                <TextBlock x:Name="CleanedTextBlock"
+                           Theme="{StaticResource BodyMDNormalTheme}"
                            TextWrapping="Wrap"
                            Foreground="{StaticResource NeutralSubduedBrush}"
                            Text="Listo, la carpeta del juego quedó limpia (backup en tModManager/Backups). Conviene verificar ahora los archivos en Steam." />
+                <TextBlock x:Name="NotCleanedTextBlock"
+                           Theme="{StaticResource BodyMDNormalTheme}"
+                           TextWrapping="Wrap"
+                           Foreground="{StaticResource NeutralSubduedBrush}"
+                           Text="La carpeta del juego no se limpió: pueden quedar archivos de mods viejos. Es muy recomendable verificar ahora los archivos en Steam." />
                 <controls:StandardButton x:Name="ButtonVerifySteam"
                                          HorizontalAlignment="Center"
                                          Text="Verificar integridad en Steam"
@@ -65,6 +71,12 @@
                            Foreground="{StaticResource NeutralSubduedBrush}"
                            Text="Después, &quot;Reiniciar&quot; borra los datos viejos: la app se reinicia y arranca limpia. Gestioná el juego e instalá tu colección." />
             </StackPanel>
+
+            <TextBlock x:Name="BusyTextBlock"
+                       Theme="{StaticResource BodyMDNormalTheme}"
+                       TextAlignment="Center"
+                       Foreground="{StaticResource NeutralSubduedBrush}"
+                       Text="Trabajando…" />
 
             <TextBlock x:Name="MessageTextBlock"
                        Theme="{StaticResource BodyMDNormalTheme}"
@@ -79,6 +91,12 @@
                     <controls:StandardButton x:Name="ButtonQuit"
                                              Text="Salir"
                                              Type="Tertiary"
+                                             Fill="Weak"
+                                             Size="Small" />
+
+                    <controls:StandardButton x:Name="ButtonSkipCleanup"
+                                             Text="Continuar sin limpiar"
+                                             Type="Secondary"
                                              Fill="Weak"
                                              Size="Small" />
 

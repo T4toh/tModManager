@@ -21,6 +21,24 @@ public partial class LegacyCleanupOverlayView : ReactiveUserControl<ILegacyClean
             this.BindCommand(ViewModel, vm => vm.CommandVerifySteam, view => view.ButtonVerifySteam)
                 .AddTo(disposables);
 
+            this.BindCommand(ViewModel, vm => vm.CommandSkipCleanup, view => view.ButtonSkipCleanup)
+                .AddTo(disposables);
+
+            this.OneWayBind(ViewModel, vm => vm.IsBusy.Value, view => view.BusyTextBlock.IsVisible)
+                .AddTo(disposables);
+
+            this.WhenAnyValue(view => view.ViewModel!.CleanupSkipped.Value)
+                .Subscribe(skipped =>
+                {
+                    CleanedTextBlock.IsVisible = !skipped;
+                    NotCleanedTextBlock.IsVisible = skipped;
+                })
+                .AddTo(disposables);
+
+            this.WhenAnyValue(view => view.ViewModel!.Step.Value, view => view.ViewModel!.CanSkipCleanup.Value)
+                .Subscribe(t => ButtonSkipCleanup.IsVisible = t.Item1 == 3 && t.Item2)
+                .AddTo(disposables);
+
             this.Bind(ViewModel, vm => vm.DeleteProtonPrefix.Value, view => view.DeleteProtonPrefixCheckBox.IsChecked)
                 .AddTo(disposables);
 

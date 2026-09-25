@@ -171,6 +171,43 @@ public class CyberpunkDeepCleanTool : ITool
         }
     }
 
+    /// <summary>
+    /// Deletes every backup folder under <paramref name="backupsRoot"/> except <paramref name="currentBackupName"/>.
+    /// Does nothing unless <paramref name="backupCreated"/>: the older backup is then the only copy of the mod files.
+    /// </summary>
+    internal static void PruneOldBackups(AbsolutePath backupsRoot, string currentBackupName, bool backupCreated, ILogger logger)
+    {
+        if (!backupCreated) return;
+
+        try
+        {
+            if (!backupsRoot.DirectoryExists()) return;
+
+            var deletedBackups = 0;
+            foreach (var oldBackupDir in System.IO.Directory.GetDirectories(backupsRoot.ToString()))
+            {
+                var dirName = System.IO.Path.GetFileName(oldBackupDir);
+                if (dirName == currentBackupName) continue;
+                try
+                {
+                    System.IO.Directory.Delete(oldBackupDir, true);
+                    deletedBackups++;
+                    logger.LogInformation("Deleted old backup: {Dir}", dirName);
+                }
+                catch (Exception ex)
+                {
+                    logger.LogWarning(ex, "Failed to delete old backup: {Dir}", dirName);
+                }
+            }
+            if (deletedBackups > 0)
+                logger.LogInformation("Deleted {Count} old backup folder(s)", deletedBackups);
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Failed to clean old backups");
+        }
+    }
+
     public async Task Execute(Loadout.ReadOnly loadout, CancellationToken cancellationToken)
     {
         var gamePath = loadout.InstallationInstance.Locations[LocationId.Game].Path;
@@ -245,37 +282,9 @@ public class CyberpunkDeepCleanTool : ITool
         else
             _logger.LogInformation("No mod files found to back up");
 
-        // Step 2: Delete previous backup folders created by earlier deep cleans.
-        // This keeps the CyberpunkBackups directory clean over time.
-        try
-        {
-            if (backupsRoot.DirectoryExists())
-            {
-                var deletedBackups = 0;
-                foreach (var oldBackupDir in System.IO.Directory.GetDirectories(backupsRoot.ToString()))
-                {
-                    var dirName = System.IO.Path.GetFileName(oldBackupDir);
-                    // Skip the backup we just created
-                    if (dirName == timestamp) continue;
-                    try
-                    {
-                        System.IO.Directory.Delete(oldBackupDir, true);
-                        deletedBackups++;
-                        _logger.LogInformation("Deleted old backup: {Dir}", dirName);
-                    }
-                    catch (Exception ex)
-                    {
-                        _logger.LogWarning(ex, "Failed to delete old backup: {Dir}", dirName);
-                    }
-                }
-                if (deletedBackups > 0)
-                    _logger.LogInformation("Deleted {Count} old backup folder(s)", deletedBackups);
-            }
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Failed to clean old backups");
-        }
+        // Step 2: Delete previous backup folders created by earlier deep cleans, but only when this run made a
+        // new one: a re-run that moved nothing must never delete the backup holding the user's mod files.
+        PruneOldBackups(backupsRoot, timestamp, backupCreated, _logger);
 
         // Step 3: Remove all mod groups and collections from the loadout database.
         // This ensures the app state is fully reset, not just disabled.

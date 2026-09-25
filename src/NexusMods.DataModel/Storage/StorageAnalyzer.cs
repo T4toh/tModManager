@@ -97,7 +97,14 @@ internal class StorageAnalyzer : IStorageAnalyzer
     }
 
     /// <inheritdoc />
-    public async Task RunDeepCleanOnAllLoadoutsAsync(CancellationToken cancellationToken = default)
+    public Task RunDeepCleanOnAllLoadoutsAsync(CancellationToken cancellationToken = default) =>
+        RunDeepClean(skipSync: false, cancellationToken);
+
+    /// <inheritdoc />
+    public Task RunDeepCleanWithoutSyncOnAllLoadoutsAsync(CancellationToken cancellationToken = default) =>
+        RunDeepClean(skipSync: true, cancellationToken);
+
+    private async Task RunDeepClean(bool skipSync, CancellationToken cancellationToken)
     {
         var db = _connection.Db;
         var loadouts = Loadout.All(db).Where(l => l.IsVisible()).ToArray();
@@ -111,7 +118,10 @@ internal class StorageAnalyzer : IStorageAnalyzer
                 continue;
             }
             _logger.LogInformation("Running Deep Clean on loadout {Name}", loadout.Name);
-            await _toolManager.RunTool(tool, loadout, _jobMonitor, cancellationToken);
+            if (skipSync)
+                await tool.StartJob(loadout, _jobMonitor, cancellationToken);
+            else
+                await _toolManager.RunTool(tool, loadout, _jobMonitor, cancellationToken);
         }
     }
 
