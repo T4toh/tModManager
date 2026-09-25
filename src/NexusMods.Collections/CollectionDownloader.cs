@@ -588,8 +588,9 @@ public class CollectionDownloader
     }
 
     /// <summary>
-    /// Validates that a status reporting "InLibrary" or "Installed" actually has its archive files on disk.
-    /// If the archive is missing, downgrades the status to "NotDownloaded" so the UI
+    /// Validates that a status reporting "InLibrary" or "Installed" actually has its files on disk: either
+    /// the original download (in <see cref="DownloadsSettings.Folder"/>) or every entry in the file store.
+    /// If both are missing, downgrades the status to "NotDownloaded" so the UI
     /// shows the download button and the user can re-download.
     /// </summary>
     public async ValueTask<CollectionDownloadStatus> ValidateStatusAsync(CollectionDownloadStatus status)
@@ -614,6 +615,10 @@ public class CollectionDownloader
         }
 
         if (!libraryItem.TryGetAsLibraryFile(out var libraryFile)) return status;
+
+        // The original download is still on disk: whatever is missing from the store is re-extracted
+        // from it at install time, so the item is downloaded.
+        if (IsDownloadOnDisk(libraryFile)) return status;
 
         try
         {
@@ -649,6 +654,14 @@ public class CollectionDownloader
         }
 
         return status;
+    }
+
+    private bool IsDownloadOnDisk(LibraryFile.ReadOnly libraryFile)
+    {
+        if (!LibraryFile.DownloadPath.TryGetValue(libraryFile, out var relativePath)) return false;
+        var downloads = _serviceProvider.GetRequiredService<ISettingsManager>().Get<DownloadsSettings>().Folder
+            .ToPath(_serviceProvider.GetRequiredService<IFileSystem>());
+        return downloads.Combine(relativePath).FileExists;
     }
 
     /// <summary>

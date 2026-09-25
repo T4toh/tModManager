@@ -865,12 +865,9 @@ public partial class ALoadoutSynchronizer : ILoadoutSynchronizer
         
         if (toExtract.Count > 0)
         {
-            var missing = toExtract.Select(x => x.Hash).Where(h => !_fileStore.HaveFile(h).Result).ToArray();
-            if (missing.Length > 0)
-            {
-                var restored = await _reExtractor.RestoreAsync(missing, CancellationToken.None);
-                Logger.LogInformation("Faltaban {Missing} archivos en el store; {Restored} reextraídos desde Descargas", missing.Length, restored.Count);
-            }
+            var (missing, restored) = await _reExtractor.RestoreMissingAsync(_fileStore, toExtract.Select(x => x.Hash), CancellationToken.None);
+            if (missing > 0)
+                Logger.LogInformation("Faltaban {Missing} archivos en el store; {Restored} reextraídos desde Descargas", missing, restored);
 
             await _fileStore.ExtractFiles(toExtract, CancellationToken.None, UpdateStatus);
 
