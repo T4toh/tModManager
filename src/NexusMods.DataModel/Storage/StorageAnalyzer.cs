@@ -3,7 +3,6 @@ using NexusMods.Abstractions.Loadouts;
 using NexusMods.MnemonicDB.Abstractions;
 using NexusMods.MnemonicDB.Abstractions.TxFunctions;
 using NexusMods.Paths;
-using NexusMods.Paths.Utilities;
 using NexusMods.Sdk.Jobs;
 using NexusMods.Sdk.Loadouts;
 using NexusMods.Sdk.Settings;
@@ -21,6 +20,7 @@ internal class StorageAnalyzer : IStorageAnalyzer
     private readonly IToolManager _toolManager;
     private readonly IJobMonitor _jobMonitor;
     private readonly ILogger<StorageAnalyzer> _logger;
+    private readonly LooseFileStore _fileStore;
 
     public StorageAnalyzer(
         IConnection connection,
@@ -28,7 +28,8 @@ internal class StorageAnalyzer : IStorageAnalyzer
         IFileSystem fileSystem,
         IToolManager toolManager,
         IJobMonitor jobMonitor,
-        ILogger<StorageAnalyzer> logger)
+        ILogger<StorageAnalyzer> logger,
+        LooseFileStore fileStore)
     {
         _connection = connection;
         _settingsManager = settingsManager;
@@ -36,6 +37,7 @@ internal class StorageAnalyzer : IStorageAnalyzer
         _toolManager = toolManager;
         _jobMonitor = jobMonitor;
         _logger = logger;
+        _fileStore = fileStore;
     }
 
     private AbsolutePath GetCyberpunkBackupsPath() =>
@@ -48,12 +50,8 @@ internal class StorageAnalyzer : IStorageAnalyzer
     {
         var settings = _settingsManager.Get<DataModelSettings>();
 
-        // Sum sizes of all .nx archive files
-        var archivesSize = settings.ArchiveLocations
-            .Select(loc => loc.ToPath(_fileSystem))
-            .Where(dir => dir.DirectoryExists())
-            .SelectMany(dir => dir.EnumerateFiles(KnownExtensions.Nx))
-            .Aggregate(0UL, (acc, file) => acc + file.FileInfo.Size.Value);
+        // Sum sizes of the files the store owns (foreign files under the archive location are not counted)
+        var archivesSize = _fileStore.TotalSize().Value;
 
         // Count backed-up game files currently pinned in the database
         var db = _connection.Db;
@@ -127,14 +125,10 @@ internal class StorageAnalyzer : IStorageAnalyzer
     /// <inheritdoc />
     public Task DeleteArchivesAsync(CancellationToken cancellationToken = default)
     {
-        var settings = _settingsManager.Get<DataModelSettings>();
-        foreach (var loc in settings.ArchiveLocations)
-        {
-            var dir = loc.ToPath(_fileSystem);
-            if (!dir.DirectoryExists()) continue;
-            foreach (var file in dir.EnumerateFiles(KnownExtensions.Nx))
-                file.Delete();
-        }
+        // Only deletes files the store owns; never touches foreign content that may share the
+        // configured Storage Location (e.g. a user-picked shared folder), and locations other than
+        // the store's own root are never written by it in the first place.
+        _fileStore.DeleteAll();
         return Task.CompletedTask;
     }
 

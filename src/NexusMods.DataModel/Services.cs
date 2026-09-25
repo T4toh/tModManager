@@ -81,13 +81,8 @@ public static class Services
         coll.AddSingleton<JsonConverter, OptionalConverterFactory>();
 
         // File Store
-        coll.AddAllSingleton<IFileStore, NxFileStore>();
-        
-        // Readonly stream source
-        coll.AddSingleton<IReadOnlyStreamSource>(s => s.GetRequiredService<NxFileStore>());
-        coll.AddSingleton<IReadOnlyStreamSource, GameFileStreamSource>();
-        coll.AddSingleton<IStreamSourceDispatcher, StreamSourceDispatcher>();
-        
+        coll.AddAllSingleton<IFileStore, LooseFileStore>();
+
         coll.AddAllSingleton<IToolManager, ToolManager>();
 
         // Disk State and Synchronizer
