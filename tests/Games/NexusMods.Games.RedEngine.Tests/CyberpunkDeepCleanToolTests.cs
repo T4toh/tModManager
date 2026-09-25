@@ -129,14 +129,18 @@ public class CyberpunkDeepCleanToolTests : IDisposable
     }
 
     [Fact]
-    public void PruneOldBackups_AfterANewBackup_KeepsOnlyTheNewOne()
+    public void PruneOldBackups_AfterANewBackup_KeepsTheNewOneAndThePreviousOne()
     {
         _game.Combine("20260101_000000").CreateDirectory();
+        _game.Combine("20260103_000000").CreateDirectory();
         _game.Combine("20260102_000000").CreateDirectory();
+        _game.Combine("20260104_000000").CreateDirectory();
 
-        CyberpunkDeepCleanTool.PruneOldBackups(_game, "20260102_000000", backupCreated: true, NullLogger.Instance);
+        CyberpunkDeepCleanTool.PruneOldBackups(_game, "20260104_000000", backupCreated: true, NullLogger.Instance);
 
         _game.Combine("20260101_000000").DirectoryExists().Should().BeFalse();
-        _game.Combine("20260102_000000").DirectoryExists().Should().BeTrue();
+        _game.Combine("20260102_000000").DirectoryExists().Should().BeFalse();
+        _game.Combine("20260103_000000").DirectoryExists().Should().BeTrue();
+        _game.Combine("20260104_000000").DirectoryExists().Should().BeTrue();
     }
 }

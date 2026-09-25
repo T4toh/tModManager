@@ -172,7 +172,9 @@ public class CyberpunkDeepCleanTool : ITool
     }
 
     /// <summary>
-    /// Deletes every backup folder under <paramref name="backupsRoot"/> except <paramref name="currentBackupName"/>.
+    /// Deletes every backup folder under <paramref name="backupsRoot"/> except <paramref name="currentBackupName"/>
+    /// and the newest one before it: a re-run (e.g. the cleanup wizard after a relaunch) that finds a few new
+    /// leftovers must not delete the first, real backup of the user's mods.
     /// Does nothing unless <paramref name="backupCreated"/>: the older backup is then the only copy of the mod files.
     /// </summary>
     internal static void PruneOldBackups(AbsolutePath backupsRoot, string currentBackupName, bool backupCreated, ILogger logger)
@@ -184,10 +186,14 @@ public class CyberpunkDeepCleanTool : ITool
             if (!backupsRoot.DirectoryExists()) return;
 
             var deletedBackups = 0;
-            foreach (var oldBackupDir in System.IO.Directory.GetDirectories(backupsRoot.ToString()))
+            // Folder names are yyyyMMdd_HHmmss timestamps, so ordinal order is chronological.
+            var olderBackups = System.IO.Directory.GetDirectories(backupsRoot.ToString())
+                .Where(dir => System.IO.Path.GetFileName(dir) != currentBackupName)
+                .OrderByDescending(dir => System.IO.Path.GetFileName(dir), StringComparer.Ordinal)
+                .Skip(1);
+            foreach (var oldBackupDir in olderBackups)
             {
                 var dirName = System.IO.Path.GetFileName(oldBackupDir);
-                if (dirName == currentBackupName) continue;
                 try
                 {
                     System.IO.Directory.Delete(oldBackupDir, true);
@@ -282,8 +288,9 @@ public class CyberpunkDeepCleanTool : ITool
         else
             _logger.LogInformation("No mod files found to back up");
 
-        // Step 2: Delete previous backup folders created by earlier deep cleans, but only when this run made a
-        // new one: a re-run that moved nothing must never delete the backup holding the user's mod files.
+        // Step 2: Delete previous backup folders created by earlier deep cleans (keeping the newest one before
+        // this), but only when this run made a new one: a re-run that moved nothing must never delete the backup
+        // holding the user's mod files.
         PruneOldBackups(backupsRoot, timestamp, backupCreated, _logger);
 
         // Step 3: Remove all mod groups and collections from the loadout database.

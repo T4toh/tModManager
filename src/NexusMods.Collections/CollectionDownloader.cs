@@ -867,11 +867,17 @@ public class CollectionDownloader
                                 libraryFileId = existingDatoms[0].E;
                                 libraryFile = new LibraryFile.ReadOnly(db, libraryFileId);
                                 
-                                // Update DB if filename changed
-                                if (libraryFile.FileName != currentFile.FileName)
+                                // Update DB if the filename changed (extension fix above), and point
+                                // DownloadPath at this file when it is missing or its file is gone
+                                // (renamed above, or an entry from before DownloadPath existed).
+                                var fixName = libraryFile.FileName != currentFile.FileName;
+                                var fixPath = !LibraryFile.DownloadPath.TryGetValue(libraryFile, out var downloadPath)
+                                    || !downloadsFolder.Combine(downloadPath).FileExists;
+                                if (fixName || fixPath)
                                 {
                                     using var txName = _connection.BeginTransaction();
-                                    txName.Add(libraryFileId, LibraryFile.FileName, currentFile.FileName);
+                                    if (fixName) txName.Add(libraryFileId, LibraryFile.FileName, currentFile.FileName);
+                                    if (fixPath) txName.Add(libraryFileId, LibraryFile.DownloadPath, currentFile.RelativeTo(downloadsFolder));
                                     await txName.Commit();
                                 }
                             }
