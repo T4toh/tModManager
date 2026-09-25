@@ -67,4 +67,53 @@ public class CyberpunkDeepCleanToolTests : IDisposable
 
         found.Should().BeEmpty();
     }
+
+    [Fact]
+    public void LooseFiles_VanillaPublishingFile_IsKept_NonVanillaPublishingFile_IsFound()
+    {
+        // r6/publishing is a mixed directory: the base game ships addonDescriptions.xml under it
+        // (confirmed against the Steam depot manifest), so it must be swept file-by-file, not moved
+        // wholesale like the other new mod directories.
+        Touch("r6/publishing/x64/Steam/additional-content/addonDescriptions.xml"); // vanilla
+        Touch("r6/publishing/x64/mod/some_mod_publishing_file.xml");               // mod leftover
+        var vanilla = new HashSet<GamePath>
+        {
+            new(LocationId.Game, "r6/publishing/x64/Steam/additional-content/addonDescriptions.xml"),
+        };
+
+        var found = CyberpunkDeepCleanTool.FindLooseModFiles(_game, vanilla).Select(p => p.ToString()).ToArray();
+
+        found.Should().BeEquivalentTo("r6/publishing/x64/mod/some_mod_publishing_file.xml");
+    }
+
+    [Fact]
+    public void ResolveVanilla_AllIdsKnown_ReturnsUnionOfFiles()
+    {
+        var idA = LocatorId.From("100");
+        var idB = LocatorId.From("200");
+        var filesA = new[] { new GamePath(LocationId.Game, "a.txt") };
+        var filesB = new[] { new GamePath(LocationId.Game, "b.txt") };
+
+        var result = CyberpunkDeepCleanTool.ResolveVanilla(
+            id => id == idA ? filesA : id == idB ? filesB : [],
+            [idA, idB]);
+
+        result.UnknownIds.Should().BeEmpty();
+        result.Vanilla.Should().BeEquivalentTo(filesA.Concat(filesB));
+    }
+
+    [Fact]
+    public void ResolveVanilla_OneIdUnknown_ReturnsEmptyAndNamesIt()
+    {
+        var idKnown = LocatorId.From("100");
+        var idUnknown = LocatorId.From("999");
+        var filesKnown = new[] { new GamePath(LocationId.Game, "a.txt") };
+
+        var result = CyberpunkDeepCleanTool.ResolveVanilla(
+            id => id == idKnown ? filesKnown : [],
+            [idKnown, idUnknown]);
+
+        result.Vanilla.Should().BeEmpty();
+        result.UnknownIds.Should().BeEquivalentTo([idUnknown]);
+    }
 }

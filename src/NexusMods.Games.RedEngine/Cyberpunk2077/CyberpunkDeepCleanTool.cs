@@ -42,8 +42,8 @@ public class CyberpunkDeepCleanTool : ITool
 
     // Paths to move to a timestamped backup directory (mirrors the bash script by manavortex).
     // IMPORTANT: Only mod-specific paths are included here. The original bash script also moves
-    // engine/config/base, engine/config/galaxy, engine/config/platform/pc, r6/cache, r6/config,
-    // and r6/input — but those are base game files, restorable via Steam's "Verify game files".
+    // engine/config/base, engine/config/galaxy, engine/config/platform/pc, r6/cache, and r6/config
+    // — but those are base game files, restorable via Steam's "Verify game files".
     private static readonly string[] PathsToMove =
     [
         "archive/pc/mod",
@@ -62,13 +62,15 @@ public class CyberpunkDeepCleanTool : ITool
         "r6/input",
         "r6/config/cybercmd",
         "r6/config/redsUserHints",
-        "r6/publishing",
         "r6/logs",
     ];
 
     private static readonly string[] PathsToDelete = ["V2077"];
 
     // Files mods drop outside their own folders. Moved only when the game's file list says they are not vanilla.
+    // r6/publishing is a mixed directory: the base game ships r6/publishing/*/*/additional-content/addonDescriptions.xml
+    // (confirmed against the Steam depot manifest), so unlike the other new mod directories it cannot be moved
+    // wholesale via PathsToMove — every file under it must be checked against the vanilla set individually.
     private static readonly string[] LooseFileGlobs =
     [
         "*",                                   // game root, top level only
@@ -77,6 +79,7 @@ public class CyberpunkDeepCleanTool : ITool
         "r6/cache/final.redscripts*",
         "r6/cache/input*.xml",
         "tools/redmod/tweaks/**/devices.tweak",
+        "r6/publishing/**",
         "bin/x64/CyberPunk.bat",
     ];
 
@@ -102,6 +105,36 @@ public class CyberpunkDeepCleanTool : ITool
             .Where(rel => !vanillaPaths.Contains(rel.ToString()))
             .OrderBy(rel => rel.ToString(), StringComparer.Ordinal)
             .ToArray();
+    }
+
+    /// <summary>
+    /// Combines the vanilla files for every locator ID of the loadout. <paramref name="lookup"/> is called once
+    /// per ID (typically <c>IFileHashesService.GetGameFiles</c> restricted to that single ID) so that an ID with
+    /// no known manifest can be told apart from an ID that legitimately has no files.
+    /// If ANY id resolves to zero files, the whole result is empty (with that id listed in <c>UnknownIds</c>):
+    /// a partial vanilla set is worse than none, since it would treat some genuinely vanilla files (from the
+    /// unresolved manifest) as mod leftovers. This happens after a game patch when the upstream hash database
+    /// (discontinued) hasn't caught up yet for one of the game's locator IDs (e.g. the base depot manifest is
+    /// unknown but REDmod's is known, or vice versa).
+    /// </summary>
+    internal static (IReadOnlySet<GamePath> Vanilla, IReadOnlyList<LocatorId> UnknownIds) ResolveVanilla(
+        Func<LocatorId, IEnumerable<GamePath>> lookup, IReadOnlyList<LocatorId> ids)
+    {
+        var vanilla = new HashSet<GamePath>();
+        var unknown = new List<LocatorId>();
+        foreach (var id in ids)
+        {
+            var files = lookup(id).ToArray();
+            if (files.Length == 0)
+            {
+                unknown.Add(id);
+                continue;
+            }
+            foreach (var file in files)
+                vanilla.Add(file);
+        }
+
+        return unknown.Count > 0 ? (new HashSet<GamePath>(), unknown) : (vanilla, unknown);
     }
 
     /// <summary>
@@ -156,13 +189,32 @@ public class CyberpunkDeepCleanTool : ITool
             MoveToBackup(gamePath.Combine(rel), backupDir.Combine(rel), ref backupCreated, backupDir);
         }
 
-        var vanilla = _fileHashes.GetGameFiles((loadout.Installation.Store, loadout.LocatorIds.ToArray()))
-            .Select(f => f.Path).ToHashSet();
-        if (vanilla.Count == 0)
+        IReadOnlySet<GamePath> vanilla = new HashSet<GamePath>();
+        try
         {
-            _logger.LogWarning(
-                "No se encontraron datos de archivos vanilla para esta versión del juego; se omite la búsqueda de archivos sueltos de mods");
+            var resolved = ResolveVanilla(
+                id => _fileHashes.GetGameFiles((loadout.Installation.Store, [id])).Select(f => f.Path),
+                loadout.LocatorIds.ToArray());
+            vanilla = resolved.Vanilla;
+
+            if (resolved.UnknownIds.Count > 0)
+            {
+                _logger.LogWarning(
+                    "No hay datos vanilla para los locator IDs {LocatorIds}; se omite la búsqueda de archivos sueltos de mods",
+                    string.Join(", ", resolved.UnknownIds));
+            }
+            else if (vanilla.Count == 0)
+            {
+                _logger.LogWarning(
+                    "No se encontraron datos de archivos vanilla para esta versión del juego; se omite la búsqueda de archivos sueltos de mods");
+            }
         }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            _logger.LogWarning(ex,
+                "No se pudo obtener la lista de archivos vanilla; se omite la búsqueda de archivos sueltos de mods");
+        }
+
         foreach (var rel in FindLooseModFiles(gamePath, vanilla))
             MoveToBackup(gamePath.Combine(rel), backupDir.Combine(rel), ref backupCreated, backupDir);
 
