@@ -105,12 +105,16 @@ public class LegacyDataDetectorTests : IDisposable
     [Fact]
     public void ResetIfRequested_RefusesWhenMnemonicDbPathIsDataDirectoryRoot()
     {
-        var fs = FileSystem.Shared;
-        var dataDirectoryRoot = fs.GetKnownPath(KnownPath.XDG_DATA_HOME).Combine(NexusMods.Sdk.ApplicationConstants.DataDirectoryName);
+        // The "data directory root" is entirely a temp folder here (via the dataDirectoryRoot
+        // override): even if this guard regresses, nothing but this test's own temp folder is at
+        // risk — never the developer's real ~/.local/share/tModManager.
+        _root.CreateDirectory();
+        var dataDirectoryRoot = _root.Combine("data-root");
         var markerPath = _root.Combine("reset-marker");
+        var fs = FileSystem.Shared;
         LegacyDataDetector.RequestResetOnStart(fs, markerPath);
 
-        var act = () => LegacyDataDetector.ResetIfRequested(_root, dataDirectoryRoot, fs, markerPath);
+        var act = () => LegacyDataDetector.ResetIfRequested(_root.Combine("Archives"), dataDirectoryRoot, fs, markerPath, dataDirectoryRoot);
 
         act.Should().Throw<InvalidOperationException>();
         // Refused, not consumed: a fixed call can retry the reset later.
@@ -128,10 +132,33 @@ public class LegacyDataDetectorTests : IDisposable
         LegacyDataDetector.RequestResetOnStart(fs, markerPath);
 
         // _root is an ancestor of archivesRoot: passing it as the DB path must be refused.
-        var act = () => LegacyDataDetector.ResetIfRequested(archivesRoot, _root, fs, markerPath);
+        var act = () => LegacyDataDetector.ResetIfRequested(archivesRoot, _root, fs, markerPath, dataDirectoryRoot: _root.Combine("data-root"));
 
         act.Should().Throw<InvalidOperationException>();
         archivesRoot.DirectoryExists().Should().BeTrue();
+    }
+
+    [Fact]
+    public void ResetIfRequested_RefusesWhenMnemonicDbPathEscapesIntoArchivesRootViaDotDot()
+    {
+        // NexusMods.Paths keeps "x/.." unnormalized, so a naive segment/string comparison of the raw
+        // paths misses that "Archives/DataModel/.." IS "Archives" on disk. The guard must resolve
+        // real paths (Path.GetFullPath collapses "..") before comparing.
+        _root.CreateDirectory();
+        var archivesRoot = _root.Combine("Archives");
+        var nested = archivesRoot.Combine("DataModel");
+        nested.CreateDirectory();
+        var mnemonicDbPath = nested.Combine("..");
+
+        var markerPath = _root.Combine("reset-marker");
+        var fs = FileSystem.Shared;
+        LegacyDataDetector.RequestResetOnStart(fs, markerPath);
+
+        var act = () => LegacyDataDetector.ResetIfRequested(archivesRoot, mnemonicDbPath, fs, markerPath, dataDirectoryRoot: _root.Combine("data-root"));
+
+        act.Should().Throw<InvalidOperationException>();
+        archivesRoot.DirectoryExists().Should().BeTrue();
+        nested.DirectoryExists().Should().BeTrue();
     }
 }
 
@@ -209,6 +236,70 @@ public class LegacyDownloadsMoveTests(ITestOutputHelper helper) : ACyberpunkIsol
         dest.Combine("X_1.zip").FileExists.Should().BeTrue();
         (await File.ReadAllTextAsync(dest.Combine("X.zip").ToString())).Should().Be("original content");
         (await File.ReadAllTextAsync(dest.Combine("X_1.zip").ToString())).Should().Be("different content");
+    }
+
+    [Fact]
+    public async Task MoveLegacyDownloads_SameFolderConfiguredDirectly_DeletesNothing()
+    {
+        var analyzer = (StorageAnalyzer)ServiceProvider.GetRequiredService<IStorageAnalyzer>();
+        var dest = ServiceProvider.GetRequiredService<ISettingsManager>().Get<DownloadsSettings>().Folder.ToPath(FileSystem);
+        dest.CreateDirectory();
+        await File.WriteAllTextAsync(dest.Combine("A-1-0.zip").ToString(), "a");
+
+        // The legacy folder IS the current downloads folder (e.g. misconfiguration, or the user
+        // pointed both at the same place): there's nothing to move, and treating it as a move would
+        // delete the only copy of every file.
+        analyzer.LegacyDownloadsFolderProvider = () => dest;
+
+        var (count, _) = await analyzer.GetLegacyDownloadsAsync();
+        var moved = await analyzer.MoveLegacyDownloadsAsync(default);
+
+        count.Should().Be(0);
+        moved.Should().Be(0);
+        dest.Combine("A-1-0.zip").FileExists.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task MoveLegacyDownloads_DestinationIsSymlinkToLegacyFolder_DeletesNothing()
+    {
+        var analyzer = (StorageAnalyzer)ServiceProvider.GetRequiredService<IStorageAnalyzer>();
+        var legacy = TemporaryFileManager.CreateFolder().Path;
+        await File.WriteAllTextAsync(legacy.Combine("A-1-0.zip").ToString(), "a");
+        analyzer.LegacyDownloadsFolderProvider = () => legacy;
+
+        var dest = ServiceProvider.GetRequiredService<ISettingsManager>().Get<DownloadsSettings>().Folder.ToPath(FileSystem);
+        dest.Parent.CreateDirectory();
+        if (dest.DirectoryExists()) dest.DeleteDirectory(recursive: true);
+        Directory.CreateSymbolicLink(dest.ToString(), legacy.ToString());
+
+        var (count, _) = await analyzer.GetLegacyDownloadsAsync();
+        var moved = await analyzer.MoveLegacyDownloadsAsync(default);
+
+        count.Should().Be(0);
+        moved.Should().Be(0);
+        legacy.Combine("A-1-0.zip").FileExists.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task GetAndMoveLegacyDownloads_SkipPartialDownloads()
+    {
+        var analyzer = (StorageAnalyzer)ServiceProvider.GetRequiredService<IStorageAnalyzer>();
+        var legacy = TemporaryFileManager.CreateFolder().Path;
+        await File.WriteAllTextAsync(legacy.Combine("A-1-0.zip").ToString(), "a");
+        var partial = legacy.Combine("B-2-0.7z.tmp-0123456789abcdef0123456789abcdef");
+        await File.WriteAllTextAsync(partial.ToString(), "half-written");
+        analyzer.LegacyDownloadsFolderProvider = () => legacy;
+
+        var (count, size) = await analyzer.GetLegacyDownloadsAsync();
+        var moved = await analyzer.MoveLegacyDownloadsAsync(default);
+
+        count.Should().Be(1);
+        size.Value.Should().Be(1);
+        moved.Should().Be(1);
+        partial.FileExists.Should().BeTrue("a half-written download must be left alone, not moved or deleted");
+        var dest = ServiceProvider.GetRequiredService<ISettingsManager>().Get<DownloadsSettings>().Folder.ToPath(FileSystem);
+        dest.Combine("A-1-0.zip").FileExists.Should().BeTrue();
+        dest.Combine(partial.FileName).FileExists.Should().BeFalse();
     }
 
     [Fact]

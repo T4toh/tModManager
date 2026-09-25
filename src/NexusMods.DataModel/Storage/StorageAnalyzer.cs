@@ -164,13 +164,26 @@ internal class StorageAnalyzer : IStorageAnalyzer
         return Task.CompletedTask;
     }
 
+    /// <summary>
+    /// A file <see cref="DownloadsFolder.TryClaimAsync"/> left half-written (named
+    /// <c>&lt;name&gt;.tmp-&lt;guid&gt;</c>) after an interrupted move/copy. Never counted or moved:
+    /// it isn't a real download, and touching it could race an in-flight write.
+    /// </summary>
+    private static bool IsPartialDownload(AbsolutePath file) =>
+        file.FileName.ToString().Contains(".tmp-", StringComparison.Ordinal);
+
     /// <inheritdoc />
     public Task<(int Count, Size Size)> GetLegacyDownloadsAsync(CancellationToken cancellationToken = default)
     {
         var folder = LegacyDownloadsFolderProvider();
         if (!folder.DirectoryExists()) return Task.FromResult((0, Size.Zero));
 
-        var files = folder.EnumerateFiles("*", recursive: false).ToArray();
+        // Nothing is "pending" if the legacy folder already IS the current downloads folder
+        // (configured that way directly, or one is a symlink to the other): there's nothing to move.
+        var to = _settingsManager.Get<DownloadsSettings>().Folder.ToPath(_fileSystem);
+        if (RealPath.Resolve(folder) == RealPath.Resolve(to)) return Task.FromResult((0, Size.Zero));
+
+        var files = folder.EnumerateFiles("*", recursive: false).Where(f => !IsPartialDownload(f)).ToArray();
         var size = files.Aggregate(0UL, (acc, file) => acc + file.FileInfo.Size.Value);
         return Task.FromResult((files.Length, Size.From(size)));
     }
@@ -182,10 +195,19 @@ internal class StorageAnalyzer : IStorageAnalyzer
         if (!from.DirectoryExists()) return 0;
 
         var to = _settingsManager.Get<DownloadsSettings>().Folder.ToPath(_fileSystem);
+
+        // Same physical folder (configured directly to the same path, or one is a symlink to the
+        // other): moving would just delete the only copy of every file. Do nothing.
+        if (RealPath.Resolve(from) == RealPath.Resolve(to))
+        {
+            _logger.LogWarning("La carpeta de descargas antigua y la actual son la misma ({Path}); no se mueve nada", from);
+            return 0;
+        }
+
         to.CreateDirectory();
 
         var moved = 0;
-        foreach (var file in from.EnumerateFiles("*", recursive: false).ToArray())
+        foreach (var file in from.EnumerateFiles("*", recursive: false).Where(f => !IsPartialDownload(f)).ToArray())
         {
             var name = DownloadsFolder.SanitizeFileName(file.FileName.ToString());
             var target = to.Combine(name);
@@ -209,8 +231,12 @@ internal class StorageAnalyzer : IStorageAnalyzer
                 }
             }
 
-            await DownloadsFolder.PlaceAsync(file, to, name, cancellationToken);
-            file.Delete();
+            var placed = await DownloadsFolder.PlaceAsync(file, to, name, cancellationToken);
+
+            // PlaceAsync may hand back the source file itself (e.g. a single aliased file even
+            // though the folders differ): never delete the only copy of a file.
+            if (RealPath.Resolve(placed) != RealPath.Resolve(file))
+                file.Delete();
             moved++;
         }
 

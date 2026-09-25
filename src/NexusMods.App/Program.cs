@@ -85,7 +85,13 @@ public class Program
         _logger = services.GetRequiredService<ILogger<Program>>();
 
         // NOTE(erri120): has to come before host startup
-        CleanupUnresponsiveProcesses(services).Wait(timeout: TimeSpan.FromSeconds(10));
+        // Also tells us whether another *responsive* main process is currently alive (as opposed to
+        // a stale one, which gets killed here): if so, resolving the datom store below (which would
+        // run a pending legacy-cleanup reset) must be skipped, or we'd delete the .nx archives and
+        // the RocksDB directory out from under that other, still-running process.
+        var cleanupTask = CleanupUnresponsiveProcesses(services);
+        cleanupTask.Wait(timeout: TimeSpan.FromSeconds(10));
+        var anotherMainIsAlive = cleanupTask.Status == TaskStatus.RanToCompletion && cleanupTask.Result;
 
         // Okay to do wait here, as we are in the main process thread.
         host.StartAsync().Wait(timeout: TimeSpan.FromMinutes(5));
@@ -95,13 +101,6 @@ public class Program
             var dataModelSettings = services.GetRequiredService<ISettingsManager>().Get<DataModelSettings>();
             var fileSystem = services.GetRequiredService<IFileSystem>();
             var osInterop = services.GetRequiredService<IOSInterop>();
-
-            // A pending legacy-cleanup reset wipes the DB directory (see AddDataModel's
-            // DatomStoreSettings factory, triggered below by resolving MigrationService) before it's
-            // ever opened, so treat it as "no model yet" here too, or InitialSetup would wrongly be
-            // skipped in favor of MigrateAll on the now-empty database.
-            var modelExists = dataModelSettings.MnemonicDBPath.ToPath(fileSystem).DirectoryExists()
-                && !LegacyDataDetector.IsResetPending(fileSystem);
 
             _ = Task.Run(async () =>
             {
@@ -118,17 +117,35 @@ public class Program
                 }
             });
 
-            // This will startup the MnemonicDb connection
-            var migration = services.GetRequiredService<MigrationService>();
-            if (modelExists)
+            if (anotherMainIsAlive)
             {
-                // Run the migrations
-                migration.MigrateAll().Wait();
+                // Don't touch the database or a pending reset while another responsive main process
+                // owns it. This process lost the startup race; it will fail to claim the
+                // single-instance lock further down (CliServer -> SyncFile.TrySetMain) and fall back
+                // to the existing behaviour for a second instance.
+                _logger.LogWarning("Otra instancia principal ya está corriendo; no se ejecutan migraciones ni el reinicio del asistente de limpieza en este proceso");
             }
             else
             {
-                // Otherwise, perform the initial setup
-                migration.InitialSetup().Wait();
+                // A pending legacy-cleanup reset wipes the DB directory (see AddDataModel's
+                // DatomStoreSettings factory, triggered below by resolving MigrationService) before
+                // it's ever opened, so treat it as "no model yet" here too, or InitialSetup would
+                // wrongly be skipped in favor of MigrateAll on the now-empty database.
+                var modelExists = dataModelSettings.MnemonicDBPath.ToPath(fileSystem).DirectoryExists()
+                    && !LegacyDataDetector.IsResetPending(fileSystem);
+
+                // This will startup the MnemonicDb connection
+                var migration = services.GetRequiredService<MigrationService>();
+                if (modelExists)
+                {
+                    // Run the migrations
+                    migration.MigrateAll().Wait();
+                }
+                else
+                {
+                    // Otherwise, perform the initial setup
+                    migration.InitialSetup().Wait();
+                }
             }
         }
 
@@ -187,18 +204,23 @@ public class Program
         }
     }
 
-    private static async Task CleanupUnresponsiveProcesses(IServiceProvider serviceProvider)
+    /// <summary>
+    /// Kills a stale (unresponsive) previous main process, if any. Returns true if a previous
+    /// process is still alive and responsive — i.e. it wasn't stale, so it was left running — which
+    /// callers must treat as "a real other main process owns the database right now".
+    /// </summary>
+    private static async Task<bool> CleanupUnresponsiveProcesses(IServiceProvider serviceProvider)
     {
         // NOTE(erri120): this is a hack, see https://github.com/Nexus-Mods/NexusMods.App/issues/3633
         var logger = serviceProvider.GetRequiredService<ILogger<Program>>();
         var syncFile = serviceProvider.GetRequiredService<SyncFile>();
 
         var (process, port) = syncFile.GetSyncInfo();
-        if (process is null) return;
+        if (process is null) return false;
 
         var pid = process.Id;
         var canConnect = await CanConnectToProcess(logger, port, timeout: TimeSpan.FromSeconds(6), services: serviceProvider);
-        if (canConnect) return;
+        if (canConnect) return true;
 
         logger.LogWarning("Unable to connect to old process with PID `{PID}` on port `{Port}`, force closing process", pid, port);
 
@@ -210,6 +232,8 @@ public class Program
         {
             logger.LogWarning(e, "Exception killing old process `{PID}`", pid);
         }
+
+        return false;
     }
 
     private static async Task<bool> CanConnectToProcess(ILogger logger, int port, TimeSpan timeout, IServiceProvider services)
