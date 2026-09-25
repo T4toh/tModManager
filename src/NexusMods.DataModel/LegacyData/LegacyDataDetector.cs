@@ -35,15 +35,32 @@ public static class LegacyDataDetector
         marker.Create().Dispose();
     }
 
+    /// <summary>Whether a reset was requested and is still pending (the marker exists).</summary>
+    public static bool IsResetPending(IFileSystem fs, AbsolutePath? markerPath = null) =>
+        ResetMarker(fs, markerPath).FileExists;
+
     /// <summary>Deletes the <c>.nx</c> archives and the database if a reset was requested. Returns true if it did.</summary>
+    /// <exception cref="InvalidOperationException">
+    /// <paramref name="mnemonicDbPath"/> is, or is an ancestor of, the app's data directory or
+    /// <paramref name="archivesRoot"/>: deleting it would wipe out far more than the database.
+    /// </exception>
     public static bool ResetIfRequested(AbsolutePath archivesRoot, AbsolutePath mnemonicDbPath, IFileSystem fs, AbsolutePath? markerPath = null)
     {
         var marker = ResetMarker(fs, markerPath);
         if (!marker.FileExists) return false;
+
+        var dataDirectoryRoot = fs.GetKnownPath(KnownPath.XDG_DATA_HOME).Combine(NexusMods.Sdk.ApplicationConstants.DataDirectoryName);
+        if (IsSelfOrAncestorOf(mnemonicDbPath, dataDirectoryRoot) || IsSelfOrAncestorOf(mnemonicDbPath, archivesRoot))
+            throw new InvalidOperationException(
+                $"Me niego a reiniciar: la ruta de la base de datos ({mnemonicDbPath}) es, o contiene, el directorio de datos o la carpeta de archivos; borrarla perdería mucho más que la base.");
+
         if (archivesRoot.DirectoryExists())
             foreach (var nx in archivesRoot.EnumerateFiles("*.nx", recursive: false)) nx.Delete();
         if (mnemonicDbPath.DirectoryExists()) mnemonicDbPath.DeleteDirectory(recursive: true);
         marker.Delete();
         return true;
     }
+
+    private static bool IsSelfOrAncestorOf(AbsolutePath candidate, AbsolutePath other) =>
+        candidate == other || other.InFolder(candidate);
 }

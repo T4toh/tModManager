@@ -1,3 +1,5 @@
+using NexusMods.Paths;
+
 namespace NexusMods.DataModel.Storage;
 
 /// <summary>
@@ -38,4 +40,22 @@ public interface IStorageAnalyzer
     /// Borra las descargas originales. Solo por acción explícita del usuario.
     /// </summary>
     Task DeleteDownloadsAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Cuenta y suma el tamaño de las descargas dejadas por el NexusMods.App original.
+    /// </summary>
+    Task<(int Count, Size Size)> GetLegacyDownloadsAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Mueve las descargas dejadas por el NexusMods.App original a la carpeta de descargas actual.
+    /// Mismo nombre y mismo contenido descarta el origen; mismo nombre y distinto contenido agrega
+    /// un sufijo. Devuelve la cantidad de archivos movidos.
+    /// </summary>
+    Task<int> MoveLegacyDownloadsAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Borra el prefix de Proton de Cyberpunk 2077 (<c>steamapps/compatdata/1091500</c>) bajo la
+    /// biblioteca de Steam indicada. No hace nada si la ruta no coincide con lo esperado.
+    /// </summary>
+    Task DeleteProtonPrefixAsync(AbsolutePath steamLibraryRoot, CancellationToken cancellationToken = default);
 }

@@ -11,6 +11,7 @@ using NexusMods.Abstractions.Serialization.ExpressionGenerator;
 using NexusMods.DataModel.CommandLine.Verbs;
 using NexusMods.DataModel.Diagnostics;
 using NexusMods.DataModel.JsonConverters;
+using NexusMods.DataModel.LegacyData;
 using NexusMods.DataModel.SchemaVersions;
 using NexusMods.DataModel.Sorting;
 using NexusMods.DataModel.Synchronizer;
@@ -61,7 +62,11 @@ public static class Services
                 var settings = settingsManager.Get<DataModelSettings>();
                 if (settings.UseInMemoryDataModel)
                     return DatomStoreSettings.InMemory;
-                
+
+                // The database can't be deleted while it's open, so a pending reset (requested by
+                // the legacy-cleanup wizard) has to run right here, before anything below opens it.
+                LegacyDataDetector.ResetIfRequested(settings.ArchiveLocations[0].ToPath(fileSystem), settings.MnemonicDBPath.ToPath(fileSystem), fileSystem);
+
                 var path = settings.MnemonicDBPath.ToPath(fileSystem);
                 if (!path.DirectoryExists())
                     path.CreateDirectory();

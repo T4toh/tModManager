@@ -18,6 +18,7 @@ using NexusMods.App.UI.Settings;
 using NexusMods.Backend;
 using NexusMods.CrossPlatform;
 using NexusMods.DataModel;
+using NexusMods.DataModel.LegacyData;
 using NexusMods.DataModel.SchemaVersions;
 using NexusMods.Paths;
 using NexusMods.ProxyConsole;
@@ -95,7 +96,12 @@ public class Program
             var fileSystem = services.GetRequiredService<IFileSystem>();
             var osInterop = services.GetRequiredService<IOSInterop>();
 
-            var modelExists = dataModelSettings.MnemonicDBPath.ToPath(fileSystem).DirectoryExists();
+            // A pending legacy-cleanup reset wipes the DB directory (see AddDataModel's
+            // DatomStoreSettings factory, triggered below by resolving MigrationService) before it's
+            // ever opened, so treat it as "no model yet" here too, or InitialSetup would wrongly be
+            // skipped in favor of MigrateAll on the now-empty database.
+            var modelExists = dataModelSettings.MnemonicDBPath.ToPath(fileSystem).DirectoryExists()
+                && !LegacyDataDetector.IsResetPending(fileSystem);
 
             _ = Task.Run(async () =>
             {

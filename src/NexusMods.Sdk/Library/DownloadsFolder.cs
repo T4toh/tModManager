@@ -88,7 +88,7 @@ public static class DownloadsFolder
     /// metadata), so it can never place the file outside the destination folder via directory
     /// traversal. Falls back to a random name if nothing usable is left.
     /// </summary>
-    private static string SanitizeFileName(string fileName)
+    public static string SanitizeFileName(string fileName)
     {
         var name = Path.GetFileName(fileName);
         return string.IsNullOrEmpty(name) || name is "." or ".." ? $"download-{Guid.NewGuid():N}" : name;

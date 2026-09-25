@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Logging;
 using NexusMods.Abstractions.Loadouts;
+using NexusMods.DataModel.LegacyData;
 using NexusMods.MnemonicDB.Abstractions;
 using NexusMods.MnemonicDB.Abstractions.TxFunctions;
 using NexusMods.Paths;
@@ -40,7 +41,13 @@ internal class StorageAnalyzer : IStorageAnalyzer
         _jobMonitor = jobMonitor;
         _logger = logger;
         _fileStore = fileStore;
+        LegacyDownloadsFolderProvider = () => LegacyDataDetector.LegacyDownloadsFolder(fileSystem);
     }
+
+    /// <summary>Test seam: overridden in tests so they never touch the real <c>~/.local/share</c>.</summary>
+    internal Func<AbsolutePath> LegacyDownloadsFolderProvider { get; set; }
+
+    private const string CyberpunkSteamAppId = "1091500";
 
     // keep in sync with CyberpunkDeepCleanTool.BackupsRoot — DataModel must not reference a game project
     private AbsolutePath GetCyberpunkBackupsPath() =>
@@ -154,6 +161,81 @@ internal class StorageAnalyzer : IStorageAnalyzer
         if (downloads.DirectoryExists())
             foreach (var file in downloads.EnumerateFiles("*", recursive: false))
                 file.Delete();
+        return Task.CompletedTask;
+    }
+
+    /// <inheritdoc />
+    public Task<(int Count, Size Size)> GetLegacyDownloadsAsync(CancellationToken cancellationToken = default)
+    {
+        var folder = LegacyDownloadsFolderProvider();
+        if (!folder.DirectoryExists()) return Task.FromResult((0, Size.Zero));
+
+        var files = folder.EnumerateFiles("*", recursive: false).ToArray();
+        var size = files.Aggregate(0UL, (acc, file) => acc + file.FileInfo.Size.Value);
+        return Task.FromResult((files.Length, Size.From(size)));
+    }
+
+    /// <inheritdoc />
+    public async Task<int> MoveLegacyDownloadsAsync(CancellationToken cancellationToken = default)
+    {
+        var from = LegacyDownloadsFolderProvider();
+        if (!from.DirectoryExists()) return 0;
+
+        var to = _settingsManager.Get<DownloadsSettings>().Folder.ToPath(_fileSystem);
+        to.CreateDirectory();
+
+        var moved = 0;
+        foreach (var file in from.EnumerateFiles("*", recursive: false).ToArray())
+        {
+            var name = DownloadsFolder.SanitizeFileName(file.FileName.ToString());
+            var target = to.Combine(name);
+
+            // Cheap path: rename directly when nothing is in the way. Only falls back to a copy
+            // when the name clashes, or the move fails because source and destination are on
+            // different filesystems (cross-device rename isn't atomic-renameable).
+            if (!target.FileExists)
+            {
+                try
+                {
+                    File.Move(file.ToString(), target.ToString());
+                    moved++;
+                    continue;
+                }
+                catch (IOException)
+                {
+                    // Most likely source and destination are on different filesystems (rename can't
+                    // cross a device boundary). Fall through to the copy+delete path below, which
+                    // also correctly handles the rare race where something claimed `target` first.
+                }
+            }
+
+            await DownloadsFolder.PlaceAsync(file, to, name, cancellationToken);
+            file.Delete();
+            moved++;
+        }
+
+        return moved;
+    }
+
+    /// <inheritdoc />
+    public Task DeleteProtonPrefixAsync(AbsolutePath steamLibraryRoot, CancellationToken cancellationToken = default)
+    {
+        var steamApps = steamLibraryRoot.Combine("steamapps");
+        if (!steamApps.DirectoryExists())
+        {
+            _logger.LogWarning("No se encontró steamapps en {Root}; no se borra el prefix de Proton", steamLibraryRoot);
+            return Task.CompletedTask;
+        }
+
+        var prefix = steamApps.Combine($"compatdata/{CyberpunkSteamAppId}");
+        if (!prefix.ToString().EndsWith($"steamapps/compatdata/{CyberpunkSteamAppId}", StringComparison.Ordinal))
+        {
+            _logger.LogWarning("Ruta de prefix inesperada {Prefix}; no se borra", prefix);
+            return Task.CompletedTask;
+        }
+
+        if (prefix.DirectoryExists())
+            prefix.DeleteDirectory(recursive: true);
         return Task.CompletedTask;
     }
 }
