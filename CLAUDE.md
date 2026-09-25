@@ -68,6 +68,7 @@ The solution (`NexusMods.App.sln`) is organized into layers:
 - **App ID:** `io.github.t4toh.tmodmanager`
 - **Data Directory:** `~/.local/share/tModManager/` (isolated from official app). The pre-rename directory `NexusMods.App.Cyberpunk` is moved here once at startup (`DataModelSettings.MigrateLegacyDataDirectory`), and the old `com.cyberpunk2077.modmanager.desktop` handler is removed when the nxm handler is registered.
 - **Downloads:** Own folder, `tModManager/Downloads` (`DownloadsSettings`), no longer shared with the official app.
+- **Configs / hash DB / logs / temp:** `$XDG_DATA_HOME/tModManager/{Configs,FileHashesDatabase}`, `$XDG_STATE_HOME/tModManager/{Logs,Temp}`. Configs and the hash DB are copied once from `NexusMods.App/` on startup (`DataDirectoryMigration.CopyUpstreamDataOnce`); nothing of ours lives under `NexusMods.App/` anymore.
 
 ### Fork-Specific Features
 
@@ -187,7 +188,7 @@ Defined in `NexusMods.App.Cli` using attributes:
 - Centralized NuGet versions in `Directory.Packages.props`; never put `Version=` on a `<PackageReference>`
 - Global analyzer rules in `.globalconfig` treated as errors (do not suppress): `CS4014` un-awaited task, `CS8509` non-exhaustive switch, `CA1069` duplicate enum values, `CA2211` visible non-constant static fields, `CA2021` incompatible `Cast`/`OfType`
 - Log messages and some UI strings are in Spanish (this is a personal fork)
-- **Never `AbsolutePath.DeleteDirectory(recursive: true)`**: NexusMods.Paths follows symlinked directories and deletes their targets (a Proton prefix's `dosdevices/z: -> /` wiped part of `$HOME` on 2026-09-25). Use `DeleteDirectoryNoFollow()` (`NexusMods.Sdk.IO`). Recursive enumeration (Paths `EnumerateFiles`, `SearchOption.AllDirectories`, globbing `Matcher`) follows symlinks too; use `NoFollowDelete.RecurseWithoutSymlinks` when the walk feeds a move or delete. Every destructive action gets a test with a symlink pointing outside
+- **Never `AbsolutePath.DeleteDirectory(recursive: true)`**: NexusMods.Paths follows symlinked directories and deletes their targets (a Proton prefix's `dosdevices/z: -> /` wiped part of `$HOME` on 2026-09-25). Use `DeleteDirectoryNoFollow()` (`NexusMods.Sdk.IO`). Recursive enumeration (Paths `EnumerateFiles`, `SearchOption.AllDirectories`, globbing `Matcher`) follows symlinks too; use `NoFollowDelete.RecurseWithoutSymlinks` when the walk feeds a move or delete. Paths built from untrusted data (archive entry names, FOMOD/collection paths, server file names) go through `SafePath` (`IsStrictlyInside`, `HasParentSegment`, `IsUnderSymlink`, `EnumerateFilesNoFollow`): Paths keeps `..`, `InFolder` is lexical and `\` becomes `/`. Every destructive action gets a test with a symlink pointing outside, and the test must fail without the fix
 
 ## What Was Removed (vs upstream)
 
