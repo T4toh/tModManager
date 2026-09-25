@@ -113,16 +113,10 @@ public class InstallCollectionJob : IJobDefinitionWithStart<InstallCollectionJob
             // The package itself is on disk, but its extracted entries (collection.json, bundled and
             // patch files) may still be missing from the file store after a manual clean — restore
             // them from the package before anything tries to read them from the store.
-            var missingChildren = LibraryArchiveFileEntry.FindByParent(Connection.Db, SourceCollection.AsLibraryFile().Id)
-                .Select(entry => entry.AsLibraryFile().Hash)
-                .Where(hash => !FileStore.HaveFile(hash).Result)
-                .Distinct()
-                .ToArray();
-            if (missingChildren.Length > 0)
-            {
-                var reExtractor = ServiceProvider.GetRequiredService<IDownloadReExtractor>();
-                await reExtractor.RestoreAsync(missingChildren, context.CancellationToken);
-            }
+            var children = LibraryArchiveFileEntry.FindByParent(Connection.Db, SourceCollection.AsLibraryFile().Id)
+                .Select(entry => entry.AsLibraryFile().Hash);
+            await ServiceProvider.GetRequiredService<IDownloadReExtractor>()
+                .RestoreMissingAsync(FileStore, children, context.CancellationToken);
 
             // If collection.json is still missing after restoring, the package can't be parsed;
             // fall through to a fresh re-download like a fully-missing package.

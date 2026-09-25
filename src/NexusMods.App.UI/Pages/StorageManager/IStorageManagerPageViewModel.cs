@@ -14,7 +14,7 @@ public interface IStorageManagerPageViewModel : IPageViewModelInterface
     /// <summary>Human-readable total size of the downloads folder.</summary>
     string DownloadsFolderSizeText { get; }
 
-    /// <summary>Human-readable total size of the CyberpunkBackups folder.</summary>
+    /// <summary>Human-readable total size of the Backups folder (Deep Clean snapshots).</summary>
     string CyberpunkBackupsSizeText { get; }
 
     /// <summary>True while GC or Deep Clean is running.</summary>
@@ -28,6 +28,9 @@ public interface IStorageManagerPageViewModel : IPageViewModelInterface
 
     /// <summary>Deletes the original downloaded files. Requires separate explicit confirmation.</summary>
     ReactiveCommand<Unit> DeleteDownloadsCommand { get; }
+
+    /// <summary>Deletes the game's Proton prefix (steamapps/compatdata/1091500). Requires separate explicit confirmation.</summary>
+    ReactiveCommand<Unit> DeleteProtonPrefixCommand { get; }
 
     /// <summary>Refreshes the storage stats from disk.</summary>
     ReactiveCommand<Unit> RefreshCommand { get; }

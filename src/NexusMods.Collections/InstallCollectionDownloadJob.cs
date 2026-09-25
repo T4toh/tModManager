@@ -138,30 +138,19 @@ public class InstallCollectionDownloadJob : IJobDefinitionWithStart<InstallColle
 
         var libraryFile = GetLibraryFile(Item, Connection.Db);
 
-        // Validate the archive physically exists on disk — the DB may say "downloaded"
-        // but the store entry could have been deleted (garbage collection, manual cleanup, etc.)
-        // For archives, check ALL children since they may be spread across different downloads.
-        var archiveMissing = false;
-        if (libraryFile.TryGetAsLibraryArchive(out var checkArchive))
+        // The DB may say "downloaded" while store entries are gone (garbage collection, Deep Clean,
+        // manual cleanup). Restore them from the original download before giving up. For archives,
+        // check ALL children since they may be spread across different downloads.
+        var needed = libraryFile.TryGetAsLibraryArchive(out var checkArchive)
+            ? checkArchive.Children.Select(child => child.AsLibraryFile().Hash).ToArray()
+            : [libraryFile.Hash];
+        var reExtractor = ServiceProvider.GetRequiredService<IDownloadReExtractor>();
+        var (missing, restored) = await reExtractor.RestoreMissingAsync(FileStore, needed, context.CancellationToken);
+        if (missing > 0)
+            Logger.LogInformation("[INSTALL] Faltaban {Missing} archivos de '{Name}' en el store; {Restored} reextraídos desde Descargas", missing, Item.Name, restored);
+        if (restored < missing)
         {
-            foreach (var child in checkArchive.Children)
-            {
-                if (!await FileStore.HaveFile(child.AsLibraryFile().Hash))
-                {
-                    Logger.LogWarning("[INSTALL] Archive child '{Path}' (hash={Hash}) missing from file store for '{Name}'",
-                        child.Path, child.AsLibraryFile().Hash, Item.Name);
-                    archiveMissing = true;
-                    break;
-                }
-            }
-        }
-        else if (!await FileStore.HaveFile(libraryFile.Hash))
-        {
-            archiveMissing = true;
-        }
-        if (archiveMissing)
-        {
-            Logger.LogWarning("[INSTALL] Archive for '{Name}' (index={Index}) is missing from file store — needs re-download",
+            Logger.LogWarning("[INSTALL] Archive for '{Name}' (index={Index}) is missing from file store and its download — needs re-download",
                 Item.Name, Item.ArrayIndex);
             throw new InvalidOperationException($"Item '{Item.Name}' (index={Item.ArrayIndex}) has a broken archive. Please re-download it.");
         }
@@ -488,12 +477,20 @@ public class InstallCollectionDownloadJob : IJobDefinitionWithStart<InstallColle
         {
             var hash = child.AsLibraryFile().Hash;
             if (!restored.Contains(hash)) continue;
-            await using var stream = await FileStore.GetFileStream(hash);
-            var md5 = await Md5Hasher.HashAsync(stream);
-            var mapping = new HashMapping { Hash = hash, Size = child.AsLibraryFile().Size };
-            hashes[md5] = mapping;
-            pathIndex[child.Path] = mapping;
-            recovered++;
+            try
+            {
+                await using var stream = await FileStore.GetFileStream(hash);
+                var md5 = await Md5Hasher.HashAsync(stream);
+                var mapping = new HashMapping { Hash = hash, Size = child.AsLibraryFile().Size };
+                hashes[md5] = mapping;
+                pathIndex[child.Path] = mapping;
+                recovered++;
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                // One unreadable child must not fail the whole mod; it stays counted as failed.
+                Logger.LogWarning(ex, "[REPLICATED] Re-extracted file '{Path}' (hash={Hash}) still can't be read", child.Path, hash);
+            }
         }
         return recovered;
     }

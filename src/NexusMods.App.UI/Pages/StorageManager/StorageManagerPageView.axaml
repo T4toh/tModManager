@@ -97,11 +97,11 @@
                         </StackPanel>
                     </Border>
 
-                    <!-- Cyberpunk Backups -->
+                    <!-- Backups -->
                     <Border Classes="Card" Padding="16">
                         <StackPanel Spacing="8">
                             <TextBlock Theme="{StaticResource HeadingXSSemiTheme}"
-                                       Text="Cyberpunk Backups" />
+                                       Text="Backups" />
                             <TextBlock Theme="{StaticResource BodyLGNormalTheme}"
                                        Foreground="{StaticResource NeutralSubduedBrush}"
                                        Text="Timestamped snapshots of mod files moved out of the game folder by the Deep Clean tool. Safe to delete once you no longer need to recover them." />
@@ -132,7 +132,7 @@
                             <TextBlock Theme="{StaticResource BodyLGNormalTheme}"
                                        Foreground="{StaticResource NeutralSubduedBrush}"
                                        TextWrapping="Wrap"
-                                       Text="Removes all game file backups from the database and all CyberpunkBackups snapshots, then runs garbage collection. The Downloads folder is not touched. You will no longer be able to roll back mods. This action cannot be undone." />
+                                       Text="Removes all game file backups from the database and the Backups snapshots (Super Clean keeps the one it creates), then runs garbage collection. The Downloads folder is not touched. You will no longer be able to roll back mods. This action cannot be undone." />
                             <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,8,0,0">
                                 <Button x:Name="DeepCleanButton"
                                         Classes="Danger"
@@ -140,6 +140,9 @@
                                 <Button x:Name="DeleteDownloadsButton"
                                         Classes="Danger"
                                         Content="Borrar descargas" />
+                                <Button x:Name="DeleteProtonPrefixButton"
+                                        Classes="Danger"
+                                        Content="Borrar prefix de Proton" />
                             </StackPanel>
                         </StackPanel>
                     </Border>

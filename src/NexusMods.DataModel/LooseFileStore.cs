@@ -180,6 +180,8 @@ public sealed class LooseFileStore : IFileStore
     /// </summary>
     private IEnumerable<AbsolutePath> EnumerateOwnedFiles()
     {
+        // The root may have been deleted by hand while the app runs: nothing owned, nothing to do.
+        if (!_root.DirectoryExists()) yield break;
         foreach (var dir in _root.EnumerateDirectories())
         {
             var dirName = dir.FileName.ToString();
@@ -243,6 +245,7 @@ public sealed class LooseFileStore : IFileStore
         foreach (var file in owned)
             file.Delete();
 
+        if (!_root.DirectoryExists()) return owned.Length;
         foreach (var dir in _root.EnumerateDirectories())
         {
             var dirName = dir.FileName.ToString();

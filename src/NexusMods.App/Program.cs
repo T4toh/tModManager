@@ -18,6 +18,7 @@ using NexusMods.App.UI.Settings;
 using NexusMods.Backend;
 using NexusMods.CrossPlatform;
 using NexusMods.DataModel;
+using NexusMods.DataModel.LegacyData;
 using NexusMods.DataModel.SchemaVersions;
 using NexusMods.Paths;
 using NexusMods.ProxyConsole;
@@ -84,18 +85,42 @@ public class Program
         _logger = services.GetRequiredService<ILogger<Program>>();
 
         // NOTE(erri120): has to come before host startup
-        CleanupUnresponsiveProcesses(services).Wait(timeout: TimeSpan.FromSeconds(10));
+        // Also tells us whether another main process is possibly still alive (as opposed to a
+        // confirmed-stale one, which gets killed here): if so, resolving the datom store below
+        // (which would run a pending legacy-cleanup reset) must be skipped, or we'd delete the .nx
+        // archives and the RocksDB directory out from under that other, still-running process.
+        var cleanupTask = CleanupUnresponsiveProcesses(services);
+        cleanupTask.Wait(timeout: TimeSpan.FromSeconds(10));
+        // Fail closed: only a check that *positively* ran to completion and found no responsive
+        // process may conclude "no other main". A fault or a timeout on the probe itself must be
+        // treated the same as "yes, one might be alive" — the whole point of this check is to avoid
+        // touching a database another process might still own, so an inconclusive result can't be
+        // read as a green light.
+        var anotherMainIsAlive = cleanupTask.Status != TaskStatus.RanToCompletion || cleanupTask.Result;
+        if (cleanupTask.Status != TaskStatus.RanToCompletion)
+            _logger.LogWarning("No se pudo determinar si otra instancia principal sigue corriendo (la comprobación no terminó); se asume que sí por seguridad");
 
         // Okay to do wait here, as we are in the main process thread.
         host.StartAsync().Wait(timeout: TimeSpan.FromMinutes(5));
 
-        if (startupMode.RunAsMain)
+        // Whether this process actually acts as the main process for the rest of startup. False
+        // whenever another main process might still be alive — even though startupMode.RunAsMain
+        // says we should try — so this process never runs migrations or a pending reset, never
+        // starts the CLI server (never claims the single-instance lock), and instead falls through
+        // to the exact same "act as a client" path a genuine second instance takes further down:
+        // forward the command line to whichever process is really main, and exit.
+        var actAsMain = startupMode.RunAsMain && !anotherMainIsAlive;
+
+        if (startupMode.RunAsMain && anotherMainIsAlive)
+        {
+            _logger.LogWarning("Otra instancia principal ya podría estar corriendo; este proceso no migra ni toca la base de datos y en su lugar reenvía los argumentos como una segunda instancia");
+        }
+
+        if (actAsMain)
         {
             var dataModelSettings = services.GetRequiredService<ISettingsManager>().Get<DataModelSettings>();
             var fileSystem = services.GetRequiredService<IFileSystem>();
             var osInterop = services.GetRequiredService<IOSInterop>();
-
-            var modelExists = dataModelSettings.MnemonicDBPath.ToPath(fileSystem).DirectoryExists();
 
             _ = Task.Run(async () =>
             {
@@ -112,8 +137,22 @@ public class Program
                 }
             });
 
-            // This will startup the MnemonicDb connection
+            // A pending legacy-cleanup reset wipes the DB directory (see AddDataModel's
+            // DatomStoreSettings factory, triggered below by resolving MigrationService) before it's
+            // ever opened — but that factory also swallows the reset entirely if its own safety
+            // guard refuses it (Services.cs), in which case the marker survives and the directory is
+            // untouched. Snapshot both signals before and after so InitialSetup only ever runs
+            // against a database a reset actually emptied, never one where the reset was requested
+            // but refused (that combination would make InitialSetup throw: "already has a schema
+            // version").
+            var dirExistedBeforeReset = dataModelSettings.MnemonicDBPath.ToPath(fileSystem).DirectoryExists();
+            var resetWasPendingBefore = LegacyDataDetector.IsResetPending(fileSystem);
+
+            // This will startup the MnemonicDb connection (and attempt the reset, if any, first)
             var migration = services.GetRequiredService<MigrationService>();
+
+            var resetWasPendingAfter = LegacyDataDetector.IsResetPending(fileSystem);
+            var modelExists = LegacyDataDetector.ModelExistsAfterReset(dirExistedBeforeReset, resetWasPendingBefore, resetWasPendingAfter);
             if (modelExists)
             {
                 // Run the migrations
@@ -124,12 +163,12 @@ public class Program
                 // Otherwise, perform the initial setup
                 migration.InitialSetup().Wait();
             }
+
+            // Start the CLI server (claims the single-instance lock) only once this process has
+            // actually run the migrate-or-reset block above.
+            var cliServer = services.GetService<CliServer>();
+            cliServer?.StartCliServerAsync().Wait(timeout: TimeSpan.FromSeconds(5));
         }
-
-
-        // Start the CLI server if we are the main process.
-        var cliServer = services.GetService<CliServer>();
-        cliServer?.StartCliServerAsync().Wait(timeout: TimeSpan.FromSeconds(5));
 
         LogMessages.RuntimeInformation(_logger, RuntimeInformation.OSDescription, RuntimeInformation.FrameworkDescription, ApplicationConstants.InstallationMethod);
         TaskScheduler.UnobservedTaskException += (sender, eventArgs) =>
@@ -146,10 +185,10 @@ public class Program
 
         try
         {
-            if (startupMode.RunAsMain)
+            if (actAsMain)
             {
                 LogMessages.StartingProcess(_logger, Environment.ProcessPath, Environment.ProcessId, args);
-                
+
                 if (startupMode.ShowUI)
                 {
                     var task = RunCliTaskAsMain(services, startupMode);
@@ -164,6 +203,10 @@ public class Program
             }
             else
             {
+                // Either a genuine second instance (startupMode.RunAsMain was false to begin with),
+                // or this process lost the "is another main alive" race above: both cases forward the
+                // command line to whichever process is really main (self-starting one if it turns out
+                // there isn't one after all — see RunCliTaskRemotely's NoMainProcessStarted handling).
                 var task = RunCliTaskRemotely(services, startupMode);
                 return task.Result;
             }
@@ -181,18 +224,23 @@ public class Program
         }
     }
 
-    private static async Task CleanupUnresponsiveProcesses(IServiceProvider serviceProvider)
+    /// <summary>
+    /// Kills a stale (unresponsive) previous main process, if any. Returns true if a previous
+    /// process is still alive and responsive — i.e. it wasn't stale, so it was left running — which
+    /// callers must treat as "a real other main process owns the database right now".
+    /// </summary>
+    private static async Task<bool> CleanupUnresponsiveProcesses(IServiceProvider serviceProvider)
     {
         // NOTE(erri120): this is a hack, see https://github.com/Nexus-Mods/NexusMods.App/issues/3633
         var logger = serviceProvider.GetRequiredService<ILogger<Program>>();
         var syncFile = serviceProvider.GetRequiredService<SyncFile>();
 
         var (process, port) = syncFile.GetSyncInfo();
-        if (process is null) return;
+        if (process is null) return false;
 
         var pid = process.Id;
         var canConnect = await CanConnectToProcess(logger, port, timeout: TimeSpan.FromSeconds(6), services: serviceProvider);
-        if (canConnect) return;
+        if (canConnect) return true;
 
         logger.LogWarning("Unable to connect to old process with PID `{PID}` on port `{Port}`, force closing process", pid, port);
 
@@ -204,6 +252,8 @@ public class Program
         {
             logger.LogWarning(e, "Exception killing old process `{PID}`", pid);
         }
+
+        return false;
     }
 
     private static async Task<bool> CanConnectToProcess(ILogger logger, int port, TimeSpan timeout, IServiceProvider services)

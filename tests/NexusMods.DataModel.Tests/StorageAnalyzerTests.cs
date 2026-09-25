@@ -33,4 +33,40 @@ public class StorageAnalyzerTests(ITestOutputHelper helper) : ACyberpunkIsolated
         subDir.DirectoryExists().Should().BeTrue();
         nestedFile.FileExists.Should().BeTrue();
     }
+
+    [Fact]
+    public async Task DeleteDownloadsAsync_SkipsInProgressPartials()
+    {
+        var storageAnalyzer = ServiceProvider.GetRequiredService<IStorageAnalyzer>();
+        var downloads = ServiceProvider.GetRequiredService<ISettingsManager>().Get<DownloadsSettings>().Folder.ToPath(FileSystem);
+        downloads.CreateDirectory();
+        var partial = downloads.Combine($"mod.zip.tmp-{Guid.NewGuid():N}");
+        await File.WriteAllTextAsync(partial.ToString(), "half written");
+
+        await storageAnalyzer.DeleteDownloadsAsync();
+
+        partial.FileExists.Should().BeTrue();
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task DeletePhysicalFilesAsync_KeepNewest_KeepsOnlyTheLatestSnapshot(bool keepNewest)
+    {
+        var analyzer = (StorageAnalyzer)ServiceProvider.GetRequiredService<IStorageAnalyzer>();
+        var backups = TemporaryFileManager.CreateFolder().Path;
+        analyzer.BackupsFolderProvider = () => backups;
+        string[] names = ["20260101_000000", "20260103_000000", "20260102_000000"];
+        foreach (var name in names)
+        {
+            backups.Combine(name).CreateDirectory();
+            await File.WriteAllTextAsync(backups.Combine(name).Combine("mod.archive").ToString(), name);
+        }
+
+        await analyzer.DeletePhysicalFilesAsync(keepNewest);
+
+        backups.EnumerateDirectories(recursive: false).Select(d => d.FileName.ToString())
+            .Should().BeEquivalentTo(keepNewest ? ["20260103_000000"] : Array.Empty<string>());
+        if (keepNewest) backups.Combine("20260103_000000").Combine("mod.archive").FileExists.Should().BeTrue();
+    }
 }

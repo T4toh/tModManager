@@ -1,6 +1,7 @@
 using System.IO.Compression;
 using FluentAssertions;
 using Microsoft.Extensions.DependencyInjection;
+using NexusMods.Abstractions.Loadouts;
 using NexusMods.Games.TestFramework;
 using NexusMods.Paths;
 using NexusMods.Sdk.FileStore;
@@ -72,5 +73,35 @@ public class ReExtractOnApplyTests(ITestOutputHelper helper) : ACyberpunkIsolate
         gamePath.FileExists.Should().BeTrue();
         foreach (var h in hashes)
             (await FileStore.HaveFile(h)).Should().BeFalse("the file is already deployed on disk and doesn't need its store copy restored");
+    }
+
+    [Fact]
+    public async Task InstallItem_AfterStoreWiped_ReExtractsBeforeInstallers()
+    {
+        var downloads = ServiceProvider.GetRequiredService<ISettingsManager>().Get<DownloadsSettings>().Folder.ToPath(FileSystem);
+        downloads.CreateDirectory();
+        var zip = downloads.Combine("redmod.zip");
+        await using (var fs = zip.Create())
+        using (var archive = new ZipArchive(fs, ZipArchiveMode.Create))
+        {
+            await using (var w = new StreamWriter(archive.CreateEntry("MyMod/info.json").Open()))
+                await w.WriteAsync("""{"name":"MyMod","version":"1.0"}""");
+            await using (var w = new StreamWriter(archive.CreateEntry("MyMod/archives/test.archive").Open()))
+                await w.WriteAsync("contenido redmod");
+        }
+
+        var loadout = await CreateLoadout();
+        var local = await LibraryService.AddLocalFile(zip);
+        var hashes = LibraryArchiveFileEntry.FindByParent(Connection.Db, local.AsLibraryFile().Id).Select(e => e.AsLibraryFile().Hash).ToArray();
+        foreach (var h in hashes) ((LooseFileStore)FileStore).PathFor(h).Delete();
+
+        // The REDmod installer reads info.json from the store: without the restore it rejects the
+        // archive and a generic installer picks it up with the wrong layout.
+        var result = await LoadoutManager.InstallItem(local.AsLibraryFile().AsLibraryItem(), loadout);
+
+        foreach (var h in hashes) (await FileStore.HaveFile(h)).Should().BeTrue();
+        result.LoadoutItemGroup!.Value.Children
+            .Select(c => ((GamePath)c.ToLoadoutItemWithTargetPath().TargetPath).Path.ToString())
+            .Should().Contain("mods/MyMod/info.json");
     }
 }
