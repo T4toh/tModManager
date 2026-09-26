@@ -12,12 +12,6 @@ public partial class WelcomeOverlayView : ReactiveUserControl<IWelcomeOverlayVie
 
         this.WhenActivated(disposables =>
         {
-            this.BindCommand(ViewModel, vm => vm.CommandOpenDiscord, view => view.ButtonOpenDiscord)
-                .AddTo(disposables);
-
-            this.BindCommand(ViewModel, vm => vm.CommandOpenForum, view => view.ButtonOpenForum)
-                .AddTo(disposables);
-
             this.BindCommand(ViewModel, vm => vm.CommandOpenGitHub, view => view.ButtonOpenGitHub)
                 .AddTo(disposables);
 
@@ -30,15 +24,12 @@ public partial class WelcomeOverlayView : ReactiveUserControl<IWelcomeOverlayVie
             this.BindCommand(ViewModel, vm => vm.CommandClose, view => view.ButtonClose)
                 .AddTo(disposables);
 
-            this.BindCommand(ViewModel, vm => vm.CommandOpenPrivacyPolicy, view => view.ButtonOpenPrivacyPolicy)
-                .AddTo(disposables);
-
             this.WhenAnyValue(view => view.ViewModel!.IsLoggedIn.Value)
                 .Subscribe(isLoggedIn =>
                 {
                     ButtonLogIn.IsVisible = !isLoggedIn;
                     ButtonLogOut.IsVisible = isLoggedIn;
-                    ButtonClose.Text = isLoggedIn ? "Close" : "Guest";
+                    ButtonClose.Text = isLoggedIn ? "Cerrar" : "Seguir sin cuenta";
                 })
                 .AddTo(disposables);
         });
