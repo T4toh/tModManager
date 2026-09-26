@@ -86,10 +86,8 @@ public class Cyberpunk2077Game : IGame, IGameData<Cyberpunk2077Game>
             //     LocationId.Saves,
             //     fileSystem.GetKnownPath(KnownPath.HomeDirectory).Combine("Saved Games/CD Projekt Red/Cyberpunk 2077")
             // },
-            {
-                LocationId.AppData,
-                fileSystem.GetKnownPath(KnownPath.LocalApplicationDataDirectory).Combine("CD Projekt Red/Cyberpunk 2077")
-            }
+            // No AppData location: on Linux LocalApplicationDataDirectory is the native ~/.local/share, not the
+            // Proton prefix, so it managed (and on unmanage/clean could delete) an unrelated folder of the user's
         }.ToImmutableDictionary();
     }
 

@@ -30,4 +30,40 @@ public class DataDirectoryMigrationTests
             if (basePath.DirectoryExists()) basePath.DeleteDirectory(recursive: true);
         }
     }
+
+    [Test]
+    public async Task CopyUpstreamDataOnce_CopiesConfigsAndHashesWithoutUpstreamPaths()
+    {
+        var basePath = FileSystem.Shared.GetKnownPath(KnownPath.TempDirectory).Combine($"tModManager-upstream-{Guid.NewGuid()}");
+        var upstream = basePath.Combine(ApplicationConstants.UpstreamDirectoryName);
+        var ours = basePath.Combine(ApplicationConstants.DataDirectoryName);
+        try
+        {
+            upstream.Combine("Configs").CreateDirectory();
+            upstream.Combine("FileHashesDatabase/db").CreateDirectory();
+            File.WriteAllText(upstream.Combine("Configs/Downloads.json").ToString(), """{"Folder":"tModManager/Downloads"}""");
+            File.WriteAllText(upstream.Combine("Configs/Logging.json").ToString(), """{"File":"NexusMods.App/Logs/x.log"}""");
+            File.WriteAllText(upstream.Combine("Configs/Cli.json").ToString(), """{"SyncFile":"/run/user/1000/NexusMods.App-sync_file.sync"}""");
+            File.WriteAllText(upstream.Combine("FileHashesDatabase/db/data").ToString(), "hashes");
+
+            DataDirectoryMigration.CopyUpstreamDataOnce(basePath);
+
+            await Assert.That(ours.Combine("Configs/Downloads.json").FileExists).IsTrue();
+            await Assert.That(ours.Combine("Configs/Logging.json").FileExists).IsFalse();
+            await Assert.That(ours.Combine("Configs/Cli.json").FileExists).IsFalse();
+            await Assert.That(Directory.EnumerateDirectories(ours.ToString(), "*.tmp-*")).IsEmpty();
+            await Assert.That(File.ReadAllText(ours.Combine("FileHashesDatabase/db/data").ToString())).IsEqualTo("hashes");
+            // Copied, not moved: the official app keeps its folder
+            await Assert.That(upstream.Combine("Configs/Logging.json").FileExists).IsTrue();
+
+            // Second run never overwrites what tModManager has since written
+            File.WriteAllText(ours.Combine("Configs/Downloads.json").ToString(), "changed");
+            DataDirectoryMigration.CopyUpstreamDataOnce(basePath);
+            await Assert.That(File.ReadAllText(ours.Combine("Configs/Downloads.json").ToString())).IsEqualTo("changed");
+        }
+        finally
+        {
+            if (basePath.DirectoryExists()) Directory.Delete(basePath.ToString(), recursive: true);
+        }
+    }
 }

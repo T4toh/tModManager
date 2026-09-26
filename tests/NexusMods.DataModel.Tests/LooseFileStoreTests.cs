@@ -22,7 +22,7 @@ public class LooseFileStoreTests : IDisposable
         _store = new LooseFileStore(NullLogger<LooseFileStore>.Instance, _root.Combine("store"));
     }
 
-    public void Dispose() { if (_root.DirectoryExists()) _root.DeleteDirectory(true); }
+    public void Dispose() { if (_root.DirectoryExists()) _root.DeleteDirectoryNoFollow(); }
 
     private AbsolutePath StoreRoot => _root.Combine("store");
 
@@ -248,5 +248,54 @@ public class LooseFileStoreTests : IDisposable
         var e = Entry("despues");
         await _store.BackupFiles([e]);
         (await _store.Load(e.Hash)).Should().Equal(Encoding.UTF8.GetBytes("despues"));
+    }
+
+    [Fact]
+    public async Task DeleteAll_OnlyTouchesTopLevelOwnedFiles_NeverThroughSymlinks()
+    {
+        // Hash-named files the store does not own: behind a symlinked folder, behind a symlinked two-hex folder,
+        // and nested one level deeper than the store layout. All must survive.
+        var outside = _root.Combine("outside");
+        var behindLink = outside.Combine("AB/AB0123456789ABCD");
+        var behindHexLink = outside.Combine("hex/CD0123456789ABCD");
+        var nested = StoreRoot.Combine("EF/sub/EF0123456789ABCD");
+        foreach (var file in new[] { behindLink, behindHexLink, nested })
+        {
+            file.Parent.CreateDirectory();
+            await file.WriteAllTextAsync("not the store's");
+        }
+        StoreRoot.CreateDirectory();
+        File.CreateSymbolicLink(StoreRoot.Combine("linked").ToString(), outside.ToString());
+        File.CreateSymbolicLink(StoreRoot.Combine("CD").ToString(), outside.Combine("hex").ToString());
+
+        var owned = Entry("owned");
+        await _store.BackupFiles([owned]);
+
+        _store.DeleteAll();
+        _store.DeleteAllExcept(new HashSet<Hash>());
+
+        (await _store.HaveFile(owned.Hash)).Should().BeFalse();
+        behindLink.FileExists.Should().BeTrue();
+        behindHexLink.FileExists.Should().BeTrue();
+        nested.FileExists.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task ExtractFiles_SymlinkAtDestination_IsReplacedNotWrittenThrough()
+    {
+        var e = Entry("mod");
+        await _store.BackupFiles([e]);
+        var target = _root.Combine("outside/user-file.txt");
+        target.Parent.CreateDirectory();
+        await target.WriteAllTextAsync("user data");
+        var dest = _out.Combine("link.txt");
+        dest.Parent.CreateDirectory();
+        File.CreateSymbolicLink(dest.ToString(), target.ToString());
+
+        await _store.ExtractFiles([(e.Hash, dest)]);
+
+        (await target.ReadAllTextAsync()).Should().Be("user data");
+        new FileInfo(dest.ToString()).LinkTarget.Should().BeNull();
+        (await dest.ReadAllTextAsync()).Should().Be("mod");
     }
 }

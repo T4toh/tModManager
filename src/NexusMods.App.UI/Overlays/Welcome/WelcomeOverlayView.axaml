@@ -13,14 +13,6 @@
     
     <!-- Design view doesn't refresh the Height when the Expander is open like it does when built -->
     
-    <reactive:ReactiveUserControl.Styles>
-        <Style Selector="Expander#PrivacyPolicyExpander">
-            <Style Selector="^ /template/ ToggleButton#ExpanderHeader">
-                <Setter Property="Background" Value="{StaticResource SurfaceTransparentBrush}" />
-            </Style>
-        </Style>
-    </reactive:ReactiveUserControl.Styles>
-
     <Border MinWidth="576" MaxWidth="576"
             Background="{StaticResource SurfaceLowBrush}"
             CornerRadius="8"
@@ -38,7 +30,7 @@
                     <TextBlock Theme="{StaticResource BodyXLBoldTheme}"
                                TextAlignment="Center"
                                Foreground="{StaticResource NeutralStrongBrush}"
-                               Text="Welcome to the"/>
+                               Text="Bienvenido a"/>
                     <TextBlock Theme="{StaticResource BodyXLBoldTheme}"
                                TextAlignment="Center"
                                Foreground="{StaticResource AppLinearGradientBrush}"
@@ -50,44 +42,24 @@
                            TextAlignment="Center"
                            TextWrapping="Wrap"
                            Foreground="{StaticResource NeutralSubduedBrush}"
-                           Text="Currently, the app supports Stardew Valley and Cyberpunk 2077 with more games coming soon. Share your feedback anytime using the 'Give Feedback' button in the footer." />
+                           Text="Gestor de mods para Cyberpunk 2077 en Steam (Linux). Iniciá sesión con tu cuenta de Nexus Mods para bajar mods y colecciones; sin cuenta podés instalar archivos que ya tengas." />
             </StackPanel>
 
-            <StackPanel Spacing="8">
+            <StackPanel Spacing="8" HorizontalAlignment="Center">
                 <TextBlock Theme="{StaticResource BodyMDNormalTheme}"
                            TextAlignment="Center"
                            TextWrapping="Wrap"
                            Foreground="{StaticResource NeutralSubduedBrush}"
-                           Text="Join the discussion on:" />
-
-                <StackPanel Orientation="Horizontal" Spacing="{StaticResource Spacing-4}" HorizontalAlignment="Center">
-                    <controls:StandardButton x:Name="ButtonOpenDiscord"
-                                             Text="Discord"
-                                             Type="Secondary"
-                                             Fill="None"
-                                             Size="Small"
-                                             ShowIcon="Left"
-                                             LeftIcon="{x:Static icons:IconValues.Discord}"
-                                             ToolTip.Tip="Open Discord" />
-
-                    <controls:StandardButton x:Name="ButtonOpenForum"
-                                             Text="Nexus Mods Forums"
-                                             Type="Secondary"
-                                             Fill="None"
-                                             Size="Small"
-                                             ShowIcon="Left"
-                                             LeftIcon="{x:Static icons:IconValues.Forum}"
-                                             ToolTip.Tip="Open Forums at Nexus Mods" />
-
-                    <controls:StandardButton x:Name="ButtonOpenGitHub"
-                                             Text="GitHub"
-                                             Type="Secondary"
-                                             Fill="None"
-                                             Size="Small"
-                                             ShowIcon="Left"
-                                             LeftIcon="{x:Static icons:IconValues.GitHub}"
-                                             ToolTip.Tip="Open GitHub" />
-                </StackPanel>
+                           Text="Código, errores y pedidos:" />
+                <controls:StandardButton x:Name="ButtonOpenGitHub"
+                                         Text="GitHub"
+                                         Type="Secondary"
+                                         Fill="None"
+                                         Size="Small"
+                                         ShowIcon="Left"
+                                         LeftIcon="{x:Static icons:IconValues.GitHub}"
+                                         HorizontalAlignment="Center"
+                                         ToolTip.Tip="Abrir el repositorio en GitHub" />
             </StackPanel>
 
 
@@ -96,37 +68,30 @@
                            TextAlignment="Center"
                            TextWrapping="Wrap"
                            Foreground="{StaticResource NeutralSubduedBrush}"
-                           Text="Enjoy the preview, and happy modding!" />
+                           Text="¡Buen modding!" />
                 <Border Height="1" Background="{StaticResource SurfaceMidBrush}" />
 
                 <StackPanel Orientation="Horizontal" HorizontalAlignment="Center"
                             Spacing="{StaticResource Spacing-4}">
 
                     <controls:StandardButton x:Name="ButtonClose"
-                                             Text="Close"
+                                             Text="Cerrar"
                                              Type="Tertiary"
                                              Fill="Weak"
                                              Size="Small" />
 
                     <controls:StandardButton x:Name="ButtonLogIn"
-                                             Text="Log in"
+                                             Text="Iniciar sesión"
                                              Type="Primary"
                                              Fill="Strong"
                                              Size="Small" />
 
                     <controls:StandardButton x:Name="ButtonLogOut"
-                                             Text="Log Out"
+                                             Text="Cerrar sesión"
                                              Type="Secondary"
                                              Fill="Strong"
                                              Size="Small" />
                 </StackPanel>
-                <controls:StandardButton x:Name="ButtonOpenPrivacyPolicy"
-                                                     Text="Privacy Policy"
-                                                     Type="Tertiary"
-                                                     Fill="Weak"
-                                                     Size="Small"
-                                                     LeftIcon="{x:Static icons:IconValues.OpenInNew}"
-                                                     ShowIcon="Left" />
             </StackPanel>
             
             

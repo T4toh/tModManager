@@ -84,13 +84,31 @@ public static class DownloadsFolder
     }
 
     /// <summary>
+    /// Appends the extension of the file <paramref name="downloadUri"/> points at when <paramref name="name"/>
+    /// doesn't already end with it. Nexus metadata names are display names ("Running Man", "Mod v1.2.1"), while the
+    /// CDN URL carries the real file name ("Running%20Man-26611-1-1-1757.zip").
+    /// </summary>
+    public static string WithExtensionFrom(string name, Uri downloadUri)
+    {
+        var lastSegment = downloadUri.AbsolutePath.Split('/').LastOrDefault(segment => segment.Length > 0);
+        if (lastSegment is null) return name;
+
+        var extension = Path.GetExtension(Uri.UnescapeDataString(lastSegment));
+        // A page URL (".../mods/107") has no extension; anything longer than ".xxxx" isn't one either
+        if (extension.Length is < 2 or > 5 || name.EndsWith(extension, StringComparison.OrdinalIgnoreCase)) return name;
+        return name + extension;
+    }
+
+    /// <summary>
     /// Keeps only the last path segment of an untrusted file name (from an HTTP header or Nexus
     /// metadata), so it can never place the file outside the destination folder via directory
     /// traversal. Falls back to a random name if nothing usable is left.
     /// </summary>
     public static string SanitizeFileName(string fileName)
     {
-        var name = Path.GetFileName(fileName);
+        // Path.GetFileName only splits on '/' on Linux, but NexusMods.Paths turns a backslash into '/' when the
+        // name is combined, so a backslash-separated "../../x" would place the file outside the folder.
+        var name = Path.GetFileName(fileName.Replace('\\', '/'));
         return string.IsNullOrEmpty(name) || name is "." or ".." ? $"download-{Guid.NewGuid():N}" : name;
     }
 }

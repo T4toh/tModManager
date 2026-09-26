@@ -104,12 +104,22 @@ internal class AddLibraryFileJob : IJobDefinitionWithStart<AddLibraryFileJob, Li
             ExtractionDirectories.Add(extractionFolder);
             await FileExtractor.ExtractAllAsync(filePath, extractionFolder, token: context.CancellationToken);
 
-            var extractedFiles = extractionFolder.Path.EnumerateFiles();
+            // Never enter a symlinked folder (an in-archive loop like `a -> .` would never finish)
+            var extractedFiles = SafePath.EnumerateFilesNoFollow(extractionFolder.Path);
 
             foreach (var extracted in extractedFiles)
             {
-                var subFile = await AnalyzeFile(context, extracted, isNestedFile: true);
+                // 7z extracts a name with backslashes as one literal file name and NexusMods.Paths reads them back as
+                // separators, so an entry named with backslash-separated ".." aliases a file outside the folder.
                 var path = extracted.RelativeTo(extractionFolder.Path);
+                if (SafePath.HasParentSegment(path) || !SafePath.IsStrictlyInside(extractionFolder.Path, extracted))
+                    throw new InvalidOperationException($"El archivo `{filePath.FileName}` tiene una entrada que apunta fuera de su carpeta: `{path}`");
+                // Hashing a link reads its target, which can be any file on disk (an older system 7z extracts
+                // escaping links); game mods never need symlinks
+                if (SafePath.IsSymlink(extracted))
+                    throw new InvalidOperationException($"El archivo `{filePath.FileName}` contiene un symlink (`{path}`); no se importa");
+
+                var subFile = await AnalyzeFile(context, extracted, isNestedFile: true);
                 _ = new LibraryArchiveFileEntry.New(Transaction, subFile.Id)
                 {
                     Path = path,

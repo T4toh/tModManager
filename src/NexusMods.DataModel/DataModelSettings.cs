@@ -54,6 +54,13 @@ public record DataModelSettings : ISettings
     }
 
     /// <summary>
+    /// True when <paramref name="directory"/> holds a RocksDB database (the MnemonicDB store). Recursive deletes of
+    /// the configured DB path check this first: the path comes from a settings file and could point anywhere.
+    /// </summary>
+    public static bool LooksLikeRocksDb(AbsolutePath directory) =>
+        directory.Combine("CURRENT").FileExists && directory.Combine("IDENTITY").FileExists;
+
+    /// <summary>
     /// Create default value.
     /// </summary>
     public static DataModelSettings CreateDefault(IServiceProvider serviceProvider)

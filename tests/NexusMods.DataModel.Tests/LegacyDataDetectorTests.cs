@@ -64,10 +64,11 @@ public class LegacyDataDetectorTests : IDisposable
         _root.Combine("AB").CreateDirectory();
         _root.Combine("AB/AB00000000000000").Create().Dispose();
 
-        // Create DB directory with a file (should be deleted)
+        // Create DB directory with RocksDB's marker files (should be deleted)
         var dbPath = _root.Combine("db");
         dbPath.CreateDirectory();
-        dbPath.Combine("data.rocksdb").Create().Dispose();
+        dbPath.Combine("CURRENT").Create().Dispose();
+        dbPath.Combine("IDENTITY").Create().Dispose();
 
         // Create marker at a temp location (test seam)
         var markerPath = _root.Combine("reset-marker");
@@ -94,6 +95,25 @@ public class LegacyDataDetectorTests : IDisposable
 
         // Marker should be deleted
         markerPath.FileExists.Should().BeFalse();
+    }
+
+    [Fact]
+    public void ResetIfRequested_DbPathThatIsNotADatabase_IsNotDeleted()
+    {
+        // The DB path comes from a settings file: pointed at e.g. ~/Documents it must never be wiped
+        _root.CreateDirectory();
+        var notADb = _root.Combine("Documents");
+        notADb.CreateDirectory();
+        notADb.Combine("thesis.odt").Create().Dispose();
+        _root.Combine("a.nx").Create().Dispose();
+        var markerPath = _root.Combine("reset-marker");
+        LegacyDataDetector.RequestResetOnStart(FileSystem.Shared, markerPath);
+
+        var act = () => LegacyDataDetector.ResetIfRequested(_root, notADb, FileSystem.Shared, markerPath, _root.Combine("data-root"));
+
+        act.Should().Throw<InvalidOperationException>();
+        notADb.Combine("thesis.odt").FileExists.Should().BeTrue();
+        _root.Combine("a.nx").FileExists.Should().BeTrue("nothing is deleted when the reset is refused");
     }
 
     [Fact]
@@ -350,5 +370,25 @@ public class LegacyDownloadsMoveTests(ITestOutputHelper helper) : ACyberpunkIsol
 
         prefix.DirectoryExists().Should().BeFalse();
         steamLibraryRoot.Combine("steamapps").DirectoryExists().Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task DeleteProtonPrefixAsync_DoesNotFollowSymlinksOutOfThePrefix()
+    {
+        // Every Wine prefix ships dosdevices/z: -> /. Following it deletes the user's disk.
+        var analyzer = (StorageAnalyzer)ServiceProvider.GetRequiredService<IStorageAnalyzer>();
+        var steamLibraryRoot = TemporaryFileManager.CreateFolder().Path;
+        var outside = TemporaryFileManager.CreateFolder().Path;
+        var canary = outside.Combine("sub/canary.txt");
+        canary.Parent.CreateDirectory();
+        await File.WriteAllTextAsync(canary.ToString(), "must survive");
+        var prefix = steamLibraryRoot.Combine("steamapps/compatdata/1091500");
+        prefix.Combine("pfx/dosdevices").CreateDirectory();
+        File.CreateSymbolicLink(prefix.Combine("pfx/dosdevices/z:").ToString(), outside.ToString());
+
+        await analyzer.DeleteProtonPrefixAsync(steamLibraryRoot);
+
+        prefix.DirectoryExists().Should().BeFalse();
+        canary.FileExists.Should().BeTrue();
     }
 }

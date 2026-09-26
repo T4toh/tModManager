@@ -30,6 +30,7 @@ using OneOf;
 using Reloaded.Memory.Extensions;
 using NexusMods.Sdk.Library;
 using NexusMods.Sdk.Hashes;
+using NexusMods.Sdk.IO;
 
 namespace NexusMods.Collections;
 
@@ -786,7 +787,8 @@ public class CollectionDownloader
         }
 
         var db = _connection.Db;
-        var files = downloadsFolder.EnumerateFiles().ToArray();
+        // Top level only (downloads are stored flat) and never through a symlinked folder or a backslash alias
+        var files = downloadsFolder.EnumerateFiles("*", recursive: false).Where(f => SafePath.IsStrictlyInside(downloadsFolder, f)).ToArray();
         _logger.LogInformation("Found {Count} files in Downloads folder", files.Length);
         
         foreach (var file in files)
@@ -847,7 +849,7 @@ public class CollectionDownloader
                                     if (!newPath.FileExists)
                                     {
                                         _logger.LogInformation("Renaming `{OldPath}` to `{NewPath}` (Detected extension: {Ext})", file, newPath, detectedExt);
-                                        file.FileSystem.MoveFile(file, newPath, true);
+                                        file.FileSystem.MoveFile(file, newPath, false);
                                         currentFile = newPath;
                                     }
                                 }

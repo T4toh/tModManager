@@ -131,7 +131,10 @@ public class StubbedFileHasherService : IFileHashesService
                 fileIds = _versionFiles[LocatorId.From("StubbedGameState.zip")];
         }
         
-        foreach (var fileId in fileIds!)
+        // Like the real service: an unknown locator ID has no files
+        if (fileIds is null) yield break;
+
+        foreach (var fileId in fileIds)
         {
             var file = PathHashRelation.Load(Current, fileId);
             yield return new GameFileRecord

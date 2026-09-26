@@ -7,6 +7,7 @@ using NexusMods.Abstractions.Library.Jobs;
 using NexusMods.Abstractions.NexusModsLibrary;
 using NexusMods.MnemonicDB.Abstractions;
 using NexusMods.Networking.HttpDownloader;
+using NexusMods.Networking.NexusWebApi;
 using NexusMods.Paths;
 using NexusMods.Sdk.FileExtractor;
 using NexusMods.Sdk.Jobs;
@@ -114,6 +115,11 @@ internal class AddDownloadJob : IJobDefinitionWithStart<AddDownloadJob, LibraryF
             }
         }
 
+        // A collection package has no Content-Disposition or metadata name; a stable name lets PlaceAsync reuse
+        // the file instead of keeping a "<guid>.tmp" copy per download
+        if (string.IsNullOrEmpty(filename) && DownloadJob.JobDefinition is NexusModsCollectionDownloadJob collectionJob)
+            filename = $"{collectionJob.Slug}-{collectionJob.Revision}";
+
         // 3. Fall back to extracting filename from HTTP URI
         if (string.IsNullOrEmpty(filename))
         {
@@ -144,6 +150,17 @@ internal class AddDownloadJob : IJobDefinitionWithStart<AddDownloadJob, LibraryF
 
         if (string.IsNullOrEmpty(filename))
             filename = tempFilePath.FileName;
+
+        // The metadata name is a display name without extension; the real one is in the download URI
+        var downloadUri = DownloadJob.JobDefinition switch
+        {
+            IHttpDownloadJob h => h.Uri,
+            INexusModsDownloadJob n => n.HttpDownloadJob.JobDefinition.Uri,
+            NexusModsCollectionDownloadJob c => c.DownloadJob?.JobDefinition.Uri,
+            _ => null,
+        };
+        if (downloadUri is not null)
+            filename = DownloadsFolder.WithExtensionFrom(filename, downloadUri);
 
         // Ensure we have an extension if the temp file has one, but AVOID .tmp
         var ext = tempFilePath.Extension;

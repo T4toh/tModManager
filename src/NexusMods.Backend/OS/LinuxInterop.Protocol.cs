@@ -11,17 +11,19 @@ internal partial class LinuxInterop
     private const string ApplicationId = ApplicationConstants.AppId;
     private const string DesktopFile = $"{ApplicationId}.desktop";
     private const string DesktopFileResourceName = $"NexusMods.Backend.{DesktopFile}";
+    private const string AppExecutableName = "tModManager";
     private const string ExecuteParameterPlaceholder = "${INSTALL_EXEC}";
     private const string TryExecuteParameterPlaceholder = "${INSTALL_TRYEXEC}";
 
     public async ValueTask RegisterUriSchemeHandler(string scheme, bool setAsDefaultHandler, CancellationToken cancellationToken)
     {
-        // Under the `dotnet` host (tests, `dotnet exec`, IDE runs) the process path is the host itself,
-        // so the desktop entry would end up as `Exec=/path/to/dotnet %u` and break the real handler.
+        // Only the app itself may own the handler. Test projects are executables too (NexusMods.UI.Tests), as is the
+        // `dotnet` host: registering from them points nxm:// (the Nexus login callback) at the wrong binary.
         _ = GetRunningExecutablePath(out var runningProcessPath);
-        if (Path.GetFileName(runningProcessPath) == "dotnet")
+        var isAppImage = Environment.GetEnvironmentVariable("APPIMAGE", EnvironmentVariableTarget.Process) is not null;
+        if (!isAppImage && Path.GetFileName(runningProcessPath) != AppExecutableName)
         {
-            _logger.LogWarning("Running under the dotnet host (`{Path}`), not registering the `{Scheme}` handler. Run the apphost binary or the AppImage instead", runningProcessPath, scheme);
+            _logger.LogWarning("Not running as the app (`{Path}`), not registering the `{Scheme}` handler. Run the apphost binary or the AppImage instead", runningProcessPath, scheme);
             return;
         }
 

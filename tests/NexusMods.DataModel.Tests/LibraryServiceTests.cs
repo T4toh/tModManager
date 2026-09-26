@@ -68,6 +68,29 @@ public class LibraryServiceTests : ACyberpunkIsolatedGameTest<LibraryServiceTest
     }
 
     [Fact]
+    public async Task ArchiveEntryEscapingViaBackslashes_IsRejected()
+    {
+        // 7z extracts an entry named "..\\..\\x" as one literal file name; NexusMods.Paths reads the backslashes back
+        // as separators, so without a check the import would hash (and store) a file outside the extraction folder.
+        var archivePath = FileSystem.GetKnownPath(KnownPath.CurrentDirectory).Combine("Resources").Combine("backslash-escape.7z");
+        archivePath.FileExists.Should().BeTrue();
+
+        var act = async () => await _libraryService.AddLocalFile(archivePath);
+        await act.Should().ThrowAsync<InvalidOperationException>().WithMessage("*fuera*");
+    }
+
+    [Fact]
+    public async Task ArchiveWithSymlink_IsRejected()
+    {
+        // Hashing a link reads its target; with an older system 7z that target can be anywhere on disk
+        var archivePath = FileSystem.GetKnownPath(KnownPath.CurrentDirectory).Combine("Resources").Combine("with-symlink.7z");
+        archivePath.FileExists.Should().BeTrue();
+
+        var act = async () => await _libraryService.AddLocalFile(archivePath);
+        await act.Should().ThrowAsync<InvalidOperationException>().WithMessage("*symlink*");
+    }
+
+    [Fact]
     public async Task Test_Issue3003()
     {
         const string fileName = "zip-with-spaces.zip";

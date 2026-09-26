@@ -12,6 +12,7 @@ using NexusMods.Sdk.Games;
 using NexusMods.Sdk.Jobs;
 using NexusMods.Sdk.Loadouts;
 using R3;
+using NexusMods.Sdk.IO;
 
 namespace NexusMods.Games.RedEngine.Cyberpunk2077;
 
@@ -99,8 +100,11 @@ public class CyberpunkDeepCleanTool : ITool
 
         var matcher = new Matcher();
         matcher.AddIncludePatterns(LooseFileGlobs);
-        var result = matcher.Execute(new DirectoryInfoWrapper(new DirectoryInfo(gameRoot.ToString())));
+        var root = gameRoot.ToString();
+        var result = matcher.Execute(new DirectoryInfoWrapper(new DirectoryInfo(root)));
         return result.Files
+            // Matcher descends into symlinked folders; a file reached through one lives outside the game folder
+            .Where(f => !SafePath.IsUnderSymlink(root, Path.Combine(root, f.Path)))
             .Select(f => RelativePath.FromUnsanitizedInput(f.Path))
             .Where(rel => !vanillaPaths.Contains(rel.ToString()))
             .OrderBy(rel => rel.ToString(), StringComparer.Ordinal)
@@ -143,9 +147,20 @@ public class CyberpunkDeepCleanTool : ITool
     public static AbsolutePath BackupsRoot(IFileSystem fs) =>
         fs.GetKnownPath(KnownPath.XDG_DATA_HOME).Combine(ApplicationConstants.DataDirectoryName).Combine("Backups");
 
-    private void MoveToBackup(AbsolutePath from, AbsolutePath to, ref bool backupCreated, AbsolutePath backupDir)
+    /// <summary>
+    /// Moves <paramref name="from"/> into the backup. Returns false only when the move failed (e.g. the game is on
+    /// another filesystem than the backups), so the caller can stop before forgetting mods that were not backed up.
+    /// </summary>
+    private bool MoveToBackup(AbsolutePath gameRoot, AbsolutePath from, AbsolutePath to, ref bool backupCreated, AbsolutePath backupDir)
     {
-        if (!from.DirectoryExists() && !from.FileExists) return;
+        if (!from.DirectoryExists() && !from.FileExists) return true;
+
+        // Under a symlinked folder (e.g. `bin` linked elsewhere) the path lives outside the game: leave it alone
+        if (SafePath.IsUnderSymlink(gameRoot.ToString(), from.ToString()))
+        {
+            _logger.LogWarning("Se omite {Path}: está dentro de una carpeta que es un symlink", from);
+            return true;
+        }
 
         if (!backupCreated)
         {
@@ -164,10 +179,12 @@ public class CyberpunkDeepCleanTool : ITool
                 System.IO.File.Move(from.ToString(), to.ToString());
 
             _logger.LogInformation("Moved {Path} to backup", from);
+            return true;
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to move {Path} to backup", from);
+            return false;
         }
     }
 
@@ -226,10 +243,11 @@ public class CyberpunkDeepCleanTool : ITool
         var backupDir = backupsRoot.Combine(RelativePath.FromUnsanitizedInput(timestamp));
         var backupCreated = false;
 
+        var failedMoves = 0;
         foreach (var relativePath in PathsToMove)
         {
             var rel = RelativePath.FromUnsanitizedInput(relativePath);
-            MoveToBackup(gamePath.Combine(rel), backupDir.Combine(rel), ref backupCreated, backupDir);
+            if (!MoveToBackup(gamePath, gamePath.Combine(rel), backupDir.Combine(rel), ref backupCreated, backupDir)) failedMoves++;
         }
 
         IReadOnlySet<GamePath> vanilla = new HashSet<GamePath>();
@@ -259,16 +277,29 @@ public class CyberpunkDeepCleanTool : ITool
         }
 
         foreach (var rel in FindLooseModFiles(gamePath, vanilla))
-            MoveToBackup(gamePath.Combine(rel), backupDir.Combine(rel), ref backupCreated, backupDir);
+        {
+            if (!MoveToBackup(gamePath, gamePath.Combine(rel), backupDir.Combine(rel), ref backupCreated, backupDir)) failedMoves++;
+        }
+
+        // Removing the mods from the database below would make the next apply delete the files that could not be
+        // backed up, and pruning could drop the only older backup. Stop here instead.
+        if (failedMoves > 0)
+            throw new InvalidOperationException($"No se pudieron mover {failedMoves} carpeta(s) o archivo(s) al backup (¿el juego está en otro disco?). Lo que sí se movió quedó en {backupDir}; no se borró nada y los mods siguen en la base, así que al aplicar se vuelven a poner. Revisá el log.");
 
         foreach (var relativePath in PathsToDelete)
         {
             var fullPath = gamePath.Combine(RelativePath.FromUnsanitizedInput(relativePath));
+            if (SafePath.IsUnderSymlink(gamePath.ToString(), fullPath.ToString()))
+            {
+                _logger.LogWarning("Se omite {Path}: está dentro de una carpeta que es un symlink", relativePath);
+                continue;
+            }
+
             try
             {
                 if (fullPath.DirectoryExists())
                 {
-                    fullPath.DeleteDirectory(true);
+                    fullPath.DeleteDirectoryNoFollow();
                     _logger.LogInformation("Deleted directory {Path}", relativePath);
                 }
                 else if (fullPath.FileExists)

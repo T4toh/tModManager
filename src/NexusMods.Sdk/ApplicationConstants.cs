@@ -39,6 +39,12 @@ public static class ApplicationConstants
     public const string LegacyDataDirectoryName = "NexusMods.App.Cyberpunk";
 
     /// <summary>
+    /// Directory name of the official NexusMods.App. tModManager used to keep its configs, hash database, temp
+    /// files and logs there, shared with the official app; they are copied out once on startup.
+    /// </summary>
+    public const string UpstreamDirectoryName = "NexusMods.App";
+
+    /// <summary>
     /// Whether the application is running in debug mode.
     /// </summary>
     public static readonly bool IsDebug;

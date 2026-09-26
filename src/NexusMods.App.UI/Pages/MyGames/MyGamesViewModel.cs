@@ -50,6 +50,7 @@ using NexusMods.UI.Sdk;
 using NexusMods.UI.Sdk.Dialog;
 using NexusMods.UI.Sdk.Dialog.Enums;
 using GameInstallMetadata = NexusMods.Sdk.Games.GameInstallMetadata;
+using NexusMods.Abstractions.Games.FileHashes;
 
 namespace NexusMods.App.UI.Pages.MyGames;
 
@@ -67,6 +68,7 @@ public class MyGamesViewModel : APageViewModel<IMyGamesViewModel>, IMyGamesViewM
     private readonly IServiceProvider _serviceProvider;
     private readonly ISynchronizerService _syncService;
     private readonly ILoadoutManager _loadoutManager;
+    private readonly IFileHashesService _fileHashesService;
     private readonly IGameRegistry _gameRegistry;
     private readonly IToolManager _toolManager;
     private readonly IWindowNotificationService _notificationService;
@@ -104,6 +106,7 @@ public class MyGamesViewModel : APageViewModel<IMyGamesViewModel>, IMyGamesViewM
         _overlayController = overlayController;
         _connection = conn;
         _loadoutManager = serviceProvider.GetRequiredService<ILoadoutManager>();
+        _fileHashesService = serviceProvider.GetRequiredService<IFileHashesService>();
         _gameRegistry = gameRegistry;
         _toolManager = toolManager;
         _logger = logger;
@@ -330,6 +333,7 @@ public class MyGamesViewModel : APageViewModel<IMyGamesViewModel>, IMyGamesViewM
                                 catch (Exception ex)
                                 {
                                     _logger.LogError(ex, "Error removing game");
+                                    _notificationService.ShowToast($"No se quitó el juego: {ex.Message}", ToastNotificationVariant.Failure);
                                 }
                                 finally
                                 {
@@ -458,7 +462,10 @@ public class MyGamesViewModel : APageViewModel<IMyGamesViewModel>, IMyGamesViewM
             }
             catch (Exception ex)
             {
-                _logger.LogWarning(ex, "UnManage file operation failed. Continuing with database removal.");
+                // Stop here: removing the DB records now would drop the backups of the original game files the
+                // mods overwrote (GameBackedUpFile), and GC would delete them, while the mods stay deployed
+                _logger.LogError(ex, "UnManage failed; the game is not removed so its backups are kept");
+                throw;
             }
         }
 
@@ -535,8 +542,9 @@ public class MyGamesViewModel : APageViewModel<IMyGamesViewModel>, IMyGamesViewM
         var changeEntries = await GetExternalChangesItems(loadout);
         vm.State = GameWidgetState.ManagedGame;
         
-        // Offer to clean them up
-        if (changeEntries.Length > 0)
+        // Offer to clean them up, only when the vanilla file list is known: without it the "external changes" are
+        // the original game files, and cleaning them deletes the game
+        if (changeEntries.Length > 0 && HasVanillaData(installation))
         {
             var (revert, doNothing, clean) = (ButtonDefinitionId.Cancel, ButtonDefinitionId.From("doNothing"), ButtonDefinitionId.Accept);
             var result = await ShowCleanGameFolderDialog(revert,
@@ -611,8 +619,14 @@ public class MyGamesViewModel : APageViewModel<IMyGamesViewModel>, IMyGamesViewM
         return (await _windowManager.ShowDialog(dialog, DialogWindowType.Modal)).ButtonId;
     }
     
+    private bool HasVanillaData(GameInstallation installation) =>
+        _fileHashesService.UnknownLocatorIds(installation.LocatorResult.Store, installation.LocatorResult.LocatorIds.Distinct().ToArray()).Length == 0;
+
     private async Task CleanGameFolder(GameInstallation installation, Loadout.ReadOnly loadout)
     {
+        if (!HasVanillaData(installation))
+            throw new InvalidOperationException("No hay lista de archivos originales para esta versión del juego; limpiar la carpeta borraría el juego");
+
         var db = _connection.Db;
         var tx = _connection.BeginTransaction();
         var changeEntries = await GetExternalChangesItems(loadout.Rebase()); 
