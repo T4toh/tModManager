@@ -281,36 +281,29 @@ public class CollectionDataProvider : ICollectionDataProvider
     /// </summary>
     private void AddDownloadProgressComponents(CompositeItemModel<EntityId> itemModel, EntityId fileMetadataId)
     {
-        DownloadInfo? captured = null;
-
-        var hasActiveDownload = _downloadsService.ActiveDownloads
+        // Each factory gets the download of the emission that added it. A shared `captured` variable raced: the
+        // component factories run on a later UI tick, and a download finishing in between left it null.
+        var activeDownload = _downloadsService.ActiveDownloads
             .Filter(d => d.FileMetadataId.Value == fileMetadataId)
-            .QueryWhenChanged(q =>
-            {
-                var match = q.Items.FirstOrDefault();
-                captured = match;
-                return match is not null;
-            })
-            .ToObservable()
-            .Prepend(() => false)
-            .ObserveOnUIThreadDispatcher();
+            .QueryWhenChanged(q => q.Items.FirstOrDefault() is { } download ? Optional.Some(download) : Optional<DownloadInfo>.None)
+            .StartWith(Optional<DownloadInfo>.None);
 
         itemModel.AddObservable(
             key: CollectionColumns.DownloadProgress.ComponentKey,
-            shouldAddObservable: hasActiveDownload,
-            componentFactory: () => new SharedProgressComponents.SizeProgressComponent(
-                initialDownloaded: captured!.DownloadedBytes.Value,
-                initialTotal: captured!.FileSize.Value,
-                downloadedObservable: captured!.DownloadedBytes.AsObservable(),
-                totalObservable: captured!.FileSize.AsObservable())
+            observable: activeDownload,
+            componentFactory: static (_, download) => new SharedProgressComponents.SizeProgressComponent(
+                initialDownloaded: download.DownloadedBytes.Value,
+                initialTotal: download.FileSize.Value,
+                downloadedObservable: download.DownloadedBytes.AsObservable(),
+                totalObservable: download.FileSize.AsObservable())
         );
 
         itemModel.AddObservable(
             key: CollectionColumns.DownloadSpeed.ComponentKey,
-            shouldAddObservable: hasActiveDownload,
-            componentFactory: () => new SharedProgressComponents.SpeedComponent(
-                initialTransferRate: captured!.TransferRate.Value,
-                transferRateObservable: captured!.TransferRate.AsObservable())
+            observable: activeDownload,
+            componentFactory: static (_, download) => new SharedProgressComponents.SpeedComponent(
+                initialTransferRate: download.TransferRate.Value,
+                transferRateObservable: download.TransferRate.AsObservable())
         );
     }
 }
