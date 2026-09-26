@@ -100,6 +100,8 @@ internal class SteamLocator : IGameLocator
                 StoreIdentifier = storeIdentifier.ToString(),
                 Store = Store,
                 Locator = this,
+                // Feeds the Wine prefix health check (DLL overrides, winetricks packages) and the prefix status panel
+                LinuxCompatabilityDataProvider = linuxCompatibilityDataProvider,
             };
         }
     }
