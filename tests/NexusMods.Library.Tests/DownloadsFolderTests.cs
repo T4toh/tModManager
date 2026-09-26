@@ -107,4 +107,16 @@ public class DownloadsFolderTests : IDisposable
         dest.Parent.Should().Be(folder);
         dest.FileName.ToString().Should().Be("evil.zip");
     }
+
+    [Theory]
+    [InlineData("Running Man", "https://files.nexus-cdn.com/3333/26611/Running%20Man-26611-1-1-1757.zip?md5=x", "Running Man.zip")]
+    [InlineData("Adam Finlay Hidden Gem Quest Recovery v1.2.1", "https://files.nexus-cdn.com/3333/1/Adam-1-1-2-1-17.7z", "Adam Finlay Hidden Gem Quest Recovery v1.2.1.7z")]
+    [InlineData("Mod.zip", "https://files.nexus-cdn.com/3333/1/Mod-1-1-0.zip", "Mod.zip")]
+    [InlineData("Mod.ZIP", "https://files.nexus-cdn.com/3333/1/Mod-1-1-0.zip", "Mod.ZIP")]
+    [InlineData("Mod", "https://www.nexusmods.com/cyberpunk2077/mods/107", "Mod")]
+    public void WithExtensionFrom_AddsTheDownloadUrisExtension(string name, string uri, string expected)
+    {
+        // Nexus metadata names are display names ("Running Man"); the real file name is in the CDN URL
+        DownloadsFolder.WithExtensionFrom(name, new Uri(uri)).Should().Be(expected);
+    }
 }

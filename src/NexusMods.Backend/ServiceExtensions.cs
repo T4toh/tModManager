@@ -120,6 +120,8 @@ public static class ServiceExtensions
         coll.AddSingleton<IFileExtractor, FileExtractor.FileExtractor>();
         coll.AddSingleton<IExtractor, SevenZipExtractor>();
         coll.AddSingleton<IExtractor, ManagedZipExtractor>();
+        // Download naming detects the archive type by magic bytes when neither the name nor the URL has an extension
+        coll.AddSingleton<ISignatureCheckerFactory, NexusMods.Backend.FileExtractor.FileSignatures.SignatureCheckerFactory>();
         coll.TryAddSingleton<TemporaryFileManager, TemporaryFileManagerEx>();
         return coll;
     }
