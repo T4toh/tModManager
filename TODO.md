@@ -4,7 +4,17 @@
 
 Mergeado: eliminación de `.nx` en 3 PRs (#42 store por hash + GC, #43 descargas propias, #45 asistente de limpieza + Deep Clean reforzado) y #44 (snapshot de RedMod). Sin CI: los workflows de GitHub se sacaron, **la verificación es local** (`./dev.sh` opción 4, un proyecto por vez). Nada de esto se probó todavía con la app abierta: solo build + tests.
 
-### Mañana: probar todo en esta PC (Linux, juego real)
+### Prueba real del 2026-09-25 (rama `fix/delete-no-follow-symlinks`)
+
+Hecho: asistente completo (Deep Clean, prefix de Proton borrado sin tocar nada afuera, verificación de Steam, reset), juego gestionado de cero, "Welcome to Night City" bajada (283 mods) e instalada, juego lanzado con RED4ext + 5 plugins y REDScript sin errores. En el camino se arreglaron: el handler `nxm://` que los tests reescribían (login roto), descargas sin extensión, carrera en la barra de progreso de la colección, y el health check del prefix que nunca corría para Steam (tras recrear el prefix faltaban `vcrun2022`/`d3dcompiler_47`: `protontricks 1091500 -q vcrun2022 d3dcompiler_47`).
+
+Falta de la lista de abajo: pasos 6-8 (borrar el store a mano y reaplicar, reinstalar la colección sin el store, Storage Manager).
+
+- [ ] **Duplicados en `Downloads/` de esta corrida:** 89 descargas nuevas sin extensión (`Running Man`) conviven con las viejas (`Running Man.zip`, mismo contenido). La biblioteca apunta a las nuevas. Limpiar: renombrar las nuevas con extensión (actualizando `LibraryFile.DownloadPath`) o borrar la vieja cuando el hash coincide
+- [ ] **El rescan MD5 no es automático** (solo el botón "Rescan downloads"): con el reset se bajó todo de nuevo aunque las descargas estaban. Correrlo solo antes de bajar una colección
+- [ ] **Avisar al borrar el prefix de Proton** que después hacen falta `vcrun2022` y `d3dcompiler_47` (o instalarlos con protontricks desde la app); ahora el health check lo detecta, pero hay que ir a buscarlo
+
+### Plan de prueba original
 
 Antes de arrancar: backup de saves (`steamapps/compatdata/1091500/pfx/drive_c/users/steamuser/Saved Games/CD Projekt Red/Cyberpunk 2077/`) y de `~/.local/share/tModManager/` (el asistente borra la base y los `.nx`).
 
