@@ -1,6 +1,6 @@
 # Mods locales de primera clase (pieza 3)
 
-Fecha: 2026-10-10 · Estado: diseño aprobado, pendiente de plan e implementación (rama `feat/local-mods-first-class`)
+Fecha: 2026-10-10 · Estado: implementado en la rama `feat/local-mods-first-class` (PR #NN), prueba en la app pendiente
 
 ## Objetivo
 
@@ -138,7 +138,7 @@ que `ManualAddGame`: `IXxxViewModel`, VM, `DesignViewModel`, vista AXAML, result
   rama Nexus-only que esta pieza toca; el resto del helper queda igual.
 - Fuente no se muestra en el grid (`NameComponent` no tiene tooltip); solo en el diálogo.
 
-Menú contextual de `LibraryView`: ítem **"Editar metadata"**, visible y habilitado solo cuando la
+Botón **"Editar"** en la barra de la biblioteca (la página no tiene menú contextual; todas las acciones por selección son botones), habilitado solo cuando la
 selección es exactamente un `LocalFile` (se resuelve en `LibraryViewModel` con `TryGetAsLocalFile`).
 Abre el mismo overlay con los valores actuales. Guardar escribe en una transacción solo lo que cambió;
 un campo vaciado se retracta. El nombre editado cambia `LibraryItem.Name`; los grupos ya instalados

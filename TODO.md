@@ -6,7 +6,7 @@ Todo lo mergeado hasta #55 está probado con el juego real. Última prueba compl
 
 **Próximo:**
 1. Bugs chicos que salieron de las pruebas (lista de abajo).
-2. Pieza 3 (mods locales de primera clase) o pieza 4 (`IIntrinsicFile`, primer uso: `UserSettings.json`) de "Piezas genéricas para el segundo juego". La pieza 2 (prefix) está hecha y probada (PR #73). Witcher 3 arranca cuando estén las piezas que necesita.
+2. Pieza 4 (`IIntrinsicFile`, primer uso: `UserSettings.json`) de "Piezas genéricas para el segundo juego". Las piezas 2 (prefix, PR #73) y 3 (mods locales, PR #NN) están hechas; la 3 queda por probar en la app con un archivo real. Witcher 3 arranca cuando estén las piezas que necesita.
 
 ### Pruebas reales
 
@@ -31,6 +31,7 @@ Mergeado o en PR, compilado en Mac pero sin correr en la PC con el juego (en Mac
 
 - [ ] **Ícono nuevo en el AppImage:** el de `./dev.sh` opción 10 usa el logo de capas (en la app ya probado 2026-10-07: barra lateral, ventana y barra de tareas)
 - [ ] **Metadata genérica en el AppImage:** el de `./dev.sh` opción 10 muestra el resumen nuevo en el lanzador (la bienvenida de la app ya probada 2026-10-07)
+- [ ] **Pieza 3 en la app** (PR #NN, solo tests): Biblioteca → "agregar desde archivo" con un zip de `~/Descargas` → aparece el diálogo prellenado (nombre, versión) → Enter → la fila muestra nombre y versión, la copia está en `tModManager/Downloads` y el original sigue en `~/Descargas`; con la fila seleccionada el botón "Editar" se habilita (con una de Nexus, no), cambiar la URL y "Ver página del mod" abre el navegador; arrancar con un `LocalFile` viejo sin `DownloadPath` y ver en el log "copiado a Descargas"
 
 ### Cómo probar con datos reales
 
@@ -113,7 +114,7 @@ Decidido 2026-09-24. Todas son GPL-3.0 como tModManager: se pueden vendorizar (c
 - **NexusMods.Paths** (`AbsolutePath`, `GamePath`, filesystem en memoria para tests): sin commits desde 2025-10. Congelada en **0.22.5**. Ojo: 0.22 trae su propio `ChunkedStream`/`IChunkedStreamSource` (este último en el namespace global); usamos el nuestro de `NexusMods.Sdk.IO`, calificado
 - **NexusMods.Hashing.xxHash3**: reemplazable por `XxHash3` de `System.IO.Hashing` (paquete oficial de Microsoft). No se hizo con la eliminación de `.nx`; ahora implica migrar los hashes guardados en la base y los nombres del store (`Archives/<2-hex>/<hash>`)
 - [x] **Eliminar `.nx` file store** (2026-09-24, PRs #42, #43, #45; probado con la app el 2026-09-25 y el 2026-10-03): reemplazado por `LooseFileStore` (content-addressed, `Archives/<2-hex>/<hash>`) + GC por barrido (`LiveHashes`). Descargas de primera clase en `tModManager/Downloads` con `LibraryFile.DownloadPath` y reextracción vía `IDownloadReExtractor`. Asistente de limpieza guiada para datos viejos (`.nx`, DB vieja), Deep Clean reforzado, borrado del prefix de Proton. Salen `NxFileStore`, los tres proyectos `GarbageCollection.*`, `NexusMods.Archives.Nx` y `NexusMods.Paths.Extensions.Nx`
-  - [ ] **Archivos locales fuera de Descargas:** lo que se agrega con `AddLocalFile` desde otra carpeta (`ManualDownloadRequiredOverlay.cs`, `LibraryViewModel.cs` "agregar desde archivo") no se copia a `tModManager/Downloads`, así que queda sin `DownloadPath`: no se puede reextraer si se borra del store ni es portable. Copiarlo (o moverlo) a Descargas antes de agregarlo
+  - [x] **Archivos locales fuera de Descargas:** lo que se agrega con `AddLocalFile` desde otra carpeta (`ManualDownloadRequiredOverlay.cs`, `LibraryViewModel.cs` "agregar desde archivo") no se copiaba a `tModManager/Downloads`, así que quedaba sin `DownloadPath`. Hecho (pieza 3, PR #NN): `AddLocalFileJob` copia a Descargas vía `DownloadsFolder.PlaceAsync` (nunca mueve), deduplica por hash, y `LocalFileBackfill` repara los viejos al arrancar
   - [ ] **Backups viejos de NexusMods.App:** `LegacyDataDetector.LegacyBackupsFolder` no se usa; `~/.local/share/NexusMods.App/CyberpunkBackups` nunca se cuenta ni se ofrece borrar. El asistente de limpieza podría mostrarlo y ofrecer borrarlo
 - Activas, no requieren acción: `FomodInstaller` (Nexus, commits 2026-09), `GameFinder` y `TransparentValueObjects` (erri120)
 
@@ -172,7 +173,7 @@ No se escribe código de Witcher 3 ni de KOTOR hasta que estas piezas existan. C
 |---|---|---|---|---|
 | 1 | Lista vanilla sin la base de Nexus (hecha, PR #53, probada 2026-10-06) (= "Lista de archivos originales" de la fase 2; la base local **no trae W3**) | después de cada parche la app no aplica | poder sacar mods | cualquier juego |
 | 2 | Ubicaciones dentro del prefix, con whitelist de archivos gestionados (hecha 2026-10-09, probada en el juego 2026-10-10; `LocationId.WinePrefix` + `IGameData.GetManagedFiles`; spec en `docs/superpowers/specs/2026-10-09-wine-prefix-location-design.md`) | `UserSettings.json` (saves y `modlist.txt` de REDmod cuando haga falta) | saves, `Documents/The Witcher 3/user.settings`, `mods.settings` | cualquier juego con prefix |
-| 3 | Mods locales de primera clase (= "Archivos locales fuera de Descargas") + metadata opcional de fuente/URL/versión | archivos agregados a mano | mods de mod.io/GitHub/foros | KOTOR |
+| 3 | Mods locales de primera clase (hecha 2026-10-10, PR #NN, prueba en la app pendiente; `LocalFile.Version/Source/PageUri`, copia a Descargas, diálogo al agregar y botón "Editar"; spec en `docs/superpowers/specs/2026-10-10-local-mods-first-class-design.md`) | archivos agregados a mano | mods de mod.io/GitHub/foros | KOTOR |
 | 4 | Primer uso real de `IIntrinsicFile` (archivo base + bloques por mod; `Ingest` de lo que cambia el juego) | `inputUserMappings.xml`, `options.json` | `mods.settings`, `dx12user.settings`/`input.settings`, XML de menús | `plugins.txt` |
 | 5 | Load order que se escribe a archivo (variedad de sort order + writer) | `modlist` de REDmod | `Priority` de `mods.settings` | Skyrim, orden de patchers KOTOR |
 | 6 | Requisitos del prefix como datos (= item de la fase 2) | `WinePrefixRequirementsEmitter` | `dinput8=n,b` para ASI, aviso DLSS bajo Proton | cualquier juego |
