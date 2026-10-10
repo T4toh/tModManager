@@ -41,9 +41,9 @@ public sealed class LibraryService : ILibraryService
         return AddDownloadJob.Create(_serviceProvider, downloadJob);
     }
 
-    public IJobTask<IAddLocalFile, LocalFile.ReadOnly> AddLocalFile(AbsolutePath absolutePath)
+    public IJobTask<IAddLocalFile, LocalFile.ReadOnly> AddLocalFile(AbsolutePath absolutePath, LocalFileMetadata? metadata = null)
     {
-        return AddLocalFileJob.Create(_serviceProvider, absolutePath);
+        return AddLocalFileJob.Create(_serviceProvider, absolutePath, metadata ?? LocalFileMetadata.Empty);
     }
 
     public IEnumerable<(Loadout.ReadOnly loadout, LibraryLinkedLoadoutItem.ReadOnly linkedItem)> LoadoutsWithLibraryItem(LibraryItem.ReadOnly libraryItem)

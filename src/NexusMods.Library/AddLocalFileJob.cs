@@ -1,4 +1,5 @@
 using Microsoft.Extensions.DependencyInjection;
+using NexusMods.Abstractions.Library;
 using NexusMods.Abstractions.Library.Jobs;
 using NexusMods.MnemonicDB.Abstractions;
 using NexusMods.Paths;
@@ -10,15 +11,17 @@ namespace NexusMods.Library;
 internal class AddLocalFileJob : IJobDefinitionWithStart<AddLocalFileJob, LocalFile.ReadOnly>, IAddLocalFile
 { 
     public required AbsolutePath FilePath { get; init; }
+    public required LocalFileMetadata Metadata { get; init; }
     internal required IConnection Connection { get; init; }
     internal required IServiceProvider ServiceProvider { get; set; }
     
-    public static IJobTask<AddLocalFileJob, LocalFile.ReadOnly> Create(IServiceProvider provider, AbsolutePath filePath)
+    public static IJobTask<AddLocalFileJob, LocalFile.ReadOnly> Create(IServiceProvider provider, AbsolutePath filePath, LocalFileMetadata metadata)
     {
         var monitor = provider.GetRequiredService<IJobMonitor>();
         var job = new AddLocalFileJob
         {
             FilePath = filePath,
+            Metadata = metadata,
             Connection = provider.GetRequiredService<IConnection>(),
             ServiceProvider = provider,
         };

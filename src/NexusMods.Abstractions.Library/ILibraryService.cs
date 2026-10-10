@@ -24,9 +24,10 @@ public interface ILibraryService
     IJobTask<IAddDownloadJob, LibraryFile.ReadOnly> AddDownload(IJobTask<IDownloadJob, AbsolutePath> downloadJob);
 
     /// <summary>
-    /// Adds a local file to the library.
+    /// Adds a local file to the library. A file outside the downloads folder is copied there first, so
+    /// it gets a <see cref="LibraryFile.DownloadPath"/> like a download. The user's file is never moved.
     /// </summary>
-    IJobTask<IAddLocalFile, LocalFile.ReadOnly> AddLocalFile(AbsolutePath absolutePath);
+    IJobTask<IAddLocalFile, LocalFile.ReadOnly> AddLocalFile(AbsolutePath absolutePath, LocalFileMetadata? metadata = null);
 
     /// <summary>
     /// Returns all loadouts that contain the given library item.
