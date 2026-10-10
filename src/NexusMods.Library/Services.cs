@@ -1,5 +1,6 @@
 using JetBrains.Annotations;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 using NexusMods.Abstractions.Downloads;
 using NexusMods.Abstractions.Library;
 using NexusMods.Sdk.FileStore;
@@ -20,6 +21,7 @@ public static class Services
         return serviceCollection
             .AddSingleton<ILibraryService, LibraryService>()
             .AddSingleton<IDownloadsService, DownloadsService>()
-            .AddSingleton<IDownloadReExtractor, DownloadReExtractor>();
+            .AddSingleton<IDownloadReExtractor, DownloadReExtractor>()
+            .AddSingleton<IHostedService, LocalFileBackfill>();
     }
 }
