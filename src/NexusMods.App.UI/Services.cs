@@ -229,6 +229,8 @@ public static class Services
             .AddView<ManualAddGameOverlayView, IManualAddGameOverlayViewModel>()
             .AddViewModel<ManualAddGameOverlayViewModel, IManualAddGameOverlayViewModel>()
 
+            .AddView<LocalFileMetadataOverlayView, ILocalFileMetadataOverlayViewModel>()
+
             .AddView<WelcomeOverlayView, IWelcomeOverlayViewModel>()
             .AddViewModel<WelcomeOverlayViewModel, IWelcomeOverlayViewModel>()
             .AddView<LegacyCleanupOverlayView, ILegacyCleanupOverlayViewModel>()
