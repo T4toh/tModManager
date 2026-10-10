@@ -1,3 +1,4 @@
+using System.IO.Compression;
 using System.Text;
 using DynamicData.Kernel;
 using FluentAssertions;
@@ -49,11 +50,12 @@ public class LibraryServiceTests : ACyberpunkIsolatedGameTest<LibraryServiceTest
     }
 
     [Fact]
-    public async Task AddingFileOutsideDownloadsFolder_HasNoDownloadPath()
+    public async Task AddingFileOutsideDownloadsFolder_IsCopiedAndGetsDownloadPath()
     {
         var src = FileSystem.GetKnownPath(KnownPath.CurrentDirectory).Combine("Resources").Combine("data_7zip_lzma2.7z");
         var local = await _libraryService.AddLocalFile(src);
-        LibraryFile.DownloadPath.TryGetValue(local.AsLibraryFile(), out _).Should().BeFalse();
+        LibraryFile.DownloadPath.Get(local.AsLibraryFile()).ToString().Should().Be("data_7zip_lzma2.7z");
+        src.FileExists.Should().BeTrue("the original is copied, never moved");
     }
 
     [Fact]
@@ -222,8 +224,9 @@ public class LibraryServiceTests : ACyberpunkIsolatedGameTest<LibraryServiceTest
 
         // Act
         // Replace both items across all loadouts
-        var newItem1 = (await _libraryService.AddLocalFile(firstArchivePath)).AsLibraryFile().AsLibraryItem(); // Same content but different LibraryItem instance
-        var newItem2 = (await _libraryService.AddLocalFile(secondArchivePath)).AsLibraryFile().AsLibraryItem();
+        // Different content on purpose: adding the same content twice now returns the existing item.
+        var newItem1 = (await _libraryService.AddLocalFile(VariantOf(firstArchivePath))).AsLibraryFile().AsLibraryItem();
+        var newItem2 = (await _libraryService.AddLocalFile(VariantOf(secondArchivePath))).AsLibraryFile().AsLibraryItem();
         var replacements = new List<(LibraryItem.ReadOnly oldItem, LibraryItem.ReadOnly newItem)>
         {
             (oldItem1, newItem1),
@@ -288,8 +291,9 @@ public class LibraryServiceTests : ACyberpunkIsolatedGameTest<LibraryServiceTest
 
         // Act
         // Create new items to replace the old ones
-        var newItem1 = (await _libraryService.AddLocalFile(firstArchivePath)).AsLibraryFile().AsLibraryItem(); // Same content but different LibraryItem instance
-        var newItem2 = (await _libraryService.AddLocalFile(secondArchivePath)).AsLibraryFile().AsLibraryItem();
+        // Different content on purpose: adding the same content twice now returns the existing item.
+        var newItem1 = (await _libraryService.AddLocalFile(VariantOf(firstArchivePath))).AsLibraryFile().AsLibraryItem();
+        var newItem2 = (await _libraryService.AddLocalFile(VariantOf(secondArchivePath))).AsLibraryFile().AsLibraryItem();
         var replacements = new List<(LibraryItem.ReadOnly oldItem, LibraryItem.ReadOnly newItem)>
         {
             (oldItem1, newItem1),
@@ -374,5 +378,20 @@ public class LibraryServiceTests : ACyberpunkIsolatedGameTest<LibraryServiceTest
 
         var result = await tx.Commit();
         return result.Remap(group);
+    }
+
+    /// <summary>
+    /// The same archive with one extra text entry inside its top folder: same installable layout, different hash.
+    /// </summary>
+    private AbsolutePath VariantOf(AbsolutePath archive)
+    {
+        var copy = TemporaryFileManager.CreateFolder().Path.Combine(archive.FileName);
+        File.Copy(archive.ToString(), copy.ToString());
+        using var zip = ZipFile.Open(copy.ToString(), ZipArchiveMode.Update);
+        var topFolder = zip.Entries[0].FullName.Split('/')[0];
+        var entry = zip.CreateEntry($"{topFolder}/variant.txt");
+        using var writer = new StreamWriter(entry.Open());
+        writer.Write("variant");
+        return copy;
     }
 }
