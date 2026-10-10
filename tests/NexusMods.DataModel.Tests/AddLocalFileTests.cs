@@ -1,6 +1,7 @@
 using FluentAssertions;
 using Microsoft.Extensions.DependencyInjection;
 using NexusMods.Abstractions.Library;
+using NexusMods.Abstractions.Loadouts;
 using NexusMods.Games.TestFramework;
 using NexusMods.Hashing.xxHash3;
 using NexusMods.Paths;
@@ -183,6 +184,47 @@ public class AddLocalFileTests(ITestOutputHelper helper) : ACyberpunkIsolatedGam
         local.AsLibraryFile().AsLibraryItem().Name.Should().Be("Mod.zip");
         LocalFile.Version.TryGetValue(local, out _).Should().BeFalse();
         LocalFile.Source.TryGetValue(local, out _).Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task UpdateLocalFileMetadata_SetsAndClearsFields()
+    {
+        var local = await LibraryService.AddLocalFile(Outside("Mod.zip"), new LocalFileMetadata(Version: "1.0", Source: "foro"));
+
+        await LibraryService.UpdateLocalFileMetadata(local.LocalFileId, new LocalFileMetadata(Name: "Nuevo", Version: "2.0", Source: "", PageUri: new Uri("https://example.org/mod")));
+
+        var updated = LocalFile.Load(Connection.Db, local.Id);
+        updated.AsLibraryFile().AsLibraryItem().Name.Should().Be("Nuevo");
+        LocalFile.Version.Get(updated).Should().Be("2.0");
+        LocalFile.Source.TryGetValue(updated, out _).Should().BeFalse("a blank value clears the field");
+        LocalFile.PageUri.Get(updated).Should().Be(new Uri("https://example.org/mod"));
+    }
+
+    [Fact]
+    public async Task UpdateLocalFileMetadata_BlankName_FallsBackToFileName()
+    {
+        var local = await LibraryService.AddLocalFile(Outside("Mod.zip"), new LocalFileMetadata(Name: "Con nombre"));
+
+        await LibraryService.UpdateLocalFileMetadata(local.LocalFileId, new LocalFileMetadata(Name: "   "));
+
+        LocalFile.Load(Connection.Db, local.Id).AsLibraryFile().AsLibraryItem().Name.Should().Be("Mod.zip");
+    }
+
+    [Fact]
+    public async Task UpdateLocalFileMetadata_DoesNotRenameInstalledGroup()
+    {
+        var src = FileSystem.GetKnownPath(KnownPath.CurrentDirectory).Combine("Resources").Combine("Lookup Anything 1.48.1-541-1-48-1-1739333325.zip");
+        var outside = TemporaryFileManager.CreateFolder().Path.Combine("Lookup.zip");
+        File.Copy(src.ToString(), outside.ToString(), overwrite: true);
+        var loadout = await CreateLoadout();
+        var local = await LibraryService.AddLocalFile(outside);
+        var installed = await LoadoutManager.InstallItem(local.AsLibraryFile().AsLibraryItem(), loadout.LoadoutId);
+        var groupId = installed.LoadoutItemGroup!.Value.Id;
+        var groupName = installed.LoadoutItemGroup!.Value.AsLoadoutItem().Name;
+
+        await LibraryService.UpdateLocalFileMetadata(local.LocalFileId, new LocalFileMetadata(Name: "Renombrado"));
+
+        LoadoutItemGroup.Load(Connection.Db, groupId).AsLoadoutItem().Name.Should().Be(groupName);
     }
 
     private static async Task<Hash> HashOf(AbsolutePath path)

@@ -30,6 +30,12 @@ public interface ILibraryService
     IJobTask<IAddLocalFile, LocalFile.ReadOnly> AddLocalFile(AbsolutePath absolutePath, LocalFileMetadata? metadata = null);
 
     /// <summary>
+    /// Replaces the metadata of a local file: non-blank fields are written, blank ones are cleared.
+    /// A blank name falls back to the file name. Loadout groups already installed from it keep their name.
+    /// </summary>
+    Task UpdateLocalFileMetadata(LocalFileId id, LocalFileMetadata metadata);
+
+    /// <summary>
     /// Returns all loadouts that contain the given library item.
     /// </summary>
     /// <param name="libraryItem">The item to search for.</param>
