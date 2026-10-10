@@ -128,13 +128,16 @@ public static class LoadoutManagementVerbs
         [Option("l", "loadout", "loadout to add the mod to")] Loadout.ReadOnly loadout,
         [Option("f", "file", "Mod file to install")] AbsolutePath file,
         [Option("n", "name", "Name of the mod after installing")] string name,
+        [Option("v", "version", "Version to record for the file", isOptional: true)] string? version,
+        [Option("s", "source", "Where the file came from (mod.io, GitHub, foro...)", isOptional: true)] string? source,
+        [Option("u", "url", "Page of the mod", isOptional: true)] Uri? url,
         [Injected] ILibraryService libraryService,
         [Injected] ILoadoutManager loadoutManager,
         [Injected] CancellationToken token)
     {
         return await renderer.WithProgress(token, async () =>
         {
-            var localFile = await libraryService.AddLocalFile(file); 
+            var localFile = await libraryService.AddLocalFile(file, new LocalFileMetadata(Name: name, Version: version, Source: source, PageUri: url));
             await loadoutManager.InstallItem(localFile.AsLibraryFile().AsLibraryItem(), loadout);
             return 0;
         });

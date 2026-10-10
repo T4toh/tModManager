@@ -7,6 +7,7 @@ using NexusMods.Abstractions.Loadouts;
 using NexusMods.Abstractions.Loadouts.Extensions;
 using NexusMods.Abstractions.Loadouts.Synchronizers;
 using NexusMods.MnemonicDB.Abstractions;
+using NexusMods.MnemonicDB.Abstractions.Attributes;
 using NexusMods.MnemonicDB.Abstractions.TxFunctions;
 using NexusMods.Paths;
 using NexusMods.Sdk.Jobs;
@@ -41,9 +42,43 @@ public sealed class LibraryService : ILibraryService
         return AddDownloadJob.Create(_serviceProvider, downloadJob);
     }
 
-    public IJobTask<IAddLocalFile, LocalFile.ReadOnly> AddLocalFile(AbsolutePath absolutePath)
+    public IJobTask<IAddLocalFile, LocalFile.ReadOnly> AddLocalFile(AbsolutePath absolutePath, LocalFileMetadata? metadata = null)
     {
-        return AddLocalFileJob.Create(_serviceProvider, absolutePath);
+        return AddLocalFileJob.Create(_serviceProvider, absolutePath, metadata ?? LocalFileMetadata.Empty);
+    }
+
+    public async Task UpdateLocalFileMetadata(LocalFileId id, LocalFileMetadata metadata)
+    {
+        var db = _connection.Db;
+        var local = LocalFile.Load(db, id);
+        if (!local.IsValid()) throw new InvalidOperationException($"No existe el archivo local {id}");
+
+        using var tx = _connection.BeginTransaction();
+        var name = string.IsNullOrWhiteSpace(metadata.Name) ? local.AsLibraryFile().FileName.ToString() : metadata.Name.Trim();
+        if (name != local.AsLibraryFile().AsLibraryItem().Name) tx.Add(id, LibraryItem.Name, name);
+        SetOrRetract(tx, id, LocalFile.Version, local, metadata.Version);
+        SetOrRetract(tx, id, LocalFile.Source, local, metadata.Source);
+        if (metadata.PageUri is null)
+        {
+            if (LocalFile.PageUri.TryGetValue(local, out var old)) tx.Retract(id, LocalFile.PageUri, old);
+        }
+        else if (!LocalFile.PageUri.TryGetValue(local, out var current) || current != metadata.PageUri)
+        {
+            tx.Add(id, LocalFile.PageUri, metadata.PageUri);
+        }
+        await tx.Commit();
+    }
+
+    private static void SetOrRetract(ITransaction tx, EntityId id, StringAttribute attribute, LocalFile.ReadOnly local, string? value)
+    {
+        var has = attribute.TryGetValue(local, out var old);
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            if (has) tx.Retract(id, attribute, old!);
+            return;
+        }
+        var trimmed = value.Trim();
+        if (!has || old != trimmed) tx.Add(id, attribute, trimmed);
     }
 
     public IEnumerable<(Loadout.ReadOnly loadout, LibraryLinkedLoadoutItem.ReadOnly linkedItem)> LoadoutsWithLibraryItem(LibraryItem.ReadOnly libraryItem)

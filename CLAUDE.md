@@ -98,6 +98,8 @@ These are custom features not present in upstream:
 
 10. **Magic bytes file detection** (`SignatureChecker.cs`): Detects archive types (7z/zip/rar) by file headers when server doesn't provide extension.
 
+11. **Local mods first-class** (`AddLocalFileJob.cs`, `LocalFileBackfill.cs`, `LocalFileMetadataOverlay`): a file added by hand is copied into `tModManager/Downloads` (`DownloadsFolder.PlaceAsync`, never moved), deduped by hash, and gets `LibraryFile.DownloadPath` like a download. `LocalFile` carries optional `Version`, `Source` (free text) and `PageUri`; the library shows the version and opens the page, and "Editar" changes them. Old local files without `DownloadPath` are copied once at startup.
+
 ### Dependency Injection Pattern
 
 Every subsystem registers services through static extension methods in its own `Services.cs`:

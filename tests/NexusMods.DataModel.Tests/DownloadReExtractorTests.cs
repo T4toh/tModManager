@@ -90,4 +90,27 @@ public class DownloadReExtractorTests(ITestOutputHelper helper) : ACyberpunkIsol
         restored.Should().BeEquivalentTo([hash]);
         (await store.HaveFile(hash)).Should().BeTrue();
     }
+
+    [Fact]
+    public async Task LocalFileAddedFromOutsideDownloads_RestoresFromTheCopy()
+    {
+        var library = ServiceProvider.GetRequiredService<ILibraryService>();
+        var store = (LooseFileStore)ServiceProvider.GetRequiredService<IFileStore>();
+        var reExtractor = ServiceProvider.GetRequiredService<IDownloadReExtractor>();
+        var src = FileSystem.GetKnownPath(KnownPath.CurrentDirectory).Combine("Resources").Combine("Lookup Anything 1.48.1-541-1-48-1-1739333325.zip");
+        var outside = TemporaryFileManager.CreateFolder().Path.Combine("outside.zip");
+        File.Copy(src.ToString(), outside.ToString(), overwrite: true);
+
+        var local = await library.AddLocalFile(outside);
+        var entryHashes = LibraryArchiveFileEntry.FindByParent(Connection.Db, local.AsLibraryFile().Id)
+            .Select(e => e.AsLibraryFile().Hash).ToArray();
+        entryHashes.Should().NotBeEmpty();
+        foreach (var h in entryHashes) store.PathFor(h).Delete();
+        outside.Delete(); // the user's copy is gone; only Downloads/outside.zip remains
+
+        var restored = await reExtractor.RestoreAsync(entryHashes, default);
+
+        restored.Should().BeEquivalentTo(entryHashes);
+        foreach (var h in entryHashes) (await store.HaveFile(h)).Should().BeTrue();
+    }
 }

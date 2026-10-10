@@ -19,6 +19,7 @@ using NexusMods.App.UI.Settings;
 using NexusMods.Backend;
 using NexusMods.CrossPlatform;
 using NexusMods.DataModel;
+using NexusMods.Library;
 using NexusMods.DataModel.LegacyData;
 using NexusMods.DataModel.SchemaVersions;
 using NexusMods.Paths;
@@ -166,6 +167,15 @@ public class Program
                 // Otherwise, perform the initial setup
                 migration.InitialSetup().Wait();
             }
+
+            // Hand-added files from before they were copied into Downloads: repair them in the
+            // background, only now that this process owns a migrated database.
+            var backfill = services.GetRequiredService<LocalFileBackfill>();
+            _ = Task.Run(async () =>
+            {
+                try { await backfill.RunAsync(CancellationToken.None); }
+                catch (Exception e) { _logger.LogWarning(e, "No se pudieron copiar los archivos locales viejos a Descargas"); }
+            });
 
             // Start the CLI server (claims the single-instance lock) only once this process has
             // actually run the migrate-or-reset block above.

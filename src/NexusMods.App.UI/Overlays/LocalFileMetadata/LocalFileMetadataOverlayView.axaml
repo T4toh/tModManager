@@ -1,0 +1,57 @@
+<reactive:ReactiveUserControl
+    x:TypeArguments="local:ILocalFileMetadataOverlayViewModel"
+    xmlns="https://github.com/avaloniaui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    xmlns:reactive="http://reactiveui.net"
+    xmlns:local="clr-namespace:NexusMods.App.UI.Overlays"
+    xmlns:base="clr-namespace:NexusMods.App.UI.Overlays.Generic.MessageBox.Base"
+    xmlns:controls="clr-namespace:NexusMods.App.UI.Controls"
+    x:DataType="local:ILocalFileMetadataOverlayViewModel"
+    mc:Ignorable="d" d:DesignWidth="600" d:DesignHeight="460"
+    x:Class="NexusMods.App.UI.Overlays.LocalFileMetadataOverlayView">
+
+    <Design.DataContext>
+        <local:LocalFileMetadataOverlayDesignViewModel />
+    </Design.DataContext>
+
+    <base:MessageBoxBackground MinWidth="560" MaxWidth="560">
+        <base:MessageBoxBackground.TopContent>
+            <Border Padding="24">
+                <StackPanel Spacing="16">
+                    <TextBlock Text="{CompiledBinding Title}" TextWrapping="Wrap" Theme="{StaticResource HeadingXSSemiTheme}" />
+                    <TextBlock Text="{CompiledBinding OriginPath}" TextWrapping="Wrap" Theme="{StaticResource BodySMNormalTheme}" Opacity="0.7" />
+
+                    <StackPanel Spacing="8">
+                        <TextBlock Text="Nombre" Theme="{StaticResource BodySMNormalTheme}" Opacity="0.7" />
+                        <TextBox x:Name="TextBoxName" Text="{CompiledBinding Name.Value}" />
+                    </StackPanel>
+                    <StackPanel Spacing="8">
+                        <TextBlock Text="Versión (opcional)" Theme="{StaticResource BodySMNormalTheme}" Opacity="0.7" />
+                        <TextBox Text="{CompiledBinding Version.Value}" />
+                    </StackPanel>
+                    <StackPanel Spacing="8">
+                        <TextBlock Text="Fuente (opcional: mod.io, GitHub, foro...)" Theme="{StaticResource BodySMNormalTheme}" Opacity="0.7" />
+                        <TextBox Text="{CompiledBinding Source.Value}" />
+                    </StackPanel>
+                    <StackPanel Spacing="8">
+                        <TextBlock Text="Página del mod (opcional)" Theme="{StaticResource BodySMNormalTheme}" Opacity="0.7" />
+                        <TextBox Text="{CompiledBinding PageUrl.Value}" Watermark="https://" />
+                        <TextBlock Text="La URL tiene que empezar con http:// o https://"
+                                   IsVisible="{CompiledBinding !IsUrlValid.Value}"
+                                   Theme="{StaticResource BodySMNormalTheme}"
+                                   Foreground="{StaticResource DangerStrongBrush}" />
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+        </base:MessageBoxBackground.TopContent>
+
+        <base:MessageBoxBackground.BottomContent>
+            <StackPanel Orientation="Horizontal" Margin="24" VerticalAlignment="Center" HorizontalAlignment="Right" Spacing="{StaticResource Spacing-2.5}">
+                <controls:StandardButton x:Name="ButtonCancel" Text="Cancelar" />
+                <controls:StandardButton x:Name="ButtonAccept" Text="{CompiledBinding AcceptText}" Type="Primary" Fill="StrongAlt" IsDefault="True" />
+            </StackPanel>
+        </base:MessageBoxBackground.BottomContent>
+    </base:MessageBoxBackground>
+</reactive:ReactiveUserControl>

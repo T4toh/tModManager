@@ -32,8 +32,13 @@ internal class LocalFileDataProvider : ILibraryDataProvider, ILoadoutDataProvide
 
     public IObservable<IChangeSet<CompositeItemModel<EntityId>, EntityId>> ObserveLibraryItems(LibraryFilter libraryFilter)
     {
+        // ObserveAll only emits when the primary attribute changes; name, version, source and page
+        // live on other attributes, so re-read the entity on any of its datoms and rebuild the row.
         return LocalFile
             .ObserveAll(_connection)
+            .TransformOnObservable(localFile => _connection
+                .ObserveDatoms(localFile.Id)
+                .QueryWhenChanged(_ => LocalFile.Load(_connection.Db, localFile.Id)))
             .Transform(localFile => ToLibraryItemModel(libraryFilter, localFile));
     }
 
@@ -92,7 +97,9 @@ internal class LocalFileDataProvider : ILibraryDataProvider, ILoadoutDataProvide
         LibraryDataProviderHelper.AddInstalledDateComponent(itemModel, linkedLoadoutItemsObservable);
         LibraryDataProviderHelper.AddInstallActionComponent(itemModel, linkedLoadoutItemsObservable);
         LibraryDataProviderHelper.AddViewChangelogActionComponent(itemModel, isEnabled: false);
-        LibraryDataProviderHelper.AddViewModPageActionComponent(itemModel, isEnabled: false);
+        if (LocalFile.Version.TryGetValue(localFile, out var version))
+            itemModel.Add(LibraryColumns.ItemVersion.CurrentVersionComponentKey, new VersionComponent(value: version));
+        LibraryDataProviderHelper.AddViewModPageActionComponent(itemModel, isEnabled: LocalFile.PageUri.TryGetValue(localFile, out _));
         LibraryDataProviderHelper.AddHideUpdatesActionComponent(itemModel, isEnabled: false, isVisible: false);
         
         // Get related collections

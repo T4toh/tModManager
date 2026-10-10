@@ -13,4 +13,9 @@ public interface IAddLocalFile : IJobDefinition<LocalFile.ReadOnly>
     /// The source file path
     /// </summary>
     public AbsolutePath FilePath { get; }
+
+    /// <summary>
+    /// Metadata to store with the file. Empty when the caller has none.
+    /// </summary>
+    public LocalFileMetadata Metadata { get; }
 }

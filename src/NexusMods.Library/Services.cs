@@ -20,6 +20,7 @@ public static class Services
         return serviceCollection
             .AddSingleton<ILibraryService, LibraryService>()
             .AddSingleton<IDownloadsService, DownloadsService>()
-            .AddSingleton<IDownloadReExtractor, DownloadReExtractor>();
+            .AddSingleton<IDownloadReExtractor, DownloadReExtractor>()
+            .AddSingleton<LocalFileBackfill>();
     }
 }
