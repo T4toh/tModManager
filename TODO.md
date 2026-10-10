@@ -6,9 +6,11 @@ Todo lo mergeado hasta #55 está probado con el juego real. Última prueba compl
 
 **Próximo:**
 1. Bugs chicos que salieron de las pruebas (lista de abajo).
-2. Pieza 4 (`IIntrinsicFile`, primer uso: `UserSettings.json`) de "Piezas genéricas para el segundo juego". Las piezas 2 (prefix, PR #73) y 3 (mods locales, PR #74) están hechas; la 3 queda por probar en la app con un archivo real. Witcher 3 arranca cuando estén las piezas que necesita.
+2. Pieza 4 (`IIntrinsicFile`, primer uso: `UserSettings.json`) de "Piezas genéricas para el segundo juego". Las piezas 2 (prefix, PR #73) y 3 (mods locales, PR #74) están hechas y probadas en la app. Witcher 3 arranca cuando estén las piezas que necesita.
 
 ### Pruebas reales
+
+- **2026-10-10** (rama `feat/local-mods-first-class`, PR #74): pieza 3 en la app con un zip en `~/Downloads`: diálogo prellenado (nombre y versión `1.2.3`), Enter agrega, copia en `tModManager/Downloads` y original intacto; "Editar" habilitado solo con una fila local, la fila se refresca al guardar, "Ver página del mod" abre el navegador; agregar el mismo zip otra vez no crea fila ni copia ("ya estaba en la biblioteca"); instalar y sincronizar sin errores. Backfill sin nada que hacer (no había locales viejos)
 
 - **2026-09-25** (rama `fix/delete-no-follow-symlinks`): asistente completo (Deep Clean, prefix de Proton borrado sin tocar nada afuera, verificación de Steam, reset), juego gestionado de cero, "Welcome to Night City" bajada (283 mods) e instalada, juego lanzado con RED4ext + 5 plugins y REDScript sin errores. En el camino se arreglaron: el handler `nxm://` que los tests reescribían (login roto), descargas sin extensión, carrera en la barra de progreso de la colección, y el health check del prefix que nunca corría para Steam (tras recrear el prefix faltaban `vcrun2022`/`d3dcompiler_47`: `protontricks 1091500 -q vcrun2022 d3dcompiler_47`)
 - **2026-10-03** (rama `chore/sandbox-run`, dentro de la jaula): store borrado a mano y reaplicado (con la app cerrada y abierta), colección reinstalada sin el store, Storage Manager (Deep Clean, borrar descargas cancelado, borrar prefix). Después, prefix recreado por Steam y health check de Proton verificado: marca `vcrun2022`/`d3dcompiler_47` sin prefix y con prefix nuevo, desaparece tras `protontricks`. En el camino: Deep Clean no movía carpetas entre subvolúmenes btrfs / discos (`EXDEV`), arreglado con `NoFollowMove.MoveDirectoryNoFollow`. Avisos `Unable to extract` de 3 archivos generados en runtime (`red4ext/config.ini`, `final.redscripts.bk`, `.bin` de address_library) con el store borrado: no vienen de ninguna descarga y se regeneran solos
@@ -31,7 +33,6 @@ Mergeado o en PR, compilado en Mac pero sin correr en la PC con el juego (en Mac
 
 - [ ] **Ícono nuevo en el AppImage:** el de `./dev.sh` opción 10 usa el logo de capas (en la app ya probado 2026-10-07: barra lateral, ventana y barra de tareas)
 - [ ] **Metadata genérica en el AppImage:** el de `./dev.sh` opción 10 muestra el resumen nuevo en el lanzador (la bienvenida de la app ya probada 2026-10-07)
-- [ ] **Pieza 3 en la app** (PR #74, solo tests): Biblioteca → "agregar desde archivo" con un zip de `~/Descargas` → aparece el diálogo prellenado (nombre, versión) → Enter → la fila muestra nombre y versión, la copia está en `tModManager/Downloads` y el original sigue en `~/Descargas`; con la fila seleccionada el botón "Editar" se habilita (con una de Nexus, no), cambiar la URL y "Ver página del mod" abre el navegador; arrancar con un `LocalFile` viejo sin `DownloadPath` y ver en el log "copiado a Descargas"
 
 ### Cómo probar con datos reales
 
@@ -173,7 +174,7 @@ No se escribe código de Witcher 3 ni de KOTOR hasta que estas piezas existan. C
 |---|---|---|---|---|
 | 1 | Lista vanilla sin la base de Nexus (hecha, PR #53, probada 2026-10-06) (= "Lista de archivos originales" de la fase 2; la base local **no trae W3**) | después de cada parche la app no aplica | poder sacar mods | cualquier juego |
 | 2 | Ubicaciones dentro del prefix, con whitelist de archivos gestionados (hecha 2026-10-09, probada en el juego 2026-10-10; `LocationId.WinePrefix` + `IGameData.GetManagedFiles`; spec en `docs/superpowers/specs/2026-10-09-wine-prefix-location-design.md`) | `UserSettings.json` (saves y `modlist.txt` de REDmod cuando haga falta) | saves, `Documents/The Witcher 3/user.settings`, `mods.settings` | cualquier juego con prefix |
-| 3 | Mods locales de primera clase (hecha 2026-10-10, PR #74, prueba en la app pendiente; `LocalFile.Version/Source/PageUri`, copia a Descargas, diálogo al agregar y botón "Editar"; spec en `docs/superpowers/specs/2026-10-10-local-mods-first-class-design.md`) | archivos agregados a mano | mods de mod.io/GitHub/foros | KOTOR |
+| 3 | Mods locales de primera clase (hecha y probada en la app 2026-10-10, PR #74; `LocalFile.Version/Source/PageUri`, copia a Descargas, diálogo al agregar y botón "Editar"; spec en `docs/superpowers/specs/2026-10-10-local-mods-first-class-design.md`) | archivos agregados a mano | mods de mod.io/GitHub/foros | KOTOR |
 | 4 | Primer uso real de `IIntrinsicFile` (archivo base + bloques por mod; `Ingest` de lo que cambia el juego) | `inputUserMappings.xml`, `options.json` | `mods.settings`, `dx12user.settings`/`input.settings`, XML de menús | `plugins.txt` |
 | 5 | Load order que se escribe a archivo (variedad de sort order + writer) | `modlist` de REDmod | `Priority` de `mods.settings` | Skyrim, orden de patchers KOTOR |
 | 6 | Requisitos del prefix como datos (= item de la fase 2) | `WinePrefixRequirementsEmitter` | `dinput8=n,b` para ASI, aviso DLSS bajo Proton | cualquier juego |
@@ -335,6 +336,8 @@ Hecho el 2026-09-22 (rama `feat/rename-tmodmanager`): borrados `.github/` comple
 - [ ] **Issue templates propios** (bug + feature) si hace falta
 
 ## 🐛 Errores conocidos y deuda
+
+- [ ] **Pieza 3, menores diferidos de la revisión (PR #74, 2026-10-10):** mover "Editar" del toolbar al menú "…" de la fila (ahí viven las acciones del ítem: página, changelog, borrar; el toolbar le suma una segunda navegación); el esquema de `PageUri` solo se valida en el diálogo (el CLI `--url` y `OpenUri` aceptan cualquier URI absoluta: exigir http(s) en `ApplyMetadata`/`UpdateLocalFileMetadata`); sin toast cuando un alta reutiliza un ítem existente (y el nombre prellenado pisa el que tenía); cada alta se espera antes de abrir el siguiente diálogo; un nombre en blanco cae al nombre del archivo en Downloads (puede ser `Mod_1.zip`), mejor `Path.GetFileName(OriginalPath)`; `Uri ==` ignora el fragmento (un cambio solo de `#ancla` no se guarda); `catch (Exception)` en `AddFilesFromDisk` también muestra toast al cancelar; `out var unused` → `out _`; un symlink dentro de Downloads elegido desde adentro se registra tal cual (`InFolder` léxico, preexistente); `NexusMods.DataModel.Tests` reporta un Total distinto en cada corrida (xUnit v3, 0 fallos, preexistente)
 
 Estado al 2026-10-07:
 

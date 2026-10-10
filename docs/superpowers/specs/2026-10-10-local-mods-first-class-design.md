@@ -1,6 +1,6 @@
 # Mods locales de primera clase (pieza 3)
 
-Fecha: 2026-10-10 · Estado: implementado en la rama `feat/local-mods-first-class` (PR #74), prueba en la app pendiente
+Fecha: 2026-10-10 · Estado: implementado en la rama `feat/local-mods-first-class` (PR #74), probado en la app el 2026-10-10
 
 ## Objetivo
 
