@@ -45,21 +45,27 @@ internal class AddLocalFileJob : IJobDefinitionWithStart<AddLocalFileJob, LocalF
         if (!FilePath.FileExists)
             throw new InvalidOperationException($"No es un archivo o no existe: {FilePath}");
 
-        // 1. Copy into Downloads unless it already lives there. The user's file is never moved.
-        var final = FilePath.InFolder(DownloadsRoot)
-            ? FilePath
-            : await DownloadsFolder.PlaceAsync(FilePath, DownloadsRoot, FilePath.FileName, ct);
-        var weCopied = final != FilePath;
-
-        // 2. Same content already in the library as a local file: reuse it.
-        var hash = await HashOf(final, ct);
+        // 1. Same content already in the library as a local file with a live download: reuse it
+        //    before copying anything. Hashing the source first means this job never has to delete
+        //    a copy afterwards, so it can never remove a file in Downloads that belongs to another
+        //    item, nor the user's own original when Downloads is a symlink to the picked folder.
+        var hash = await HashOf(FilePath, ct);
         var existing = LibraryFile.FindByHash(Connection.Db, hash)
             .Select(file => LocalFile.Load(Connection.Db, file.Id))
             .FirstOrDefault(local => local.IsValid());
-        if (existing.IsValid())
-            return await ReuseExisting(existing, final, weCopied);
+        if (existing.IsValid() && HasLiveDownload(existing))
+            return await ReuseExisting(existing, adopt: null);
 
-        // 3. Register the copy. AddLibraryFileJob records DownloadPath because `final` is inside Downloads.
+        // 2. Copy into Downloads unless it already lives there. The user's file is never moved.
+        var final = FilePath.InFolder(DownloadsRoot)
+            ? FilePath
+            : await DownloadsFolder.PlaceAsync(FilePath, DownloadsRoot, FilePath.FileName, ct);
+
+        // 3. An old LocalFile with the same content but no usable download adopts this copy.
+        if (existing.IsValid())
+            return await ReuseExisting(existing, adopt: final);
+
+        // 4. Register the copy. AddLibraryFileJob records DownloadPath because `final` is inside Downloads.
         using var tx = Connection.BeginTransaction();
         var libraryFile = await AddLibraryFileJob.Create(ServiceProvider, tx, final);
         var localFile = new LocalFile.New(tx, libraryFile.LibraryFileId)
@@ -72,23 +78,25 @@ internal class AddLocalFileJob : IJobDefinitionWithStart<AddLocalFileJob, LocalF
         return result.Remap(localFile);
     }
 
-    private async ValueTask<LocalFile.ReadOnly> ReuseExisting(LocalFile.ReadOnly existing, AbsolutePath final, bool weCopied)
+    private bool HasLiveDownload(LocalFile.ReadOnly local) =>
+        LibraryFile.DownloadPath.TryGetValue(local.AsLibraryFile(), out var rel) && DownloadsRoot.Combine(rel).FileExists;
+
+    /// <summary>
+    /// Returns the existing item. With <paramref name="adopt"/> set, that copy becomes its download
+    /// (an old LocalFile registered from outside Downloads, or one whose download is gone).
+    /// </summary>
+    private async ValueTask<LocalFile.ReadOnly> ReuseExisting(LocalFile.ReadOnly existing, AbsolutePath? adopt)
     {
-        var libraryFile = existing.AsLibraryFile();
-        var hasDownload = LibraryFile.DownloadPath.TryGetValue(libraryFile, out var rel) && DownloadsRoot.Combine(rel).FileExists;
+        var name = existing.AsLibraryFile().AsLibraryItem().Name;
         using var tx = Connection.BeginTransaction();
-        if (hasDownload)
+        if (adopt is { } final)
         {
-            // The library already has a download for this content; our copy is redundant unless
-            // PlaceAsync handed us that very file (same name + same content reuses it).
-            if (weCopied && final != DownloadsRoot.Combine(rel)) final.Delete();
-            Logger.LogInformation("'{File}' ya estaba en la biblioteca como '{Existing}'", FilePath, libraryFile.AsLibraryItem().Name);
+            tx.Add(existing.Id, LibraryFile.DownloadPath, final.RelativeTo(DownloadsRoot));
+            Logger.LogInformation("'{File}' repara la descarga faltante de '{Existing}'", final, name);
         }
         else
         {
-            // Old LocalFile registered from outside Downloads: adopt this copy as its download.
-            tx.Add(existing.Id, LibraryFile.DownloadPath, final.RelativeTo(DownloadsRoot));
-            Logger.LogInformation("'{File}' repara la descarga faltante de '{Existing}'", final, libraryFile.AsLibraryItem().Name);
+            Logger.LogInformation("'{File}' ya estaba en la biblioteca como '{Existing}'", FilePath, name);
         }
         ApplyMetadata(tx, existing.Id, Metadata);
         await tx.Commit();

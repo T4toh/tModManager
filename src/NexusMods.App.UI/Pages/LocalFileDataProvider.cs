@@ -32,8 +32,13 @@ internal class LocalFileDataProvider : ILibraryDataProvider, ILoadoutDataProvide
 
     public IObservable<IChangeSet<CompositeItemModel<EntityId>, EntityId>> ObserveLibraryItems(LibraryFilter libraryFilter)
     {
+        // ObserveAll only emits when the primary attribute changes; name, version, source and page
+        // live on other attributes, so re-read the entity on any of its datoms and rebuild the row.
         return LocalFile
             .ObserveAll(_connection)
+            .TransformOnObservable(localFile => _connection
+                .ObserveDatoms(localFile.Id)
+                .QueryWhenChanged(_ => LocalFile.Load(_connection.Db, localFile.Id)))
             .Transform(localFile => ToLibraryItemModel(libraryFilter, localFile));
     }
 

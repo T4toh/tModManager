@@ -3,6 +3,8 @@ using Humanizer;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using NexusMods.Abstractions.Library;
+using NexusMods.Sdk.Hashes;
+using NexusMods.Paths;
 using NexusMods.Abstractions.NexusModsLibrary.Models;
 using NexusMods.Abstractions.NexusWebApi;
 using NexusMods.App.UI.Extensions;
@@ -55,12 +57,18 @@ public class ManualDownloadRequiredOverlayDesignViewModel : AOverlayViewModel<IM
 
 public class ManualDownloadRequiredOverlayViewModel : AOverlayViewModel<IManualDownloadRequiredOverlayViewModel>, IManualDownloadRequiredOverlayViewModel
 {
+    private static async Task<Md5Value> Md5Of(AbsolutePath file)
+    {
+        await using var stream = file.Read();
+        using var md5 = System.Security.Cryptography.MD5.Create();
+        return Md5Value.From(await md5.ComputeHashAsync(stream));
+    }
+
     public ManualDownloadRequiredOverlayViewModel(IServiceProvider serviceProvider, CollectionDownloadExternal.ReadOnly downloadEntity)
     {
         var osInterop = serviceProvider.GetRequiredService<IOSInterop>();
         var avaloniaInterop = serviceProvider.GetRequiredService<IAvaloniaInterop>();
         var libraryService = serviceProvider.GetRequiredService<ILibraryService>();
-        var connection = serviceProvider.GetRequiredService<IConnection>();
         var logger = serviceProvider.GetRequiredService<ILogger<ManualDownloadRequiredOverlayViewModel>>();
         var mappingCache = serviceProvider.GetRequiredService<IGameDomainToGameIdMappingCache>();
 
@@ -91,13 +99,16 @@ public class ManualDownloadRequiredOverlayViewModel : AOverlayViewModel<IManualD
 
                 IsCheckingFile = true;
 
-                var localFile = await libraryService.AddLocalFile(file);
-                var receivedHash = localFile.AsLibraryFile().Md5.Value;
+                // Hash before adding: AddLocalFile reuses an existing library item with the same
+                // content, so adding first and deleting on mismatch could delete something the user
+                // already had (and left an orphan copy in Downloads on every wrong pick).
+                var receivedHash = await Md5Of(file);
                 ReceivedHash = receivedHash.ToString();
 
                 if (receivedHash == downloadEntity.Md5)
                 {
                     logger.LogInformation("Received file with matching hash for download `{DownloadName}` (index={Index})", downloadEntity.AsCollectionDownload().Name, downloadEntity.AsCollectionDownload().ArrayIndex);
+                    await libraryService.AddLocalFile(file);
                     base.Close();
                     return;
                 }
@@ -106,12 +117,6 @@ public class ManualDownloadRequiredOverlayViewModel : AOverlayViewModel<IManualD
 
                 IsCheckingFile = false;
                 IsIncorrectFile = true;
-
-                {
-                    using var tx = connection.BeginTransaction();
-                    tx.Delete(localFile, recursive: true);
-                    await tx.Commit();
-                }
             },
             awaitOperation: AwaitOperation.Drop,
             configureAwait: false

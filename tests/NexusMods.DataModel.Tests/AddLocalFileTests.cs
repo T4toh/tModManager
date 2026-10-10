@@ -121,6 +121,20 @@ public class AddLocalFileTests(ITestOutputHelper helper) : ACyberpunkIsolatedGam
     }
 
     [Fact]
+    public async Task AddLocalFile_SameContentAsAnotherFileInDownloads_NeverDeletesIt()
+    {
+        // Downloads/X.zip belongs to someone else (a Nexus download); the same content was hand-added before as X-copy.zip.
+        Downloads.CreateDirectory();
+        File.WriteAllText(Downloads.Combine("X.zip").ToString(), "same");
+        var copy = await LibraryService.AddLocalFile(Outside("X-copy.zip", "same"));
+
+        var again = await LibraryService.AddLocalFile(Outside("X.zip", "same"));
+
+        again.Id.Should().Be(copy.Id);
+        FilesIn(Downloads).Should().Equal("X-copy.zip", "X.zip");
+    }
+
+    [Fact]
     public async Task AddLocalFile_SymlinkToFile_CopiesARegularFile()
     {
         var target = Outside("real.zip", "linked bytes");

@@ -1,6 +1,7 @@
 using FluentAssertions;
 using Microsoft.Extensions.DependencyInjection;
 using NexusMods.Games.TestFramework;
+using NexusMods.Hashing.xxHash3;
 using NexusMods.Library;
 using NexusMods.Paths;
 using NexusMods.Sdk.Library;
@@ -13,13 +14,19 @@ public class LocalFileBackfillTests(ITestOutputHelper helper) : ACyberpunkIsolat
 {
     private AbsolutePath Downloads => ServiceProvider.GetRequiredService<ISettingsManager>().Get<DownloadsSettings>().Folder.ToPath(FileSystem);
 
-    private async Task<LocalFile.ReadOnly> OldLocalFile(AbsolutePath original)
+    private static async Task<NexusMods.Hashing.xxHash3.Hash> HashOf(AbsolutePath path)
+    {
+        await using var stream = path.Read();
+        return await stream.xxHash3Async();
+    }
+
+    private async Task<LocalFile.ReadOnly> OldLocalFile(AbsolutePath original, NexusMods.Hashing.xxHash3.Hash? hash = null)
     {
         using var tx = Connection.BeginTransaction();
         var lib = new LibraryFile.New(tx, out var id)
         {
             FileName = original.FileName,
-            Hash = NexusMods.Hashing.xxHash3.Hash.From(42),
+            Hash = hash ?? (original.FileExists ? await HashOf(original) : NexusMods.Hashing.xxHash3.Hash.From(42)),
             Size = Size.From(1),
             LibraryItem = new LibraryItem.New(tx, id) { Name = original.FileName },
         };
@@ -81,5 +88,44 @@ public class LocalFileBackfillTests(ITestOutputHelper helper) : ACyberpunkIsolat
 
         copied.Should().Be(0);
         Downloads.EnumerateFiles("*", recursive: false).Should().ContainSingle();
+    }
+
+    [Fact]
+    public async Task OriginalChangedSinceItWasAdded_IsSkipped()
+    {
+        var original = TemporaryFileManager.CreateFolder().Path.Combine("Changed.zip");
+        File.WriteAllText(original.ToString(), "v2 overwrote the file the library knows");
+        var local = await OldLocalFile(original, NexusMods.Hashing.xxHash3.Hash.From(42));
+
+        var copied = await ActivatorUtilities.CreateInstance<LocalFileBackfill>(ServiceProvider).RunAsync(default);
+
+        copied.Should().Be(0);
+        LibraryFile.DownloadPath.TryGetValue(LocalFile.Load(Connection.Db, local.Id).AsLibraryFile(), out _).Should().BeFalse();
+        Downloads.DirectoryExists().Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task OneUnreadableOriginal_DoesNotStopTheOthers()
+    {
+        var unreadable = TemporaryFileManager.CreateFolder().Path.Combine("Locked.zip");
+        File.WriteAllText(unreadable.ToString(), "locked");
+        var hashBeforeLock = await HashOf(unreadable);
+        File.SetUnixFileMode(unreadable.ToString(), UnixFileMode.None);
+        await OldLocalFile(unreadable, hashBeforeLock);
+        var fine = TemporaryFileManager.CreateFolder().Path.Combine("Zzz-fine.zip");
+        File.WriteAllText(fine.ToString(), "fine");
+        var fineLocal = await OldLocalFile(fine);
+
+        try
+        {
+            var copied = await ActivatorUtilities.CreateInstance<LocalFileBackfill>(ServiceProvider).RunAsync(default);
+
+            copied.Should().Be(1);
+            LibraryFile.DownloadPath.Get(LocalFile.Load(Connection.Db, fineLocal.Id).AsLibraryFile()).ToString().Should().Be("Zzz-fine.zip");
+        }
+        finally
+        {
+            File.SetUnixFileMode(unreadable.ToString(), UnixFileMode.UserRead | UnixFileMode.UserWrite);
+        }
     }
 }
