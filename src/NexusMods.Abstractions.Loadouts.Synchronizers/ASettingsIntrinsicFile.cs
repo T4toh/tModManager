@@ -86,19 +86,37 @@ public abstract class ASettingsIntrinsicFile<TDoc>(GamePath path) : ISettingsInt
         var diskHash = diskBytes.xxHash3();
 
         var state = FindState(loadout);
+        var winners = WinningEntries(loadout);
+        // No file, nothing ingested before and nothing owned: there is nothing to write and no reason to
+        // invent a file the game has not created yet.
+        if (diskText.Length == 0 && !state.IsValid() && winners.Count == 0) return null;
+
         TDoc disk;
         string baseText;
-        try
+        if (diskText.Length == 0)
         {
-            disk = Parse(diskText);
-            baseText = diskText;
-        }
-        catch (Exception e) when (e is not OutOfMemoryException)
-        {
-            // A half-written or hand-broken file: keep the last good base and repair the file from it.
+            // The game (or the user) deleted the file: regenerate it from the last base, never replace
+            // the base with nothing.
             baseText = state.IsValid() ? state.BaseContent : string.Empty;
             disk = Parse(baseText);
             diskHash = Hash.Zero;
+        }
+        else
+        {
+            try
+            {
+                disk = Parse(diskText);
+                baseText = diskText;
+            }
+            catch (Exception e) when (e is not OutOfMemoryException)
+            {
+                // A half-written or hand-broken file. With a last good base, repair the file from it; with
+                // none (first sight), leave the file alone rather than replace what we cannot read.
+                if (!state.IsValid()) return null;
+                baseText = state.BaseContent;
+                disk = Parse(baseText);
+                diskHash = Hash.Zero;
+            }
         }
 
         if (state.IsValid())
@@ -115,7 +133,6 @@ public abstract class ASettingsIntrinsicFile<TDoc>(GamePath path) : ISettingsInt
         // game" means the disk differs from our value AND from the value of the previous base: on first
         // sight (no base yet) the disk holds the original and our entry simply applies; after that, a
         // key we wrote only counts as changed when the game moved it away from what the last ingest saw.
-        var winners = WinningEntries(loadout);
         var effective = winners.ToDictionary(kv => kv.Key, kv => kv.Value.Value);
         var previousBase = state.IsValid() ? Parse(state.BaseContent) : default;
         LoadoutOverridesGroupId? overrides = null;

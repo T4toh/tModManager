@@ -7,6 +7,7 @@ using NexusMods.Abstractions.Loadouts.Synchronizers.Rules;
 using NexusMods.Sdk.Settings;
 using NexusMods.Games.RedEngine.Cyberpunk2077.Emitters;
 using NexusMods.Sdk.Games;
+using NexusMods.Sdk.IO;
 using NexusMods.Sdk.Loadouts;
 using R3;
 
@@ -59,6 +60,26 @@ public class Cyberpunk2077Synchronizer : ALoadoutSynchronizer
             return true;
 
         return false;
+    }
+
+    /// <summary>UserSettings.json is generated from the loadout's entries when the prefix location exists.</summary>
+    public override Dictionary<GamePath, IIntrinsicFile> IntrinsicFiles(Loadout.ReadOnly loadout)
+    {
+        var locations = loadout.InstallationInstance.Locations;
+        if (!locations.TryGetValue(LocationId.WinePrefix, out var prefix)) return new Dictionary<GamePath, IIntrinsicFile>();
+        // Prefix deleted (Storage Manager) or not created yet: nothing to generate inside a folder that is not there.
+        // The loadout keeps its entries and base; the file comes back once the prefix exists again.
+        if (!prefix.Path.DirectoryExists()) return new Dictionary<GamePath, IIntrinsicFile>();
+        var path = new GamePath(LocationId.WinePrefix, Cyberpunk2077Game.UserSettingsPath(prefix.Path));
+        var resolved = locations.ToAbsolutePath(path);
+        // A linked settings file (or one behind a linked folder) is never written through, and declaring it
+        // would make every sync refuse: leave it alone and say so, the rest of the loadout still applies.
+        if (SafePath.IsSymlink(resolved) || SafePath.IsUnderSymlink(prefix.Path.ToString(), resolved.ToString()))
+        {
+            Logger.LogWarning("`{Path}` es un symlink o está bajo uno; tModManager no gestiona sus ajustes", path);
+            return new Dictionary<GamePath, IIntrinsicFile>();
+        }
+        return new Dictionary<GamePath, IIntrinsicFile> { [path] = new UserSettingsFile(path) };
     }
 
     // Return true to filter OUT (skip), false to include.

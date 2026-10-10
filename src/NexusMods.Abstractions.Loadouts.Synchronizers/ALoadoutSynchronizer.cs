@@ -487,7 +487,7 @@ public partial class ALoadoutSynchronizer : ILoadoutSynchronizer
                 
                 case Actions.AdaptLoadout:
                     job?.SetStatus("Updating loadout");
-                    await AdaptLoadout(syncTree, locations, loadout, tx);
+                    await AdaptLoadout(syncTree, locations, loadout, tx, gameMetadataId);
                     break;
 
                 case Actions.DeleteFromDisk:
@@ -502,7 +502,7 @@ public partial class ALoadoutSynchronizer : ILoadoutSynchronizer
                 
                 case Actions.WriteIntrinsic:
                     job?.SetStatus("Writing intrinsic files");
-                    await ActionWriteIntrinsics(syncTree, locations, tx, loadout, job);
+                    await ActionWriteIntrinsics(syncTree, locations, tx, loadout, gameMetadataId, job);
                     break;
 
                 case Actions.AddReifiedDelete:
@@ -563,7 +563,7 @@ public partial class ALoadoutSynchronizer : ILoadoutSynchronizer
     /// </summary>
     private static void EnsureDiskChangesStayInside(Dictionary<GamePath, SyncNode> syncTree, GameLocations locations)
     {
-        const Actions diskChanges = Actions.DeleteFromDisk | Actions.ExtractToDisk | Actions.WriteIntrinsic;
+        const Actions diskChanges = Actions.DeleteFromDisk | Actions.ExtractToDisk | Actions.WriteIntrinsic | Actions.AdaptLoadout;
         foreach (var (path, node) in syncTree)
         {
             if ((node.Actions & diskChanges) == 0) continue;
@@ -579,7 +579,7 @@ public partial class ALoadoutSynchronizer : ILoadoutSynchronizer
         }
     }
 
-    private async Task ActionWriteIntrinsics(Dictionary<GamePath, SyncNode> syncTree, GameLocations gameLocations, IMainTransaction tx, Loadout.ReadOnly loadout, SynchronizeLoadoutJob? job)
+    private async Task ActionWriteIntrinsics(Dictionary<GamePath, SyncNode> syncTree, GameLocations gameLocations, IMainTransaction tx, Loadout.ReadOnly loadout, EntityId gameMetadataId, SynchronizeLoadoutJob? job)
     {
         var intrinsicFiles = IntrinsicFiles(loadout);
         foreach (var (path, node) in syncTree)
@@ -589,14 +589,26 @@ public partial class ALoadoutSynchronizer : ILoadoutSynchronizer
 
             var instance = intrinsicFiles[path];
             var resolvedPath = gameLocations.ToAbsolutePath(path);
-            resolvedPath.Parent.CreateDirectory();
-            await using var stream = resolvedPath.Create();
-            stream.SetLength(0);
-            await instance.Write(stream, loadout, syncTree);
+            // The disk may hold data the loadout never saw (first apply after managing, when disk ==
+            // previous state and nothing was ingested yet): always ingest first so the base is real, then
+            // write only what Ingest says is missing. A blind Write here would wipe the game's own keys,
+            // and with no file at all Ingest decides whether there is anything worth creating.
+            ReadOnlyMemory<byte>? rewrite;
+            if (resolvedPath.FileExists)
+            {
+                await using var stream = resolvedPath.Read();
+                rewrite = await instance.Ingest(stream, loadout, syncTree, tx);
+            }
+            else
+            {
+                rewrite = await instance.Ingest(Stream.Null, loadout, syncTree, tx);
+            }
+            if (rewrite is { } bytes)
+                WriteIntrinsicBytes(gameLocations, path, node, bytes.ToArray(), tx, gameMetadataId);
         }
     }
 
-    private async Task AdaptLoadout(Dictionary<GamePath, SyncNode> syncTree, GameLocations gameLocations, Loadout.ReadOnly loadout, IMainTransaction tx)
+    private async Task AdaptLoadout(Dictionary<GamePath, SyncNode> syncTree, GameLocations gameLocations, Loadout.ReadOnly loadout, IMainTransaction tx, EntityId gameMetadataId)
     {
         var intrinsicFiles = IntrinsicFiles(loadout);
         foreach (var (path, node) in syncTree)
@@ -606,8 +618,48 @@ public partial class ALoadoutSynchronizer : ILoadoutSynchronizer
 
             var instance = intrinsicFiles[path];
             var resolvedPath = gameLocations.ToAbsolutePath(path);
-            await using var stream = resolvedPath.Read();
-            _ = await instance.Ingest(stream, loadout, syncTree, tx);
+            ReadOnlyMemory<byte>? rewrite;
+            await using (var stream = resolvedPath.Read())
+                rewrite = await instance.Ingest(stream, loadout, syncTree, tx);
+            // Our keys land in the same apply instead of the next one
+            if (rewrite is { } bytes)
+                WriteIntrinsicBytes(gameLocations, path, node, bytes.ToArray(), tx, gameMetadataId);
+        }
+    }
+
+    /// <summary>
+    /// Writes a generated intrinsic file and records its disk state, like ActionExtractToDisk does, so the
+    /// next sync compares against what was written instead of ingesting our own output as a game change.
+    /// </summary>
+    private static void WriteIntrinsicBytes(GameLocations gameLocations, GamePath path, SyncNode node, byte[] bytes, ITransaction tx, EntityId gameMetadataId)
+    {
+        var resolvedPath = gameLocations.ToAbsolutePath(path);
+        resolvedPath.Parent.CreateDirectory();
+        using (var stream = resolvedPath.Create())
+        {
+            stream.SetLength(0);
+            stream.Write(bytes);
+        }
+        var hash = bytes.xxHash3();
+        var size = Size.FromLong(bytes.Length);
+        var writeTimeUtc = new DateTimeOffset(resolvedPath.FileInfo.LastWriteTimeUtc);
+        if (node.HaveDisk)
+        {
+            var id = node.Disk.EntityId;
+            tx.Add(id, DiskStateEntry.Hash, hash);
+            tx.Add(id, DiskStateEntry.Size, size);
+            tx.Add(id, DiskStateEntry.LastModified, writeTimeUtc);
+        }
+        else
+        {
+            _ = new DiskStateEntry.New(tx, tx.TempId(DiskStateEntry.EntryPartition))
+            {
+                Path = path.ToGamePathParentTuple(gameMetadataId),
+                Hash = hash,
+                Size = size,
+                LastModified = writeTimeUtc,
+                GameId = gameMetadataId,
+            };
         }
     }
 
