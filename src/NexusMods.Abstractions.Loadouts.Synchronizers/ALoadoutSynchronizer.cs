@@ -626,7 +626,7 @@ public partial class ALoadoutSynchronizer : ILoadoutSynchronizer
             var instance = intrinsicFiles[path];
             var resolvedPath = gameLocations.ToAbsolutePath(path);
             await using var stream = resolvedPath.Read();
-            await instance.Ingest(stream, loadout, syncTree, tx);
+            _ = await instance.Ingest(stream, loadout, syncTree, tx);
         }
     }
 

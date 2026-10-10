@@ -33,6 +33,8 @@ public static class Services
             .AddCollectionGroupModel()
             .AddSortOrderModel()
             .AddGameBackedUpFileModel()
+            .AddIntrinsicFileEntryModel()
+            .AddIntrinsicFileStateModel()
             .AddLoadoutQueriesSql();
     }
 }

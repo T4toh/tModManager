@@ -156,8 +156,9 @@ public class GamePathAttribute(string ns, string name) : ScalarAttribute<GamePat
     /// <inheritdoc />
     protected override string ToLowLevel(GamePath value)
     {
-        // TODO: make this a reference or something
-        return $"{value.LocationId.Value}|{value.Path}";
+        // The location's name, not its numeric hash: FromLowLevel re-hashes the text, so writing the
+        // number came back as a different id (an upstream bug nothing exercised until IntrinsicFileEntry).
+        return $"{value.LocationId}|{value.Path}";
     }
 
     /// <inheritdoc />
