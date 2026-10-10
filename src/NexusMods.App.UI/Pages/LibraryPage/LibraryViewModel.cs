@@ -67,6 +67,7 @@ public class LibraryViewModel : APageViewModel<ILibraryViewModel>, ILibraryViewM
     public ReactiveCommand<Unit> UpdateAndKeepOldSelectedItemsCommand { get; }
 
     public ReactiveCommand<Unit> RemoveSelectedItemsCommand { get; }
+    public ReactiveCommand<Unit> EditLocalFileMetadataCommand { get; }
     
     public ReactiveCommand<Unit> DeselectItemsCommand { get; }
 
@@ -216,6 +217,18 @@ public class LibraryViewModel : APageViewModel<ILibraryViewModel>, ILibraryViewM
         RemoveSelectedItemsCommand = hasSelection.ToReactiveCommand<Unit>(
             executeAsync: (_, cancellationToken) => RemoveSelectedItems(cancellationToken),
             awaitOperation: AwaitOperation.Parallel,
+            initialCanExecute: false,
+            configureAwait: false
+        );
+
+        var hasSingleLocalFile = Adapter.SelectedModels
+            .ObserveChanged()
+            .Select(change => TryGetSingleSelectedLocalFile(out var unused))
+            .Prepend(false);
+
+        EditLocalFileMetadataCommand = hasSingleLocalFile.ToReactiveCommand<Unit>(
+            executeAsync: (_, cancellationToken) => EditLocalFileMetadata(cancellationToken),
+            awaitOperation: AwaitOperation.Drop,
             initialCanExecute: false,
             configureAwait: false
         );
@@ -697,7 +710,8 @@ After asking design, we're choosing to simply open the mod page for now.
 */
         return viewChangelogMessage.Id.Match(
             modPageMetadataId => OpenModPage(modPageMetadataId),
-            libraryItemId => OpenModPage(new NexusModsLibraryItem.ReadOnly(_connection.Db, libraryItemId).ModPageMetadataId)
+            libraryItemId => OpenModPage(new NexusModsLibraryItem.ReadOnly(_connection.Db, libraryItemId).ModPageMetadataId),
+            _ => ValueTask.CompletedTask // changelogs stay Nexus-only; the action is disabled for local files
         );
     }
 
@@ -705,7 +719,14 @@ After asking design, we're choosing to simply open the mod page for now.
     {
         return viewModPageMessage.Id.Match(
             modPageMetadataId => OpenModPage(modPageMetadataId),
-            libraryItemId => OpenModPage(new NexusModsLibraryItem.ReadOnly(_connection.Db, libraryItemId).ModPageMetadataId)
+            libraryItemId => OpenModPage(new NexusModsLibraryItem.ReadOnly(_connection.Db, libraryItemId).ModPageMetadataId),
+            localFileId =>
+            {
+                var local = LocalFile.Load(_connection.Db, localFileId);
+                if (LocalFile.PageUri.TryGetValue(local, out var uri))
+                    _serviceProvider.GetRequiredService<IOSInterop>().OpenUri(uri);
+                return ValueTask.CompletedTask;
+            }
         );
     }
     
@@ -887,6 +908,36 @@ After asking design, we're choosing to simply open the mod page for now.
         _notificationService.ShowToast(Language.ToastNotification_Items_deleted);
     }
 
+    private bool TryGetSingleSelectedLocalFile(out LocalFile.ReadOnly localFile)
+    {
+        localFile = default;
+        var ids = GetSelectedIds();
+        if (ids.Length != 1) return false;
+        var candidate = LocalFile.Load(_connection.Db, ids[0]);
+        if (!candidate.IsValid()) return false;
+        localFile = candidate;
+        return true;
+    }
+
+    private async ValueTask EditLocalFileMetadata(CancellationToken cancellationToken)
+    {
+        if (!TryGetSingleSelectedLocalFile(out var localFile)) return;
+        var libraryItem = localFile.AsLibraryFile().AsLibraryItem();
+        var initial = new LocalFileMetadata(
+            Name: libraryItem.Name,
+            Version: LocalFile.Version.TryGetValue(localFile, out var version) ? version : null,
+            Source: LocalFile.Source.TryGetValue(localFile, out var source) ? source : null,
+            PageUri: LocalFile.PageUri.TryGetValue(localFile, out var uri) ? uri : null);
+        var overlay = new LocalFileMetadataOverlayViewModel(
+            title: "Editar archivo local",
+            acceptText: "Guardar",
+            originPath: localFile.OriginalPath,
+            initial: initial);
+        var result = await _serviceProvider.GetRequiredService<IOverlayController>().EnqueueAndWait(overlay);
+        if (!result.Confirmed) return;
+        await _libraryService.UpdateLocalFileMetadata(localFile.LocalFileId, result.Metadata);
+    }
+
     private async ValueTask AddFilesFromDisk(IStorageProvider storageProvider, CancellationToken cancellationToken)
     {
         var files = await storageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
@@ -910,16 +961,28 @@ After asking design, we're choosing to simply open the mod page for now.
             .Where(path => path.FileExists)
             .ToArray();
 
-        await Parallel.ForAsync(
-            fromInclusive: 0,
-            toExclusive: paths.Length,
-            body: async (i, innerCancellationToken) =>
+        var overlayController = _serviceProvider.GetRequiredService<IOverlayController>();
+        foreach (var path in paths)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var overlay = new LocalFileMetadataOverlayViewModel(
+                title: "Agregar archivo a la biblioteca",
+                acceptText: "Agregar",
+                originPath: path.ToString(),
+                initial: LocalFileMetadataOverlayViewModel.PrefillFor(path.FileName));
+            var result = await overlayController.EnqueueAndWait(overlay);
+            if (!result.Confirmed) continue;
+
+            try
             {
-                var path = paths[i];
-                await _libraryService.AddLocalFile(path);
-            },
-            cancellationToken: cancellationToken
-        );
+                await _libraryService.AddLocalFile(path, result.Metadata);
+            }
+            catch (Exception ex)
+            {
+                _serviceProvider.GetRequiredService<ILogger<LibraryViewModel>>().LogError(ex, "No se pudo agregar '{Path}'", path);
+                _notificationService.ShowToast($"No se agregó '{path.FileName}': {ex.Message}", ToastNotificationVariant.Failure);
+            }
+        }
     }
 
     private ValueTask UpdateSelectedItems(CancellationToken cancellationToken)
@@ -1023,8 +1086,8 @@ After asking design, we're choosing to simply open the mod page for now.
 public readonly record struct InstallMessage(LibraryItemId[] Ids);
 public readonly record struct UpdateAndReplaceMessage(ModUpdatesOnModPage Updates, CompositeItemModel<EntityId> TreeNode);
 public readonly record struct UpdateAndKeepOldMessage(ModUpdatesOnModPage Updates, CompositeItemModel<EntityId> TreeNode);
-public readonly record struct ViewChangelogMessage(OneOf<NexusModsModPageMetadataId, NexusModsLibraryItemId> Id);
-public readonly record struct ViewModPageMessage(OneOf<NexusModsModPageMetadataId, NexusModsLibraryItemId> Id);
+public readonly record struct ViewChangelogMessage(OneOf<NexusModsModPageMetadataId, NexusModsLibraryItemId, LocalFileId> Id);
+public readonly record struct ViewModPageMessage(OneOf<NexusModsModPageMetadataId, NexusModsLibraryItemId, LocalFileId> Id);
 public readonly record struct HideUpdatesMessage(OneOf<NexusModsModPageMetadataId, NexusModsLibraryItemId> Id);
 public readonly record struct DeleteItemMessage(LibraryItemId[] Ids);
 
@@ -1092,7 +1155,17 @@ public class LibraryTreeDataGridAdapter :
             })
         );
 
-        static OneOf<NexusModsModPageMetadataId, NexusModsLibraryItemId> GetModPageIdOneOfType(IDb db, EntityId entityId)
+        static OneOf<NexusModsModPageMetadataId, NexusModsLibraryItemId, LocalFileId> GetModPageIdOneOfType(IDb db, EntityId entityId)
+        {
+            var localFile = LocalFile.Load(db, entityId);
+            if (localFile.IsValid())
+                return OneOf<NexusModsModPageMetadataId, NexusModsLibraryItemId, LocalFileId>.FromT2(localFile.LocalFileId);
+            return GetNexusModPageIdOneOfType(db, entityId).Match(
+                OneOf<NexusModsModPageMetadataId, NexusModsLibraryItemId, LocalFileId>.FromT0,
+                OneOf<NexusModsModPageMetadataId, NexusModsLibraryItemId, LocalFileId>.FromT1);
+        }
+
+        static OneOf<NexusModsModPageMetadataId, NexusModsLibraryItemId> GetNexusModPageIdOneOfType(IDb db, EntityId entityId)
         {
             var modPageMetadata = NexusModsModPageMetadata.Load(db, entityId);
             if (modPageMetadata.IsValid())
@@ -1150,7 +1223,7 @@ public class LibraryTreeDataGridAdapter :
                 var (self, model, _) = state;
                 var entityId = model.Key;
 
-                self.MessageSubject.OnNext(new HideUpdatesMessage(GetModPageIdOneOfType(self._connection.Db, entityId)));
+                self.MessageSubject.OnNext(new HideUpdatesMessage(GetNexusModPageIdOneOfType(self._connection.Db, entityId)));
             })
         );
     }

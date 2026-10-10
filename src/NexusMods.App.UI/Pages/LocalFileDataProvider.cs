@@ -92,7 +92,9 @@ internal class LocalFileDataProvider : ILibraryDataProvider, ILoadoutDataProvide
         LibraryDataProviderHelper.AddInstalledDateComponent(itemModel, linkedLoadoutItemsObservable);
         LibraryDataProviderHelper.AddInstallActionComponent(itemModel, linkedLoadoutItemsObservable);
         LibraryDataProviderHelper.AddViewChangelogActionComponent(itemModel, isEnabled: false);
-        LibraryDataProviderHelper.AddViewModPageActionComponent(itemModel, isEnabled: false);
+        if (LocalFile.Version.TryGetValue(localFile, out var version))
+            itemModel.Add(LibraryColumns.ItemVersion.CurrentVersionComponentKey, new VersionComponent(value: version));
+        LibraryDataProviderHelper.AddViewModPageActionComponent(itemModel, isEnabled: LocalFile.PageUri.TryGetValue(localFile, out _));
         LibraryDataProviderHelper.AddHideUpdatesActionComponent(itemModel, isEnabled: false, isVisible: false);
         
         // Get related collections
