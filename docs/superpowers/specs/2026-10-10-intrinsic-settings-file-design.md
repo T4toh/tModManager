@@ -118,9 +118,14 @@ public abstract class ASettingsIntrinsicFile<TDoc> : IIntrinsicFile
     protected abstract void Set(TDoc document, string key, string value);
 
     public Task Write(Stream stream, Loadout.ReadOnly loadout, Dictionary<GamePath, SyncNode> syncTree);
-    public Task Ingest(Stream stream, Loadout.ReadOnly loadout, Dictionary<GamePath, SyncNode> syncTree, ITransaction tx);
+    public Task<ReadOnlyMemory<byte>?> Ingest(Stream stream, Loadout.ReadOnly loadout, Dictionary<GamePath, SyncNode> syncTree, ITransaction tx);
 }
 ```
+
+`IIntrinsicFile.Ingest` pasa a devolver `ReadOnlyMemory<byte>?`: el contenido que debe quedar en
+disco después de ingerir, o `null` si no hay nada que reescribir. Es un cambio de interfaz sin otros
+implementadores. Así el core no necesita leer datoms sin commitear ni la clase base guardar estado
+entre llamadas: `Ingest` ya conoce la base nueva y las entradas que acaba de crear.
 
 - `Write`: `Parse(BaseContent del IntrinsicFileState o "")` → `Set` de cada entrada ganadora
   (`WinningEntries(loadout)`: entradas de ítems habilitados con `File == Path`, resueltas por §1) →
@@ -131,6 +136,8 @@ public abstract class ASettingsIntrinsicFile<TDoc> : IIntrinsicFile
   `IntrinsicFileEntry` con el valor del disco en el grupo de External Changes
   (`GetOrCreateOverridesGroup`, el mismo que usan los archivos). Si la clave ya tenía una entrada
   en External Changes con ese valor, no hace nada. Claves que nadie posee: no generan entradas.
+  Devuelve el render de `base nueva + entradas ganadoras` (con las External Changes recién creadas
+  aplicadas en memoria) como bytes, o `null` si es idéntico al disco.
 - `Write` toma la base del snapshot y no del disco a propósito: `ActionWriteIntrinsics` ya truncó el
   archivo cuando llama a `Write`, y un archivo que el juego borró se regenera igual.
 - Primer apply sin snapshot y sin archivo en disco: base vacía, `Write` escribe solo las entradas
@@ -140,12 +147,9 @@ public abstract class ASettingsIntrinsicFile<TDoc> : IIntrinsicFile
 
 ### 3. Cambios al synchronizer (`ALoadoutSynchronizer`)
 
-- `AdaptLoadout`: después de `instance.Ingest(...)`, renderiza `instance.Write` a un `MemoryStream`
-  con el loadout tal como queda en la transacción (`tx` todavía abierta: las entradas nuevas de
-  External Changes están en `tx`, así que `Write` recibe el loadout actual más las entradas
-  pendientes; la clase base acepta las dos fuentes), compara los bytes con el disco y, si difieren,
-  escribe el archivo. Así nuestras claves aterrizan en el mismo apply y el disco queda igual al
-  loadout.
+- `AdaptLoadout`: si `instance.Ingest(...)` devuelve bytes, los escribe en el archivo (`Create` +
+  copia) en el mismo apply. Así nuestras claves aterrizan de inmediato y el disco queda igual al
+  loadout. El estado de disco que se graba al final del sync toma el hash de lo escrito.
 - `EnsureDiskChangesStayInside` suma `Actions.AdaptLoadout` a `diskChanges`: la escritura posterior
   a `Ingest` pasa por las mismas guardas de whitelist y symlinks que `WriteIntrinsic`.
 - `Cyberpunk2077Synchronizer.IntrinsicFiles(loadout)`: si la instalación declara
