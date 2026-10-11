@@ -91,11 +91,6 @@ public readonly struct GameLocations : IReadOnlyDictionary<LocationId, GameLocat
     }
 
     /// <summary>
-    /// Resolves <paramref name="gamePath"/> to a path inside its location. Throws when the path has a <c>..</c>
-    /// segment: paths from mods and collections (FOMOD destinations, collection.json) can carry one and
-    /// <c>Combine</c> keeps it, so this is the one check every synchronizer write and delete goes through.
-    /// </summary>
-    /// <summary>
     /// False when the path's location has a whitelist and the path is not in it, or when the location is not declared
     /// at all (a prefix that no longer exists): the app must not read, write, back up or delete it.
     /// </summary>
@@ -105,6 +100,11 @@ public readonly struct GameLocations : IReadOnlyDictionary<LocationId, GameLocat
         return location.ManagedFiles is null || location.ManagedFiles.Contains(gamePath.Path);
     }
 
+    /// <summary>
+    /// Resolves <paramref name="gamePath"/> to a path inside its location. Throws when the path has a <c>..</c>
+    /// segment: paths from mods and collections (FOMOD destinations, collection.json) can carry one and
+    /// <c>Combine</c> keeps it, so this is the one check every synchronizer write and delete goes through.
+    /// </summary>
     public AbsolutePath ToAbsolutePath(GamePath gamePath)
     {
         if (SafePath.HasParentSegment(gamePath.Path))

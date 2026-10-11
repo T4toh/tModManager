@@ -44,6 +44,8 @@ internal class AddLocalFileJob : IJobDefinitionWithStart<AddLocalFileJob, LocalF
         // regular file by PlaceAsync (it reads the content, it never links).
         if (!FilePath.FileExists)
             throw new InvalidOperationException($"No es un archivo o no existe: {FilePath}");
+        // Before copying anything: a bad page URL must not leave a copy behind
+        Metadata.EnsureValidPageUri();
 
         // 1. Same content already in the library as a local file with a live download: reuse it
         //    before copying anything. Hashing the source first means this job never has to delete
@@ -98,7 +100,8 @@ internal class AddLocalFileJob : IJobDefinitionWithStart<AddLocalFileJob, LocalF
         {
             Logger.LogInformation("'{File}' ya estaba en la biblioteca como '{Existing}'", FilePath, name);
         }
-        ApplyMetadata(tx, existing.Id, Metadata);
+        // The existing item keeps its name: the dialog prefilled one from the file name, the user's own is better
+        ApplyMetadata(tx, existing.Id, Metadata with { Name = null });
         await tx.Commit();
         return LocalFile.Load(Connection.Db, existing.Id);
     }
@@ -108,6 +111,7 @@ internal class AddLocalFileJob : IJobDefinitionWithStart<AddLocalFileJob, LocalF
     /// </summary>
     internal static void ApplyMetadata(ITransaction tx, EntityId id, LocalFileMetadata metadata)
     {
+        metadata.EnsureValidPageUri();
         if (!string.IsNullOrWhiteSpace(metadata.Name)) tx.Add(id, LibraryItem.Name, metadata.Name.Trim());
         if (!string.IsNullOrWhiteSpace(metadata.Version)) tx.Add(id, LocalFile.Version, metadata.Version.Trim());
         if (!string.IsNullOrWhiteSpace(metadata.Source)) tx.Add(id, LocalFile.Source, metadata.Source.Trim());

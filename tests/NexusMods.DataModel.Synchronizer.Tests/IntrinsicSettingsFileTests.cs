@@ -149,6 +149,19 @@ public class IntrinsicSettingsFileTests(ITestOutputHelper helper) : ACyberpunkIs
     }
 
     [Fact]
+    public async Task DeleteLoadout_RemovesTheIntrinsicStateToo()
+    {
+        var loadout = await ManagedWith(Original);
+        await ModWithEntry(loadout, "DLSS Off", Dlss, "\"Off\"");
+        loadout = await Apply(loadout);
+        IntrinsicFileState.FindByLoadout(Connection.Db, loadout.LoadoutId).Should().NotBeEmpty();
+
+        await LoadoutManager.DeleteLoadout(loadout.LoadoutId);
+
+        IntrinsicFileState.FindByLoadout(Connection.Db, loadout.LoadoutId).Should().BeEmpty("the state is not a LoadoutItem, it has to be deleted on its own");
+    }
+
+    [Fact]
     public async Task GameDeletesTheFile_ItIsRegenerated()
     {
         var loadout = await ManagedWith(Original);

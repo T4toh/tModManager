@@ -1,11 +1,11 @@
 # TODO
 
-## 📍 Estado y próximos pasos (2026-10-07)
+## 📍 Estado y próximos pasos (2026-10-10)
 
-Todo lo mergeado hasta #55 está probado con el juego real. Última prueba completa: 2026-10-06, colección "Welcome to Night City 2.31a" (283 mods) agregada, bajada, instalada, aplicada y jugada. Sin CI: **la verificación es local** (`./dev.sh` opción 4, un proyecto por vez).
+Todo lo mergeado hasta #75 está probado con el juego real. Última prueba completa: 2026-10-06, colección "Welcome to Night City 2.31a" (283 mods) agregada, bajada, instalada, aplicada y jugada. Sin CI: **la verificación es local** (`./dev.sh` opción 4, un proyecto por vez).
 
 **Próximo:**
-1. Bugs chicos que salieron de las pruebas (lista de abajo).
+1. Bugs chicos que salieron de las pruebas (lista de abajo). Los menores de revisión de #73/#74/#75 se cerraron en PR #76 (2026-10-10).
 2. Pieza 5 (load order que se escribe a archivo) o pieza 6 (requisitos del prefix como datos) de "Piezas genéricas para el segundo juego". Las piezas 2, 3 y 4 están hechas (PRs #73, #74, #75) y probadas con el juego. Witcher 3 arranca cuando estén las piezas que necesita.
 
 ### Pruebas reales
@@ -339,9 +339,9 @@ Hecho el 2026-09-22 (rama `feat/rename-tmodmanager`): borrados `.github/` comple
 
 ## 🐛 Errores conocidos y deuda
 
-- [ ] **Pieza 4, límites conocidos y menores diferidos (PR #75):** al deshabilitar un mod con entradas, la clave conserva el último valor escrito (la base ya lo tiene) hasta que el juego o el usuario la cambien; revertir de verdad pediría guardar el valor previo al primer Write por clave. Un archivo que no parsea y no tiene base se deja en paz sin log (la clase base no tiene logger). De la revisión: `UserSettingsFile` lanza con JSON de forma inesperada (`name` numérico, `options` no-array) dentro de `Ingest`; `LoadoutSettings.Upsert` toma cualquier ítem de primer nivel llamado "Ajustes" como el grupo; `TryResolveFile` y `settings list` muestran `{WinePrefix}/ruta` pero `-f` acepta `WinePrefix:ruta`; el grupo "Ajustes" y los External Changes de entradas no se ven en la UI (solo CLI); textos de CP2077/Wine en la ayuda del CLI del core; el aviso de symlink en `IntrinsicFiles` se loguea en cada llamada; `IntrinsicFileState` no es `LoadoutItem` y `DeleteLoadout` lo deja huérfano; `LoadoutOverrides.GetOrCreate` solo ve estado commiteado. Pendientes: formatos INI/líneas, UI de entradas, orden por load order entre entradas, productores desde instaladores/colecciones
+- [ ] **Pieza 4, límites conocidos (PR #75; menores de la revisión cerrados en PR #76, 2026-10-10):** al deshabilitar un mod con entradas, la clave conserva el último valor escrito (la base ya lo tiene) hasta que el juego o el usuario la cambien; revertir de verdad pediría guardar el valor previo al primer Write por clave. Un archivo que no parsea y no tiene base se deja en paz sin log (la clase base no tiene logger). `LoadoutSettings.Upsert` toma cualquier ítem de primer nivel llamado "Ajustes" como el grupo (un marker pide cambio de esquema); el grupo "Ajustes" y los External Changes de entradas no se ven en la UI (solo CLI); `LoadoutOverrides.GetOrCreate` solo ve estado commiteado (con dos archivos intrínsecos en un mismo apply crearía dos grupos; hoy hay uno). Pendientes: formatos INI/líneas, UI de entradas, orden por load order entre entradas, productores desde instaladores/colecciones
 
-- [ ] **Pieza 3, menores diferidos de la revisión (PR #74, 2026-10-10):** mover "Editar" del toolbar al menú "…" de la fila (ahí viven las acciones del ítem: página, changelog, borrar; el toolbar le suma una segunda navegación); el esquema de `PageUri` solo se valida en el diálogo (el CLI `--url` y `OpenUri` aceptan cualquier URI absoluta: exigir http(s) en `ApplyMetadata`/`UpdateLocalFileMetadata`); sin toast cuando un alta reutiliza un ítem existente (y el nombre prellenado pisa el que tenía); cada alta se espera antes de abrir el siguiente diálogo; un nombre en blanco cae al nombre del archivo en Downloads (puede ser `Mod_1.zip`), mejor `Path.GetFileName(OriginalPath)`; `Uri ==` ignora el fragmento (un cambio solo de `#ancla` no se guarda); `catch (Exception)` en `AddFilesFromDisk` también muestra toast al cancelar; `out var unused` → `out _`; un symlink dentro de Downloads elegido desde adentro se registra tal cual (`InFolder` léxico, preexistente); `NexusMods.DataModel.Tests` reporta un Total distinto en cada corrida (xUnit v3, 0 fallos, preexistente)
+- [ ] **Pieza 3, lo que queda de la revisión (PR #74; el resto cerrado en PR #76, 2026-10-10):** cada alta se espera antes de abrir el siguiente diálogo; un symlink dentro de Downloads elegido desde adentro se registra tal cual (`InFolder` léxico, preexistente); `NexusMods.DataModel.Tests` reporta un Total distinto en cada corrida (xUnit v3, 0 fallos, preexistente)
 
 Estado al 2026-10-07:
 
@@ -405,7 +405,6 @@ Encontrado el 2026-09-24 en la eliminación de `.nx` (revisiones de implementaci
 
 ### Otros TODO relevantes en código
 
-- [ ] **Pieza 2, menores diferidos de la revisión (PR #73, 2026-10-10):** `GameLocations.IsManaged` quedó entre el `<summary>` de `ToAbsolutePath` y el método (mover el bloque); `GameLocationsService.IndexGame` no chequea `IsManaged` tras `ToGamePath` (un prefix anidado dentro de `Game` indexaría todo el prefix como paths `WinePrefix`; falla seguro en el guard); el filtro de `CleanDirectories` no tiene test que falle sin él; la rama `$USER` de `WineUserName` (prefix de Lutris) no tiene test; `FilesToIndex` chequea `FileExists` antes de `IsUnderSymlink` (solo metadata; invertir el orden)
 - [ ] **Prefix manual (Lutris) borrado + reinicio:** `ManuallyAddedLocator` solo declara el prefix si la carpeta existe, así que la base queda con paths `WinePrefix` de una ubicación no declarada. Sync y unmanage fallan con mensaje claro (`EnsureDiskChangesStayInside`), pero `DiffTreeViewModel.ToAbsolutePath` puede tirar `KeyNotFoundException` en la UI. Declararlo por la ruta guardada exista o no, como hace `SteamLocator`
 - [ ] **Symlinks de archivo en la carpeta del juego:** el scan los lista y los hashea a través del link; un mod que los reemplace deshace el link (`LooseFileStore.ExtractFiles` lo borra antes de escribir) y el reset borra el archivo. El prefix ya lo rechaza (`EnsureDiskChangesStayInside`, solo ubicaciones con whitelist); extender a `Game` cuando se decida qué hacer con links legítimos
 - `NexusMods.Library/DownloadsService.cs:46` — restaurar descargas completadas desde storage al arrancar

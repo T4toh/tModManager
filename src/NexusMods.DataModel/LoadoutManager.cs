@@ -264,6 +264,11 @@ internal partial class LoadoutManager : ILoadoutManager
             tx.Delete(priorityEntity, recursive: false);
         }
 
+        foreach (var state in IntrinsicFileState.FindByLoadout(loadout.Db, loadout))
+        {
+            tx.Delete(state, recursive: false);
+        }
+
         await tx.Commit();
         
         // Execute the garbage collector
