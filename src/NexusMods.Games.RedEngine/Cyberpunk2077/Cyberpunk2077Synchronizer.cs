@@ -70,7 +70,9 @@ public class Cyberpunk2077Synchronizer : ALoadoutSynchronizer
         // Prefix deleted (Storage Manager) or not created yet: nothing to generate inside a folder that is not there.
         // The loadout keeps its entries and base; the file comes back once the prefix exists again.
         if (!prefix.Path.DirectoryExists()) return new Dictionary<GamePath, IIntrinsicFile>();
-        var path = new GamePath(LocationId.WinePrefix, Cyberpunk2077Game.UserSettingsPath(prefix.Path));
+        // The whitelist was computed once when the game was located; use that very path so the two never diverge
+        var relative = prefix.ManagedFiles?.FirstOrDefault(f => f.FileName == "UserSettings.json") ?? Cyberpunk2077Game.UserSettingsPath(prefix.Path);
+        var path = new GamePath(LocationId.WinePrefix, relative);
         var resolved = locations.ToAbsolutePath(path);
         // A linked settings file (or one behind a linked folder) is never written through, and declaring it
         // would make every sync refuse: leave it alone and say so, the rest of the loadout still applies.

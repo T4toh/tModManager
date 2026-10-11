@@ -1,6 +1,7 @@
 using System.Text.Json.Nodes;
 using FluentAssertions;
 using NexusMods.Abstractions.Loadouts;
+using NexusMods.Abstractions.Games;
 using NexusMods.Abstractions.Loadouts.Synchronizers;
 using NexusMods.Games.RedEngine.Cyberpunk2077;
 using NexusMods.Games.TestFramework;
@@ -209,6 +210,91 @@ public class IntrinsicSettingsFileTests(ITestOutputHelper helper) : ACyberpunkIs
         await LoadoutManager.UnManage(GameInstallation);
 
         (await Settings.ReadAllTextAsync()).Should().Be(Original);
+    }
+
+    private async Task SetEntryValue(LoadoutItemGroupId mod, string value)
+    {
+        using var tx = Connection.BeginTransaction();
+        var entry = IntrinsicFileEntry.FindByFile(Connection.Db, SettingsPath).Single(e => e.AsLoadoutItem().ParentId == mod);
+        tx.Add(entry.Id, IntrinsicFileEntry.Value, value);
+        await tx.Commit();
+    }
+
+    private bool ShouldSync(Loadout.ReadOnly loadout)
+    {
+        Refresh(ref loadout);
+        var metadata = GameRegistry.ForceGetMetadata(GameInstallation);
+        var sync = (ALoadoutSynchronizer)GameInstallation.GetGame().Synchronizer;
+        var disk = sync.GetDiskStateForGame(metadata);
+        var previous = ((ILoadoutSynchronizer)sync).GetPreviouslyAppliedDiskState(metadata);
+        return sync.ShouldSynchronize(loadout, previous, disk);
+    }
+
+    [Fact]
+    public async Task ChangingTheEntryBetweenApplies_LandsAndCreatesNoExternalChange()
+    {
+        var loadout = await ManagedWith(Original);
+        var mod = await ModWithEntry(loadout, "DLSS", Dlss, "\"Off\"");
+        loadout = await Apply(loadout);
+        (await ValueOnDisk("/graphics/advanced", "DLSS")).Should().Be("\"Off\"");
+
+        await SetEntryValue(mod, "\"Quality\"");
+        loadout = await Apply(loadout);
+
+        (await ValueOnDisk("/graphics/advanced", "DLSS")).Should().Be("\"Quality\"");
+        ExternalChangeEntries(loadout).Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task NumericValueWithDecimal_IsNotAnExternalChangeOnTheNextApply()
+    {
+        var loadout = await ManagedWith(Original);
+        await ModWithEntry(loadout, "Mouse", "/controls/fpp_camera/FPP_MouseX", "7.0");
+        loadout = await Apply(loadout);
+        loadout = await Apply(loadout);
+
+        (await ValueOnDisk("/controls/fpp_camera", "FPP_MouseX")).Should().Be("7.0");
+        ExternalChangeEntries(loadout).Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task NoEntries_FileIsNeverRewrittenNorRegenerated()
+    {
+        var loadout = await ManagedWith(Original);
+        loadout = await Apply(loadout);
+        (await Settings.ReadAllTextAsync()).Should().Be(Original, "no owned keys, the game's own formatting stays");
+
+        Settings.Delete();   // the user resets the game's settings on purpose
+        await Apply(loadout);
+
+        Settings.FileExists.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task ShouldSynchronize_IsFalseAfterApply_AndTrueAfterANewEntryValue()
+    {
+        var loadout = await ManagedWith(Original);
+        var mod = await ModWithEntry(loadout, "DLSS", Dlss, "\"Off\"");
+        loadout = await Apply(loadout);
+
+        ShouldSync(loadout).Should().BeFalse("nothing to write: the status must say Current and keep Launch enabled");
+
+        await SetEntryValue(mod, "\"Quality\"");
+        ShouldSync(loadout).Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task GameRevertsOurKeyToTheOriginal_BecomesAnExternalChange()
+    {
+        var loadout = await ManagedWith(Original);
+        await ModWithEntry(loadout, "DLSS", Dlss, "\"Off\"");
+        loadout = await Apply(loadout);
+
+        await GameWrites(doc => { doc["data"]![1]!["options"]![0]!["value"] = "Auto"; return doc; });
+        loadout = await Apply(loadout);
+
+        ExternalChangeEntries(loadout).Should().ContainSingle().Which.Value.Should().Be("\"Auto\"");
+        (await ValueOnDisk("/graphics/advanced", "DLSS")).Should().Be("\"Auto\"");
     }
 
     [Fact]

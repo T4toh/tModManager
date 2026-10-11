@@ -82,7 +82,7 @@ public class SettingsIntrinsicFileTests(ITestOutputHelper helper) : ACyberpunkIs
 
         rewritten.Should().Be("fov=90\ndlss=off\n", "our key is re-applied over the game's value in the same apply");
         (await Render(file, after)).Should().Be("fov=90\ndlss=off\n");
-        IntrinsicFileState.FindByLoadout(Connection.Db, after.LoadoutId).Should().ContainSingle().Which.BaseContent.Should().Be("fov=90\ndlss=auto\n");
+        IntrinsicFileState.FindByLoadout(Connection.Db, after.LoadoutId).Should().ContainSingle().Which.BaseContent.Should().Be("fov=90\ndlss=off\n", "the base is what is on disk after the apply");
     }
 
     [Fact]
@@ -154,6 +154,87 @@ public class SettingsIntrinsicFileTests(ITestOutputHelper helper) : ACyberpunkIs
         Refresh(ref loadout);
 
         (await Render(new LinesFile(), loadout)).Should().NotContain("dlss", "a disabled mod owns nothing");
+    }
+
+    [Fact]
+    public async Task EntryChangedBetweenApplies_IsNotAGameChange()
+    {
+        var loadout = await CreateLoadout();
+        var mod = await Mod(loadout, "A", ("dlss", "off"));
+        Refresh(ref loadout);
+        var file = new LinesFile();
+        (_, loadout) = await IngestText(file, loadout, "fov=90\ndlss=auto\n");   // apply 1 wrote dlss=off
+
+        // The user changes the entry; the next apply sees our own previous value on disk
+        using (var tx = Connection.BeginTransaction())
+        {
+            var entry = IntrinsicFileEntry.FindByFile(Connection.Db, FilePath).Single(e => e.AsLoadoutItem().ParentId == mod);
+            tx.Add(entry.Id, IntrinsicFileEntry.Value, "quality");
+            await tx.Commit();
+        }
+        Refresh(ref loadout);
+        var (rewritten, after) = await IngestText(file, loadout, "fov=90\ndlss=off\n");
+
+        rewritten.Should().Be("fov=90\ndlss=quality\n");
+        IntrinsicFileEntry.FindByFile(Connection.Db, FilePath).Count(e => e.AsLoadoutItem().LoadoutId == after.LoadoutId).Should().Be(1, "no External Change");
+    }
+
+    [Fact]
+    public async Task GameRevertsOurKeyToTheOriginal_IsAGameChange()
+    {
+        var loadout = await CreateLoadout();
+        await Mod(loadout, "A", ("dlss", "off"));
+        Refresh(ref loadout);
+        var file = new LinesFile();
+        (_, loadout) = await IngestText(file, loadout, "dlss=auto\n");   // apply 1 wrote dlss=off
+
+        var (rewritten, after) = await IngestText(file, loadout, "dlss=auto\n");   // the user picked the original again in game
+
+        rewritten.Should().BeNull();
+        var overrides = LoadoutOverridesGroup.FindByOverridesFor(Connection.Db, after.LoadoutId).Should().ContainSingle().Subject;
+        overrides.AsLoadoutItemGroup().Children.Select(c => IntrinsicFileEntry.Load(Connection.Db, c.Id)).Where(e => e.IsValid())
+            .Should().ContainSingle().Which.Value.Should().Be("auto");
+    }
+
+    [Fact]
+    public async Task NoOwnedKeys_NeverRewritesNorRegenerates()
+    {
+        var loadout = await CreateLoadout();
+        var file = new LinesFile();
+
+        var (rewritten, after) = await IngestText(file, loadout, "fov=90\n");
+        rewritten.Should().BeNull();
+        IntrinsicFileState.FindByLoadout(Connection.Db, after.LoadoutId).Should().ContainSingle().Which.BaseContent.Should().Be("fov=90\n");
+
+        (rewritten, _) = await IngestText(file, after, "");   // the user deleted the file on purpose
+        rewritten.Should().BeNull("nothing is owned, so there is nothing to regenerate");
+    }
+
+    [Fact]
+    public async Task OurValueAlreadyOnDisk_DoesNotRewrite()
+    {
+        var loadout = await CreateLoadout();
+        await Mod(loadout, "A", ("dlss", "off"));
+        Refresh(ref loadout);
+        var file = new LinesFile();
+
+        var (rewritten, _) = await IngestText(file, loadout, "fov=90\ndlss=off\n");
+
+        rewritten.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task IsUpToDate_TrueWhenEveryOwnedKeyMatches()
+    {
+        var loadout = await CreateLoadout();
+        await Mod(loadout, "A", ("dlss", "off"));
+        Refresh(ref loadout);
+        var file = new LinesFile();
+
+        file.IsUpToDate("fov=90\ndlss=off\n", loadout).Should().BeTrue();
+        file.IsUpToDate("fov=90\ndlss=auto\n", loadout).Should().BeFalse();
+        file.IsUpToDate("fov=90\n", loadout).Should().BeFalse("the owned key is missing");
+        new LinesFile().IsUpToDate("whatever\n", await CreateLoadout()).Should().BeTrue("nothing owned");
     }
 
     [Fact]

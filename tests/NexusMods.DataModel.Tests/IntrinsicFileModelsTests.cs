@@ -1,7 +1,6 @@
 using FluentAssertions;
 using NexusMods.Abstractions.Loadouts;
 using NexusMods.Games.TestFramework;
-using NexusMods.Hashing.xxHash3;
 using NexusMods.Sdk.Games;
 using NexusMods.Sdk.Loadouts;
 using Xunit;
@@ -45,13 +44,11 @@ public class IntrinsicFileModelsTests(ITestOutputHelper helper) : ACyberpunkIsol
             LoadoutId = loadout.LoadoutId,
             File = Settings,
             BaseContent = "{}",
-            IngestedHash = Hash.From(1),
         };
         await tx.Commit();
 
         var state = IntrinsicFileState.FindByLoadout(Connection.Db, loadout.LoadoutId).Should().ContainSingle().Subject;
         state.File.Should().Be(Settings);
         state.BaseContent.Should().Be("{}");
-        state.IngestedHash.Should().Be(Hash.From(1));
     }
 }

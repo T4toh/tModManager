@@ -1,26 +1,28 @@
 using System.Text;
 using NexusMods.Abstractions.Loadouts;
 using NexusMods.Abstractions.Loadouts.Extensions;
-using NexusMods.Hashing.xxHash3;
 using NexusMods.MnemonicDB.Abstractions;
 using NexusMods.Sdk.Games;
 using NexusMods.Sdk.Loadouts;
 
 namespace NexusMods.Abstractions.Loadouts.Synchronizers;
 
-/// <summary>An intrinsic file whose entries the CLI can validate and list.</summary>
+/// <summary>An intrinsic file whose entries the CLI can validate and list, and whose state the status check can read.</summary>
 public interface ISettingsIntrinsicFile : IIntrinsicFile
 {
     bool TryValidate(string key, string value, out string? error);
     /// <summary>Enabled entries for this file, one per key: External Changes win, otherwise the newest entity.</summary>
     IReadOnlyDictionary<string, IntrinsicFileEntry.ReadOnly> WinningEntries(Loadout.ReadOnly loadout);
+    /// <summary>True when every owned key already has its value in <paramref name="diskText"/> (always true with nothing owned).</summary>
+    bool IsUpToDate(string diskText, Loadout.ReadOnly loadout);
 }
 
 /// <summary>
-/// A settings file the game rewrites, where the loadout owns some keys. Write renders the last
-/// ingested base plus the winning entries; Ingest snapshots the disk as the new base, turns a
-/// game-made change to an owned key into an External Change entry (which wins), and returns the
-/// bytes that must be on disk afterwards. The game defines only the format.
+/// A settings file the game rewrites, where the loadout owns some keys. Ingest reads the disk, puts
+/// the owned keys' values in, turns a game-made change to an owned key into an External Change entry
+/// (which wins), and returns the bytes to write when something has to change. The base kept in
+/// <see cref="IntrinsicFileState"/> is what the file looks like after the apply, so a deleted or
+/// broken file is regenerated from it. The game defines only the format.
 /// </summary>
 public abstract class ASettingsIntrinsicFile<TDoc>(GamePath path) : ISettingsIntrinsicFile
 {
@@ -70,6 +72,17 @@ public abstract class ASettingsIntrinsicFile<TDoc>(GamePath path) : ISettingsInt
         return winners;
     }
 
+    public bool IsUpToDate(string diskText, Loadout.ReadOnly loadout)
+    {
+        var wanted = WinningValues(loadout);
+        if (wanted.Count == 0) return true;
+        if (string.IsNullOrWhiteSpace(diskText)) return false;
+        TDoc disk;
+        try { disk = Parse(diskText); }
+        catch (Exception e) when (e is not OutOfMemoryException) { return false; }
+        return wanted.All(kv => TryGet(disk, kv.Key, out var onDisk) && onDisk == kv.Value);
+    }
+
     public Task Write(Stream stream, Loadout.ReadOnly loadout, Dictionary<GamePath, SyncNode> syncTree)
     {
         var state = FindState(loadout);
@@ -82,64 +95,70 @@ public abstract class ASettingsIntrinsicFile<TDoc>(GamePath path) : ISettingsInt
     {
         using var reader = new StreamReader(stream, Encoding.UTF8, detectEncodingFromByteOrderMarks: true, leaveOpen: true);
         var diskText = await reader.ReadToEndAsync();
-        var diskBytes = Encoding.UTF8.GetBytes(diskText);
-        var diskHash = diskBytes.xxHash3();
 
         var state = FindState(loadout);
-        var winners = WinningEntries(loadout);
-        // No file, nothing ingested before and nothing owned: there is nothing to write and no reason to
-        // invent a file the game has not created yet.
-        if (diskText.Length == 0 && !state.IsValid() && winners.Count == 0) return null;
+        var entries = WinningEntries(loadout);
+        var wanted = entries.ToDictionary(kv => kv.Key, kv => Normalize(kv.Key, kv.Value.Value));
+        var missing = string.IsNullOrWhiteSpace(diskText);
+        // No file, nothing ingested before and nothing owned: nothing to do, and no reason to invent a
+        // file the game has not created yet.
+        if (missing && !state.IsValid() && wanted.Count == 0) return null;
 
         TDoc disk;
-        string baseText;
-        if (diskText.Length == 0)
+        string renderBase;
+        bool repair;
+        if (missing)
         {
-            // The game (or the user) deleted the file: regenerate it from the last base, never replace
-            // the base with nothing.
-            baseText = state.IsValid() ? state.BaseContent : string.Empty;
-            disk = Parse(baseText);
-            diskHash = Hash.Zero;
+            // Deleted by the game or the user: regenerate from the last base (only when something is owned, below).
+            renderBase = state.IsValid() ? state.BaseContent : string.Empty;
+            disk = Parse(renderBase);
+            repair = true;
         }
         else
         {
             try
             {
                 disk = Parse(diskText);
-                baseText = diskText;
+                renderBase = diskText;
+                repair = false;
             }
             catch (Exception e) when (e is not OutOfMemoryException)
             {
-                // A half-written or hand-broken file. With a last good base, repair the file from it; with
-                // none (first sight), leave the file alone rather than replace what we cannot read.
+                // Half-written or hand-broken. With a last good base, repair from it; with none, leave it alone.
                 if (!state.IsValid()) return null;
-                baseText = state.BaseContent;
-                disk = Parse(baseText);
-                diskHash = Hash.Zero;
+                renderBase = state.BaseContent;
+                disk = Parse(renderBase);
+                repair = true;
             }
         }
 
-        if (state.IsValid())
+        // Nothing owned: the file is the game's and the user's. Remember it, never rewrite or regenerate it.
+        if (wanted.Count == 0)
         {
-            if (state.BaseContent != baseText) tx.Add(state.Id, IntrinsicFileState.BaseContent, baseText);
-            if (state.IngestedHash != diskHash) tx.Add(state.Id, IntrinsicFileState.IngestedHash, diskHash);
-        }
-        else
-        {
-            _ = new IntrinsicFileState.New(tx) { LoadoutId = loadout.LoadoutId, File = Path, BaseContent = baseText, IngestedHash = diskHash };
+            if (!repair) UpsertBase(tx, state, loadout, diskText);
+            return null;
         }
 
         // Owned keys the game changed become External Changes with the game's value. "Changed by the
-        // game" means the disk differs from our value AND from the value of the previous base: on first
-        // sight (no base yet) the disk holds the original and our entry simply applies; after that, a
-        // key we wrote only counts as changed when the game moved it away from what the last ingest saw.
-        var effective = winners.ToDictionary(kv => kv.Key, kv => kv.Value.Value);
+        // game" means the disk differs from our value AND from the value of the previous base (what the
+        // file looked like after the last apply): on first sight there is no base and our entry simply
+        // applies; after that, a key only counts as changed when the game moved it away from what we left.
         var previousBase = state.IsValid() ? Parse(state.BaseContent) : default;
+        // The file gets the entry's own literal ("7.0"); `wanted` is only the normalized form for comparing
+        var effective = entries.ToDictionary(kv => kv.Key, kv => kv.Value.Value);
+        var mustWrite = repair;
         LoadoutOverridesGroupId? overrides = null;
-        foreach (var (key, entry) in winners)
+        foreach (var (key, entry) in entries)
         {
-            if (!TryGet(disk, key, out var onDisk) || onDisk == entry.Value) continue;
-            if (!state.IsValid() || (TryGet(previousBase!, key, out var before) && before == onDisk)) continue;
+            var want = wanted[key];
+            var found = TryGet(disk, key, out var onDisk);
+            if (found && onDisk == want) continue;
+            var gameChanged = found && state.IsValid() && !(TryGet(previousBase!, key, out var before) && before == onDisk);
+            if (!gameChanged)
+            {
+                mustWrite = true;
+                continue;
+            }
             effective[key] = onDisk;
             if (IsExternalChange(entry))
             {
@@ -154,9 +173,32 @@ public abstract class ASettingsIntrinsicFile<TDoc>(GamePath path) : ISettingsInt
             };
         }
 
-        var rendered = Encoding.UTF8.GetBytes(Render(baseText, effective));
-        if (rendered.AsSpan().SequenceEqual(diskBytes)) return null;
-        return new ReadOnlyMemory<byte>(rendered);
+        if (!mustWrite)
+        {
+            UpsertBase(tx, state, loadout, diskText);
+            return null;
+        }
+        var rendered = Render(renderBase, effective);
+        UpsertBase(tx, state, loadout, rendered);
+        return new ReadOnlyMemory<byte>(Encoding.UTF8.GetBytes(rendered));
+    }
+
+    /// <summary>Values the loadout wants, run through the format so "5.0" and "5" compare equal to what TryGet returns.</summary>
+    private Dictionary<string, string> WinningValues(Loadout.ReadOnly loadout) =>
+        WinningEntries(loadout).ToDictionary(kv => kv.Key, kv => Normalize(kv.Key, kv.Value.Value));
+
+    private string Normalize(string key, string value)
+    {
+        try
+        {
+            var doc = Parse(string.Empty);
+            Set(doc, key, value);
+            return TryGet(doc, key, out var normalized) ? normalized : value;
+        }
+        catch (Exception e) when (e is InvalidOperationException or FormatException)
+        {
+            return value;
+        }
     }
 
     private static bool IsExternalChange(IntrinsicFileEntry.ReadOnly entry) =>
@@ -167,6 +209,16 @@ public abstract class ASettingsIntrinsicFile<TDoc>(GamePath path) : ISettingsInt
         var doc = Parse(baseText);
         foreach (var (key, value) in values) Set(doc, key, value);
         return Serialize(doc);
+    }
+
+    private void UpsertBase(ITransaction tx, IntrinsicFileState.ReadOnly state, Loadout.ReadOnly loadout, string text)
+    {
+        if (state.IsValid())
+        {
+            if (state.BaseContent != text) tx.Add(state.Id, IntrinsicFileState.BaseContent, text);
+            return;
+        }
+        _ = new IntrinsicFileState.New(tx) { LoadoutId = loadout.LoadoutId, File = Path, BaseContent = text };
     }
 
     private IntrinsicFileState.ReadOnly FindState(Loadout.ReadOnly loadout) =>

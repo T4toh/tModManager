@@ -1205,8 +1205,27 @@ public partial class ALoadoutSynchronizer : ILoadoutSynchronizer
         var syncTree = BuildSyncTree(lastScannedDiskState, previousDiskState, loadout);
         // Process the sync tree to get the actions populated in the nodes
         ProcessSyncTree(syncTree);
-        
-        return syncTree.Any(n => n.Value.Actions != Actions.DoNothing && n.Value.Actions != Actions.WarnOfUnableToExtract);
+
+        var intrinsics = new Lazy<Dictionary<GamePath, IIntrinsicFile>>(() => IntrinsicFiles(loadout));
+        return syncTree.Any(kv =>
+        {
+            var node = kv.Value;
+            if (node.Actions is Actions.DoNothing or Actions.WarnOfUnableToExtract) return false;
+            // An intrinsic has no loadout hash, so its steady state is "WriteIntrinsic"; that is only a
+            // pending change when the file does not already hold the loadout's values.
+            if (node.Actions == Actions.WriteIntrinsic && node.SourceItemType == LoadoutSourceItemType.Intrinsic
+                && IntrinsicIsUpToDate(kv.Key, loadout, intrinsics.Value))
+                return false;
+            return true;
+        });
+    }
+
+    private static bool IntrinsicIsUpToDate(GamePath path, Loadout.ReadOnly loadout, Dictionary<GamePath, IIntrinsicFile> intrinsics)
+    {
+        if (!intrinsics.TryGetValue(path, out var file) || file is not ISettingsIntrinsicFile settings) return false;
+        var resolved = loadout.InstallationInstance.Locations.ToAbsolutePath(path);
+        var text = resolved.FileExists ? File.ReadAllText(resolved.ToString()) : string.Empty;
+        return settings.IsUpToDate(text, loadout);
     }
     
     /// <inheritdoc />
