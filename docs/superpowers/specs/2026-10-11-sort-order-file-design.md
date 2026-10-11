@@ -1,6 +1,6 @@
 # Load order escrito a archivo (pieza 5)
 
-Fecha: 2026-10-11 · Estado: diseño aprobado, pendiente de implementar en la rama `feat/sort-order-file`
+Fecha: 2026-10-11 · Estado: implementado en la rama `feat/sort-order-file` (PR #77), pendiente de prueba con el juego real
 
 ## Objetivo
 

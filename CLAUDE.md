@@ -166,6 +166,8 @@ Loadout data hierarchy: `Loadout` → `LoadoutItemGroup` (mod) → `LoadoutItem`
 
 Intrinsic settings files (`ASettingsIntrinsicFile<TDoc>`, `Abstractions.Loadouts.Synchronizers`): a game declares files it rewrites (CP2077: `UserSettings.json` via `Cyberpunk2077Synchronizer.IntrinsicFiles`, only when the prefix exists and the file is not a symlink); the loadout owns keys through `IntrinsicFileEntry` items (any group), the last ingested disk text is the base (`IntrinsicFileState`), every apply ingests the disk first and writes base + winning entries, and a game-made change to an owned key (differs from the entry and from the previous base) becomes an External Change entry that wins. `IIntrinsicFile.Ingest` returns the bytes to rewrite in the same apply; a missing file is regenerated from the base, an unparseable one with no base is left alone. CLI: `loadout settings set|list`.
 
+Sort order files (`ISortOrderFile`, `SortOrderIntrinsicFile`): a variety that writes its order to a file implements `ISortOrderFile` (`GameIds`, `Path`, `Render`) and is registered as such in DI; `ALoadoutSynchronizer.IntrinsicFiles` wraps every one of the game as an intrinsic through `DeclareIntrinsic` (location declared and on disk, managed, not a symlink; warned once). The loadout is the only writer: a hand edit is overwritten on apply, no External Change. CP2077: `RedModSortOrderVariety` → `WinePrefix:drive_c/modlist.txt` (CRLF), in the prefix whitelist; `RedModDeployTool` only runs `deploy -force -modlist=C:\modlist.txt` and skips when the file is not there.
+
 ### UI Architecture
 
 Avalonia MVVM with interface-based ViewModels:
