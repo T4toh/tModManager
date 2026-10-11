@@ -6,6 +6,7 @@ using NexusMods.Abstractions.Games.FileHashes;
 using NexusMods.Abstractions.Library;
 using NexusMods.Abstractions.Loadouts;
 using NexusMods.Abstractions.Loadouts.Synchronizers;
+using NexusMods.DataModel.Synchronizer;
 using NexusMods.Abstractions.Loadouts.Synchronizers.Rules;
 using NexusMods.DataModel.Undo;
 using NexusMods.MnemonicDB.Abstractions;
@@ -38,6 +39,7 @@ public static class LoadoutManagementVerbs
             .AddModule("loadout group", "Commands for managing a specific group of files in a loadout")
             .AddModule("loadout group items", "Commands for managing the items in a group of files in a loadout")
             .AddModule("loadout version", "Commands for managing the version of a loadout")
+            .AddModule("loadout settings", "Entradas de archivos de configuración que el loadout posee (UserSettings.json en CP2077)")
             .AddVerb(() => SetVersion)
             .AddVerb(() => Synchronize)
             .AddVerb(() => InstallMod)
@@ -48,7 +50,71 @@ public static class LoadoutManagementVerbs
             .AddVerb(() => ListGroups)
             .AddVerb(() => DeleteGroupItems)
             .AddVerb(() => ListRevisions)
-            .AddVerb(() => Revert);
+            .AddVerb(() => Revert)
+            .AddVerb(() => SettingsSet)
+            .AddVerb(() => SettingsUnset)
+            .AddVerb(() => SettingsList);
+
+    [Verb("loadout settings set", "Fija el valor de una clave de un archivo de configuración gestionado")]
+    private static async Task<int> SettingsSet([Injected] IRenderer renderer,
+        [Option("l", "loadout", "Loadout")] Loadout.ReadOnly loadout,
+        [Option("k", "key", "Clave (CP2077: grupo/opción, ej. /graphics/advanced/DLSS)")] string key,
+        [Option("v", "value", "Valor como literal del formato (CP2077: JSON, ej. \"Off\", 5.0, true)")] string value,
+        [Option("f", "file", "Archivo como Ubicación:ruta; por defecto el único del juego", isOptional: true)] string? file,
+        [Injected] IConnection connection)
+    {
+        if (!LoadoutSettings.TryResolveFile(loadout, file, out var path, out var intrinsic, out var error))
+        {
+            await renderer.Error("{0}", error!);
+            return -1;
+        }
+        if (intrinsic is ISettingsIntrinsicFile settings && !settings.TryValidate(key, value, out var invalid))
+        {
+            await renderer.Error("{0}", invalid!);
+            return -1;
+        }
+        var entry = await LoadoutSettings.Upsert(connection, loadout, path, key, value);
+        await renderer.TextLine("{0} = {1} en {2} (grupo '{3}'). Aplicá el loadout para escribirlo.", entry.Key, entry.Value, path, LoadoutSettings.GroupName);
+        return 0;
+    }
+
+    [Verb("loadout settings unset", "Quita una clave fijada con 'loadout settings set', o con -g Overrides el External Change que dejó el juego")]
+    private static async Task<int> SettingsUnset([Injected] IRenderer renderer,
+        [Option("l", "loadout", "Loadout")] Loadout.ReadOnly loadout,
+        [Option("k", "key", "Clave")] string key,
+        [Option("f", "file", "Archivo como Ubicación:ruta; por defecto el único del juego", isOptional: true)] string? file,
+        [Option("g", "group", "Ajustes (por defecto) u Overrides", isOptional: true)] string? group,
+        [Injected] IConnection connection)
+    {
+        if (!LoadoutSettings.TryResolveFile(loadout, file, out var path, out _, out var error))
+        {
+            await renderer.Error("{0}", error!);
+            return -1;
+        }
+        var external = string.Equals(group, "Overrides", StringComparison.OrdinalIgnoreCase);
+        if (!external && group is not null && !string.Equals(group, LoadoutSettings.GroupName, StringComparison.OrdinalIgnoreCase))
+        {
+            await renderer.Error("-g tiene que ser '{0}' u 'Overrides'", LoadoutSettings.GroupName);
+            return -1;
+        }
+        if (!await LoadoutSettings.Remove(connection, loadout, path, key, external))
+        {
+            await renderer.Error("No hay ninguna entrada '{0}' en el grupo '{1}'", key, external ? "Overrides" : LoadoutSettings.GroupName);
+            return -1;
+        }
+        await renderer.TextLine("{0} quitada. Aplicá el loadout; la clave conserva el último valor escrito hasta que el juego o vos la cambien.", key);
+        return 0;
+    }
+
+    [Verb("loadout settings list", "Lista las entradas de archivos de configuración del loadout")]
+    private static async Task<int> SettingsList([Injected] IRenderer renderer,
+        [Option("l", "loadout", "Loadout")] Loadout.ReadOnly loadout)
+    {
+        await LoadoutSettings.List(loadout)
+            .Select(r => (r.File.ToString(), r.Key, r.Value, r.Group, r.Wins ? "sí" : ""))
+            .RenderTable(renderer, "Archivo", "Clave", "Valor", "Grupo", "Gana");
+        return 0;
+    }
 
     [Verb("loadout version set", "Sets the game version for a loadout")]
     private static async Task<int> SetVersion([Injected] IRenderer renderer,

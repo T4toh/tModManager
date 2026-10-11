@@ -98,6 +98,8 @@ These are custom features not present in upstream:
 
 10. **Magic bytes file detection** (`SignatureChecker.cs`): Detects archive types (7z/zip/rar) by file headers when server doesn't provide extension.
 
+12. **Intrinsic settings files** (`ASettingsIntrinsicFile.cs`, `UserSettingsFile.cs`, `LoadoutSettings.cs`): see "Loadout & Synchronization"; CP2077's `UserSettings.json` is the first use, fed by `loadout settings set`.
+
 11. **Local mods first-class** (`AddLocalFileJob.cs`, `LocalFileBackfill.cs`, `LocalFileMetadataOverlay`): a file added by hand is copied into `tModManager/Downloads` (`DownloadsFolder.PlaceAsync`, never moved), deduped by hash, and gets `LibraryFile.DownloadPath` like a download. `LocalFile` carries optional `Version`, `Source` (free text) and `PageUri`; the library shows the version and opens the page, and "Editar" changes them. Old local files without `DownloadPath` are copied once at startup.
 
 ### Dependency Injection Pattern
@@ -161,6 +163,8 @@ The core mod management loop:
 Layer 0 (game files) is the installation's `GameBaselineFile` list: filled from the Nexus hash DB when it knows the installed Steam version (plus previous entries Nexus doesn't list whose path is still on disk, edited or not, or under the loadout, so nothing original becomes a leftover), otherwise from the disk (`BaselineRule`, mod ownership read from the last applied loadout), rebuilt when manifest IDs change (the marker is dropped with the old IDs, so a failed rebuild leaves no list), when a disk-made list's version becomes known to the hash DB, or with the "Actualicé el juego" button (`ISynchronizerService.UpdateBaseline`, serialized with syncs; on a disk rebuild it also adopts External Changes that still match the disk, outside mod and intrinsic paths). A disk list without the game's primary file is not saved. Layer 0, reset, Deep Clean, the apply guard and My Games read only the list; the hash DB is asked what is vanilla only by `UpdateBaseline` and by `ReprocessOverrides` (which moves External Changes at paths the DB lists into game files, and is skipped while the list came from the disk). Deep Clean picks loose files via `CyberpunkDeepCleanTool.LooseModFilesToMove`.
 
 Loadout data hierarchy: `Loadout` → `LoadoutItemGroup` (mod) → `LoadoutItem` → `LoadoutFile` (individual file with hash/size/path).
+
+Intrinsic settings files (`ASettingsIntrinsicFile<TDoc>`, `Abstractions.Loadouts.Synchronizers`): a game declares files it rewrites (CP2077: `UserSettings.json` via `Cyberpunk2077Synchronizer.IntrinsicFiles`, only when the prefix exists and the file is not a symlink); the loadout owns keys through `IntrinsicFileEntry` items (any group), the last ingested disk text is the base (`IntrinsicFileState`), every apply ingests the disk first and writes base + winning entries, and a game-made change to an owned key (differs from the entry and from the previous base) becomes an External Change entry that wins. `IIntrinsicFile.Ingest` returns the bytes to rewrite in the same apply; a missing file is regenerated from the base, an unparseable one with no base is left alone. CLI: `loadout settings set|list`.
 
 ### UI Architecture
 

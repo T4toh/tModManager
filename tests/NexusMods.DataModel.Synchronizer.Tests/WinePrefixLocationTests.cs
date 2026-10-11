@@ -84,6 +84,25 @@ public class WinePrefixLocationTests(ITestOutputHelper helper) : ACyberpunkIsola
         loadout.IsValid().Should().BeTrue();
     }
 
+    private const string OriginalJson = "{\"version\":140,\"data\":[{\"group_name\":\"/g\",\"options\":[{\"name\":\"k\",\"value\":1}]}]}";
+
+    /// <summary>A mod that owns one key of the (intrinsic) settings file.</summary>
+    private async Task<Loadout.ReadOnly> WithSettingsEntry(Loadout.ReadOnly loadout, string key, string value)
+    {
+        using (var tx = Connection.BeginTransaction())
+        {
+            var group = AddEmptyGroup(tx, loadout.LoadoutId, "SettingsMod");
+            _ = new IntrinsicFileEntry.New(tx, out var id)
+            {
+                File = SettingsPath, Key = key, Value = value,
+                LoadoutItem = new LoadoutItem.New(tx, id) { Name = key, LoadoutId = loadout.LoadoutId, ParentId = group },
+            };
+            await tx.Commit();
+        }
+        Refresh(ref loadout);
+        return loadout;
+    }
+
     private async Task<Loadout.ReadOnly> WithSettingsMod(Loadout.ReadOnly loadout)
     {
         using (var tx = Connection.BeginTransaction())
@@ -114,20 +133,21 @@ public class WinePrefixLocationTests(ITestOutputHelper helper) : ACyberpunkIsola
     [Fact]
     public async Task ResetRestoresTheSettingsAndLeavesTheRest()
     {
-        await WritePrefixFile(Settings, "original");
+        // UserSettings.json is an intrinsic settings file: a mod owns a key, never the whole file
+        await WritePrefixFile(Settings, OriginalJson);
         await WritePrefixFile(SettingsFolder + "/CrashInfo.json", "crash");
         var loadout = await ManagedLoadout();
-        loadout = await WithSettingsMod(loadout);
+        loadout = await WithSettingsEntry(loadout, "/g/k", "2");
 
         loadout = await Synchronizer.Synchronize(loadout);
-        (await PrefixFile(Settings).ReadAllTextAsync()).Should().Be(Settings, "AddModAsync writes the relative path as content");
+        (await PrefixFile(Settings).ReadAllTextAsync()).Should().Contain("\"value\": 2");
 
         // The game edits its settings between syncs
-        await PrefixFile(Settings).WriteAllTextAsync("edited by the game");
+        await PrefixFile(Settings).WriteAllTextAsync(OriginalJson.Replace("\"value\":1", "\"value\":3", StringComparison.Ordinal));
 
         await LoadoutManager.UnManage(GameInstallation);
 
-        (await PrefixFile(Settings).ReadAllTextAsync()).Should().Be("original");
+        (await PrefixFile(Settings).ReadAllTextAsync()).Should().Be(OriginalJson);
         (await PrefixFile(SettingsFolder + "/CrashInfo.json").ReadAllTextAsync()).Should().Be("crash");
         PrefixFile(SettingsFolder).DirectoryExists().Should().BeTrue("the app never removes folders inside the prefix");
     }
@@ -230,15 +250,15 @@ public class WinePrefixLocationTests(ITestOutputHelper helper) : ACyberpunkIsola
     [Fact]
     public async Task GameEditWithoutAMod_ResetRestoresTheOriginal()
     {
-        await WritePrefixFile(Settings, "original");
+        await WritePrefixFile(Settings, OriginalJson);
         var loadout = await ManagedLoadout();
 
-        await PrefixFile(Settings).WriteAllTextAsync("edited by the game");
+        await PrefixFile(Settings).WriteAllTextAsync(OriginalJson.Replace("\"value\":1", "\"value\":3", StringComparison.Ordinal));
         loadout = await Synchronizer.Synchronize(loadout.Rebase());
-        ExternalChangesCount(loadout).Should().Be(1);
+        ExternalChangesCount(loadout).Should().Be(0, "a settings file is intrinsic: the game's edits become its base, not a file-level External Change");
 
         await LoadoutManager.UnManage(GameInstallation);
 
-        (await PrefixFile(Settings).ReadAllTextAsync()).Should().Be("original", "originals in the prefix are backed up when first seen");
+        (await PrefixFile(Settings).ReadAllTextAsync()).Should().Be(OriginalJson, "originals in the prefix are backed up when first seen");
     }
 }

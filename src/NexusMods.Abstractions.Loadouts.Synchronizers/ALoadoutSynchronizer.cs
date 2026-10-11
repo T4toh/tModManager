@@ -180,27 +180,8 @@ public partial class ALoadoutSynchronizer : ILoadoutSynchronizer
     /// <summary>
     /// Gets or creates the override group.
     /// </summary>
-    protected LoadoutOverridesGroupId GetOrCreateOverridesGroup(ITransaction tx, Loadout.ReadOnly loadout)
-    {
-        if (LoadoutOverridesGroup.FindByOverridesFor(loadout.Db, loadout.Id).TryGetFirst(out var found))
-            return found;
-
-        var newOverrides = new LoadoutOverridesGroup.New(tx, out var id)
-        {
-            OverridesForId = loadout,
-            LoadoutItemGroup = new LoadoutItemGroup.New(tx, id)
-            {
-                IsGroup = true,
-                LoadoutItem = new LoadoutItem.New(tx, id)
-                {
-                    Name = "Overrides",
-                    LoadoutId = loadout.Id,
-                },
-            },
-        };
-
-        return newOverrides.Id;
-    }
+    protected LoadoutOverridesGroupId GetOrCreateOverridesGroup(ITransaction tx, Loadout.ReadOnly loadout) =>
+        LoadoutOverrides.GetOrCreate(tx, loadout);
 
     private class LoadoutItemGroupComparer : IEqualityComparer<LoadoutItemGroup.ReadOnly>, IAlternateEqualityComparer<EntityId, LoadoutItemGroup.ReadOnly>
     {
@@ -506,7 +487,7 @@ public partial class ALoadoutSynchronizer : ILoadoutSynchronizer
                 
                 case Actions.AdaptLoadout:
                     job?.SetStatus("Updating loadout");
-                    await AdaptLoadout(syncTree, locations, loadout, tx);
+                    await AdaptLoadout(syncTree, locations, loadout, tx, gameMetadataId);
                     break;
 
                 case Actions.DeleteFromDisk:
@@ -521,7 +502,7 @@ public partial class ALoadoutSynchronizer : ILoadoutSynchronizer
                 
                 case Actions.WriteIntrinsic:
                     job?.SetStatus("Writing intrinsic files");
-                    await ActionWriteIntrinsics(syncTree, locations, tx, loadout, job);
+                    await ActionWriteIntrinsics(syncTree, locations, tx, loadout, gameMetadataId, job);
                     break;
 
                 case Actions.AddReifiedDelete:
@@ -582,7 +563,7 @@ public partial class ALoadoutSynchronizer : ILoadoutSynchronizer
     /// </summary>
     private static void EnsureDiskChangesStayInside(Dictionary<GamePath, SyncNode> syncTree, GameLocations locations)
     {
-        const Actions diskChanges = Actions.DeleteFromDisk | Actions.ExtractToDisk | Actions.WriteIntrinsic;
+        const Actions diskChanges = Actions.DeleteFromDisk | Actions.ExtractToDisk | Actions.WriteIntrinsic | Actions.AdaptLoadout;
         foreach (var (path, node) in syncTree)
         {
             if ((node.Actions & diskChanges) == 0) continue;
@@ -598,7 +579,7 @@ public partial class ALoadoutSynchronizer : ILoadoutSynchronizer
         }
     }
 
-    private async Task ActionWriteIntrinsics(Dictionary<GamePath, SyncNode> syncTree, GameLocations gameLocations, IMainTransaction tx, Loadout.ReadOnly loadout, SynchronizeLoadoutJob? job)
+    private async Task ActionWriteIntrinsics(Dictionary<GamePath, SyncNode> syncTree, GameLocations gameLocations, IMainTransaction tx, Loadout.ReadOnly loadout, EntityId gameMetadataId, SynchronizeLoadoutJob? job)
     {
         var intrinsicFiles = IntrinsicFiles(loadout);
         foreach (var (path, node) in syncTree)
@@ -608,14 +589,26 @@ public partial class ALoadoutSynchronizer : ILoadoutSynchronizer
 
             var instance = intrinsicFiles[path];
             var resolvedPath = gameLocations.ToAbsolutePath(path);
-            resolvedPath.Parent.CreateDirectory();
-            await using var stream = resolvedPath.Create();
-            stream.SetLength(0);
-            await instance.Write(stream, loadout, syncTree);
+            // The disk may hold data the loadout never saw (first apply after managing, when disk ==
+            // previous state and nothing was ingested yet): always ingest first so the base is real, then
+            // write only what Ingest says is missing. A blind Write here would wipe the game's own keys,
+            // and with no file at all Ingest decides whether there is anything worth creating.
+            ReadOnlyMemory<byte>? rewrite;
+            if (resolvedPath.FileExists)
+            {
+                await using var stream = resolvedPath.Read();
+                rewrite = await instance.Ingest(stream, loadout, syncTree, tx);
+            }
+            else
+            {
+                rewrite = await instance.Ingest(Stream.Null, loadout, syncTree, tx);
+            }
+            if (rewrite is { } bytes)
+                WriteIntrinsicBytes(gameLocations, path, node, bytes.ToArray(), tx, gameMetadataId);
         }
     }
 
-    private async Task AdaptLoadout(Dictionary<GamePath, SyncNode> syncTree, GameLocations gameLocations, Loadout.ReadOnly loadout, IMainTransaction tx)
+    private async Task AdaptLoadout(Dictionary<GamePath, SyncNode> syncTree, GameLocations gameLocations, Loadout.ReadOnly loadout, IMainTransaction tx, EntityId gameMetadataId)
     {
         var intrinsicFiles = IntrinsicFiles(loadout);
         foreach (var (path, node) in syncTree)
@@ -625,8 +618,48 @@ public partial class ALoadoutSynchronizer : ILoadoutSynchronizer
 
             var instance = intrinsicFiles[path];
             var resolvedPath = gameLocations.ToAbsolutePath(path);
-            await using var stream = resolvedPath.Read();
-            await instance.Ingest(stream, loadout, syncTree, tx);
+            ReadOnlyMemory<byte>? rewrite;
+            await using (var stream = resolvedPath.Read())
+                rewrite = await instance.Ingest(stream, loadout, syncTree, tx);
+            // Our keys land in the same apply instead of the next one
+            if (rewrite is { } bytes)
+                WriteIntrinsicBytes(gameLocations, path, node, bytes.ToArray(), tx, gameMetadataId);
+        }
+    }
+
+    /// <summary>
+    /// Writes a generated intrinsic file and records its disk state, like ActionExtractToDisk does, so the
+    /// next sync compares against what was written instead of ingesting our own output as a game change.
+    /// </summary>
+    private static void WriteIntrinsicBytes(GameLocations gameLocations, GamePath path, SyncNode node, byte[] bytes, ITransaction tx, EntityId gameMetadataId)
+    {
+        var resolvedPath = gameLocations.ToAbsolutePath(path);
+        resolvedPath.Parent.CreateDirectory();
+        using (var stream = resolvedPath.Create())
+        {
+            stream.SetLength(0);
+            stream.Write(bytes);
+        }
+        var hash = bytes.xxHash3();
+        var size = Size.FromLong(bytes.Length);
+        var writeTimeUtc = new DateTimeOffset(resolvedPath.FileInfo.LastWriteTimeUtc);
+        if (node.HaveDisk)
+        {
+            var id = node.Disk.EntityId;
+            tx.Add(id, DiskStateEntry.Hash, hash);
+            tx.Add(id, DiskStateEntry.Size, size);
+            tx.Add(id, DiskStateEntry.LastModified, writeTimeUtc);
+        }
+        else
+        {
+            _ = new DiskStateEntry.New(tx, tx.TempId(DiskStateEntry.EntryPartition))
+            {
+                Path = path.ToGamePathParentTuple(gameMetadataId),
+                Hash = hash,
+                Size = size,
+                LastModified = writeTimeUtc,
+                GameId = gameMetadataId,
+            };
         }
     }
 
@@ -1172,8 +1205,27 @@ public partial class ALoadoutSynchronizer : ILoadoutSynchronizer
         var syncTree = BuildSyncTree(lastScannedDiskState, previousDiskState, loadout);
         // Process the sync tree to get the actions populated in the nodes
         ProcessSyncTree(syncTree);
-        
-        return syncTree.Any(n => n.Value.Actions != Actions.DoNothing && n.Value.Actions != Actions.WarnOfUnableToExtract);
+
+        var intrinsics = new Lazy<Dictionary<GamePath, IIntrinsicFile>>(() => IntrinsicFiles(loadout));
+        return syncTree.Any(kv =>
+        {
+            var node = kv.Value;
+            if (node.Actions is Actions.DoNothing or Actions.WarnOfUnableToExtract) return false;
+            // An intrinsic has no loadout hash, so its steady state is "WriteIntrinsic"; that is only a
+            // pending change when the file does not already hold the loadout's values.
+            if (node.Actions == Actions.WriteIntrinsic && node.SourceItemType == LoadoutSourceItemType.Intrinsic
+                && IntrinsicIsUpToDate(kv.Key, loadout, intrinsics.Value))
+                return false;
+            return true;
+        });
+    }
+
+    private static bool IntrinsicIsUpToDate(GamePath path, Loadout.ReadOnly loadout, Dictionary<GamePath, IIntrinsicFile> intrinsics)
+    {
+        if (!intrinsics.TryGetValue(path, out var file) || file is not ISettingsIntrinsicFile settings) return false;
+        var resolved = loadout.InstallationInstance.Locations.ToAbsolutePath(path);
+        var text = resolved.FileExists ? File.ReadAllText(resolved.ToString()) : string.Empty;
+        return settings.IsUpToDate(text, loadout);
     }
     
     /// <inheritdoc />

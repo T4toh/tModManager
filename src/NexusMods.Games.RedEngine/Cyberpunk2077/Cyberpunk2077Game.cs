@@ -100,10 +100,15 @@ public class Cyberpunk2077Game : IGame, IGameData<Cyberpunk2077Game>, IDisposabl
         if (gameLocatorResult.LinuxCompatabilityDataProvider is not { } linux)
             return ImmutableDictionary<LocationId, ImmutableHashSet<RelativePath>>.Empty;
 
-        var user = WineUserName(linux.WinePrefixDirectoryPath);
-        var settings = (RelativePath)$"drive_c/users/{user}/AppData/Local/CD Projekt Red/Cyberpunk 2077/UserSettings.json";
-        return ImmutableDictionary<LocationId, ImmutableHashSet<RelativePath>>.Empty.Add(LocationId.WinePrefix, [settings]);
+        return ImmutableDictionary<LocationId, ImmutableHashSet<RelativePath>>.Empty.Add(LocationId.WinePrefix, [UserSettingsPath(linux.WinePrefixDirectoryPath)]);
     }
+
+    /// <summary>
+    /// UserSettings.json inside the prefix, relative to the prefix root. One helper for the whitelist and for the
+    /// intrinsic file, so both always name the same path (Proton: steamuser; Wine/Lutris: the real user).
+    /// </summary>
+    public static RelativePath UserSettingsPath(AbsolutePath prefix) =>
+        (RelativePath)$"drive_c/users/{WineUserName(prefix)}/AppData/Local/CD Projekt Red/Cyberpunk 2077/UserSettings.json";
 
     /// <summary>
     /// Proton runs every game as <c>steamuser</c>; a Wine/Lutris prefix uses the real user name. Before the first
