@@ -100,7 +100,9 @@ public class Cyberpunk2077Game : IGame, IGameData<Cyberpunk2077Game>, IDisposabl
         if (gameLocatorResult.LinuxCompatabilityDataProvider is not { } linux)
             return ImmutableDictionary<LocationId, ImmutableHashSet<RelativePath>>.Empty;
 
-        return ImmutableDictionary<LocationId, ImmutableHashSet<RelativePath>>.Empty.Add(LocationId.WinePrefix, [UserSettingsPath(linux.WinePrefixDirectoryPath)]);
+        return ImmutableDictionary<LocationId, ImmutableHashSet<RelativePath>>.Empty.Add(
+            LocationId.WinePrefix,
+            [UserSettingsPath(linux.WinePrefixDirectoryPath), Constants.RedModListPath.Path]);
     }
 
     /// <summary>
