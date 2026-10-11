@@ -3,8 +3,8 @@ This schema is written to a markdown file for both documentation and validation 
 models in the app, then validate the tests to update this file. 
 
 ## Statistics
-   - Fingerprint: 0x3C11C762366C7F8E
-   - Total attributes: 210
+   - Fingerprint: 0x609DEC54A72AD58B
+   - Total attributes: 209
    - Total namespaces: 67
    
 ## Attributes
@@ -93,7 +93,6 @@ models in the app, then validate the tests to update this file.
 | NexusMods.Loadouts.IntrinsicFileEntry/Value                                        | Utf8                    | False   | False | False     | 
 | NexusMods.Loadouts.IntrinsicFileState/BaseContent                                  | Utf8                    | False   | False | False     | 
 | NexusMods.Loadouts.IntrinsicFileState/File                                         | Utf8                    | False   | False | False     | 
-| NexusMods.Loadouts.IntrinsicFileState/IngestedHash                                 | UInt64                  | False   | False | False     | 
 | NexusMods.Loadouts.IntrinsicFileState/Loadout                                      | Reference               | True    | False | False     | 
 | NexusMods.Loadouts.LibraryLinkedLoadoutItem/LibraryItem                            | Reference               | True    | False | False     | 
 | NexusMods.Loadouts.Loadout/GameVersion                                             | Utf8                    | False   | False | False     | 

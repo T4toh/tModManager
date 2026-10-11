@@ -217,8 +217,21 @@ lanza; texto vacío produce el documento mínimo.
   vacío si el archivo no existe): el primer apply después de gestionar ve disco == estado previo y un
   `Write` ciego desde base vacía borraba las claves del juego. `Write` queda para quien genere archivos
   sin base.
+- **La base es el archivo tal como queda después del apply** (lo que escribimos, o el disco si no hubo
+  nada que escribir), no el disco de antes. Con la base "de antes", cambiar una entrada entre dos applies
+  (o un literal `5.0`) se leía como cambio del juego y quedaba clavado como External Change (revisión
+  final, C1).
 - **"Cambio del juego"** = el valor en disco difiere de la entrada **y** del valor de la base anterior
-  para esa clave. Sin base previa (primera vez) el disco es el original y la entrada aplica.
+  para esa clave. Sin base previa (primera vez) el disco es el original y la entrada aplica. Los valores
+  se comparan normalizados por el formato (`"5.0"` y `"5"` son iguales); al archivo va el literal de la
+  entrada.
+- **Solo se escribe cuando hace falta:** una clave propia falta o difiere, o el archivo está ausente o
+  roto. Sin claves propias el archivo nunca se reescribe ni se regenera (el formato del juego queda
+  intacto; borrar el archivo para resetear ajustes sigue funcionando). `ShouldSynchronize` trata un
+  intrínseco cuyos valores ya están en disco como "nada que hacer", así el estado queda `Current` y
+  Launch habilitado (revisión final, I1/I2).
+- **Límite conocido:** al deshabilitar un mod con entradas, la clave conserva el último valor escrito
+  (la base ya lo tiene) hasta que el juego o el usuario la cambien.
 - **Archivo ausente** → se regenera desde la base guardada (nunca se reemplaza la base por vacío).
   **Archivo que no parsea** → con base previa se repara desde ella; sin base se deja en paz. **Sin
   archivo, sin base y sin entradas** → no se escribe nada (no se inventa un archivo para un juego que

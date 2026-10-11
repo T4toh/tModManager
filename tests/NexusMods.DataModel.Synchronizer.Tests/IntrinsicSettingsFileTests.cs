@@ -184,9 +184,7 @@ public class IntrinsicSettingsFileTests(ITestOutputHelper helper) : ACyberpunkIs
         var loadout = await ManagedWith(Original);
         var mod = await ModWithEntry(loadout, "DLSS Off", Dlss, "\"Off\"");
         loadout = await Apply(loadout);
-        // The game rewrites the file (same values): the base now carries "Off"
-        await GameWrites(doc => doc);
-        loadout = await Apply(loadout);
+        // The base already carries "Off" right after the write
 
         using (var tx = Connection.BeginTransaction())
         {
@@ -195,7 +193,7 @@ public class IntrinsicSettingsFileTests(ITestOutputHelper helper) : ACyberpunkIs
         }
         await Apply(loadout);
 
-        // Documented limitation: the base absorbed the mod's value; nothing owns the key now, so it stays
+        // Documented limitation: the base holds the last written value; nothing owns the key now, so it stays
         (await ValueOnDisk("/graphics/advanced", "DLSS")).Should().Be("\"Off\"");
     }
 
