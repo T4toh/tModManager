@@ -26,7 +26,7 @@ public static class LoadoutSettings
         path = default;
         file = null!;
         error = null;
-        var intrinsics = ((ALoadoutSynchronizer)loadout.InstallationInstance.GetGame().Synchronizer).IntrinsicFiles(loadout);
+        var intrinsics = SettingsFiles(loadout);
         if (string.IsNullOrWhiteSpace(fileArg))
         {
             if (intrinsics.Count != 1)
@@ -53,6 +53,12 @@ public static class LoadoutSettings
         }
         return true;
     }
+
+    /// <summary>Only the intrinsics with keys to set: a load order file (<see cref="ISortOrderFile"/>) is not a settings file.</summary>
+    private static Dictionary<GamePath, IIntrinsicFile> SettingsFiles(Loadout.ReadOnly loadout) =>
+        ((ALoadoutSynchronizer)loadout.InstallationInstance.GetGame().Synchronizer).IntrinsicFiles(loadout)
+            .Where(kv => kv.Value is ISettingsIntrinsicFile)
+            .ToDictionary(kv => kv.Key, kv => kv.Value);
 
     public static async Task<IntrinsicFileEntry.ReadOnly> Upsert(IConnection connection, Loadout.ReadOnly loadout, GamePath file, string key, string value)
     {
@@ -113,8 +119,7 @@ public static class LoadoutSettings
     public static IEnumerable<(GamePath File, string Key, string Value, string Group, bool Wins)> List(Loadout.ReadOnly loadout)
     {
         var db = loadout.Db;
-        var intrinsics = ((ALoadoutSynchronizer)loadout.InstallationInstance.GetGame().Synchronizer).IntrinsicFiles(loadout);
-        foreach (var (path, file) in intrinsics)
+        foreach (var (path, file) in SettingsFiles(loadout))
         {
             var winners = file is ISettingsIntrinsicFile settings
                 ? settings.WinningEntries(loadout).ToDictionary(kv => kv.Key, kv => kv.Value.Id)

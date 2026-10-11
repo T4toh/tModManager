@@ -33,6 +33,9 @@ public class LoadoutSettingsTests(ITestOutputHelper helper) : ACyberpunkIsolated
         path.Should().Be(expected);
         LoadoutSettings.TryResolveFile(loadout, "Game:nope.json", out _, out _, out error).Should().BeFalse();
         error.Should().Contain("nope.json");
+        // The REDmod modlist is an intrinsic too, but not a settings file: no keys to set, never offered
+        LoadoutSettings.TryResolveFile(loadout, "WinePrefix:drive_c/modlist.txt", out _, out _, out error).Should().BeFalse();
+        error.Should().Contain("modlist.txt").And.NotContain("Opciones: WinePrefix:drive_c/modlist.txt");
         error.Should().Contain($"WinePrefix:{expected.Path}", "the options are printed in the form -f accepts");
     }
 
