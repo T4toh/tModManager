@@ -107,6 +107,8 @@ public class LocalFileBackfillTests(ITestOutputHelper helper) : ACyberpunkIsolat
     [Fact]
     public async Task OneUnreadableOriginal_DoesNotStopTheOthers()
     {
+        // CA1416: SetUnixFileMode is Unix-only (the whole suite is, but the analyzer wants the guard)
+        if (!OperatingSystem.IsLinux()) return;
         var unreadable = TemporaryFileManager.CreateFolder().Path.Combine("Locked.zip");
         File.WriteAllText(unreadable.ToString(), "locked");
         var hashBeforeLock = await HashOf(unreadable);

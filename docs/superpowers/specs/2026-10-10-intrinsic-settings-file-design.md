@@ -1,6 +1,6 @@
 # Archivos intrínsecos con entradas por mod e `Ingest` (pieza 4)
 
-Fecha: 2026-10-10 · Estado: diseño aprobado, pendiente de plan e implementación (rama `feat/intrinsic-settings-file`)
+Fecha: 2026-10-10 · Estado: implementado en la rama `feat/intrinsic-settings-file` (PR #NN), prueba con el juego pendiente
 
 ## Objetivo
 
@@ -210,6 +210,27 @@ En `tests/Games/NexusMods.Games.RedEngine.Tests`, `UserSettingsFileTests`: parse
 y preserva `version`, campos desconocidos y tipos; `TryGet` de clave existente e inexistente; `Set`
 sobre existente reemplaza solo `value`; `Set` sobre inexistente agrega sin romper; valor inválido
 lanza; texto vacío produce el documento mínimo.
+
+### Ajustes surgidos en la implementación (2026-10-10)
+
+- **Siempre se ingiere antes de escribir.** `WriteIntrinsic` también pasa por `Ingest` (con un stream
+  vacío si el archivo no existe): el primer apply después de gestionar ve disco == estado previo y un
+  `Write` ciego desde base vacía borraba las claves del juego. `Write` queda para quien genere archivos
+  sin base.
+- **"Cambio del juego"** = el valor en disco difiere de la entrada **y** del valor de la base anterior
+  para esa clave. Sin base previa (primera vez) el disco es el original y la entrada aplica.
+- **Archivo ausente** → se regenera desde la base guardada (nunca se reemplaza la base por vacío).
+  **Archivo que no parsea** → con base previa se repara desde ella; sin base se deja en paz. **Sin
+  archivo, sin base y sin entradas** → no se escribe nada (no se inventa un archivo para un juego que
+  nunca corrió).
+- **CP2077 no declara el intrínseco** si el prefix no existe (borrado o aún no creado) o si el archivo
+  es un symlink o está bajo uno (aviso en el log): declararlo hacía fallar todo sync (symlink) o
+  repoblaba un prefix borrado. Las entradas y la base quedan en el loadout hasta que el archivo vuelva.
+- Los tests de la pieza 2 que ponían un *archivo* de mod en esa ruta o esperaban un External Change de
+  archivo por una edición del juego pasan a entrada + base: la ruta es intrínseca.
+- `LoadoutSettings` vive en `NexusMods.DataModel` (necesita `GetGame()` de `Abstractions.Games`).
+- `GamePathAttribute` (Sdk) serializaba el id numérico de la ubicación y lo re-hasheaba al leer; sin
+  usos hasta ahora. Escribe el nombre.
 
 ### Fuera de alcance
 
