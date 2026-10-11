@@ -129,10 +129,10 @@ el `is ISettingsIntrinsicFile`.
 
 ## Tests
 
-- `NexusMods.DataModel.Synchronizer.Tests/SortOrderFileTests.cs` (fixture `ACyberpunkIsolatedGameTest`
-  con `WithWinePrefix`): criterios 1 a 7. Los REDmods se agregan como en `RedModDeployToolTests.AddRedMods`
-  (los `.7z` de `LibraryArchiveInstallerTests/Resources`, ya referenciados por el proyecto de tests de CP; se
-  copian al de Synchronizer o el helper se mueve a `Games.TestFramework`).
+- `NexusMods.Games.RedEngine.Tests/SortOrderFileTests.cs` (fixture `ACyberpunkIsolatedGameTest` con
+  `WithWinePrefix`; el proyecto ya tiene los `.7z` de `LibraryArchiveInstallerTests/Resources`): criterios
+  1 a 7. Los REDmods se agregan como en `RedModDeployToolTests.AddRedMods`.
+- `NexusMods.DataModel.Tests/SortOrderIntrinsicFileTests.cs`: el adaptador solo, con un `ISortOrderFile` falso.
 - `RedModDeployToolTests`: `WriteLoadoutFile` pasa a `variety.Render(loadout, loadout.Db)`; sin cambios en
   los `.verified.`.
 - Test negativo obligatorio para el symlink (criterio 6): tiene que fallar si se saca la guarda.
