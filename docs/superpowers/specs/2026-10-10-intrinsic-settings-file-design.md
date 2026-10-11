@@ -1,6 +1,6 @@
 # Archivos intrínsecos con entradas por mod e `Ingest` (pieza 4)
 
-Fecha: 2026-10-10 · Estado: implementado en la rama `feat/intrinsic-settings-file` (PR #75), prueba con el juego pendiente
+Fecha: 2026-10-10 · Estado: implementado en la rama `feat/intrinsic-settings-file` (PR #75), probado con el juego el 2026-10-10 (falta el paso de quitar el External Change)
 
 ## Objetivo
 
