@@ -220,6 +220,44 @@ public class SortOrderFileTests(ITestOutputHelper helper) : ACyberpunkIsolatedGa
     }
 
     [Fact]
+    public async Task PreexistingModlist_PrefixDeletedAfterApply_IsNotRecreated()
+    {
+        // An adopted original (layer 0) must not be extracted back into a prefix that is gone
+        ModList.Parent.CreateDirectory();
+        await ModList.WriteAllTextAsync("vortex_mod\r\n");
+        var loadout = await ManagedLoadout();
+        loadout = await AddRedMods(loadout);
+        loadout = await Apply(loadout);
+
+        Prefix.DeleteDirectoryNoFollow();
+        loadout = await Apply(loadout);
+
+        Prefix.DirectoryExists().Should().BeFalse("the app never recreates the prefix, not even for an original");
+        NeedsSync(loadout).Should().BeFalse("nothing is pending inside a prefix that is not there");
+    }
+
+    [Fact]
+    public async Task PreexistingModlist_ReplacedBySymlinkAfterApply_ApplyContinues()
+    {
+        ModList.Parent.CreateDirectory();
+        await ModList.WriteAllTextAsync("vortex_mod\r\n");
+        var loadout = await ManagedLoadout();
+        loadout = await AddRedMods(loadout);
+        loadout = await Apply(loadout);
+
+        var outside = TemporaryFileManager.CreateFolder().Path.Combine("modlist.txt");
+        await outside.WriteAllTextAsync("precious");
+        ModList.Delete();
+        File.CreateSymbolicLink(ModList.ToString(), outside.ToString());
+
+        var act = () => Apply(loadout);
+
+        await act.Should().NotThrowAsync("a linked whitelisted file is simply not ours any more");
+        (await outside.ReadAllTextAsync()).Should().Be("precious");
+        new FileInfo(ModList.ToString()).LinkTarget.Should().NotBeNull();
+    }
+
+    [Fact]
     public async Task PreexistingModlist_IsBackedUpAndRestoredOnUnManage()
     {
         // Written by another manager before tModManager took over

@@ -270,7 +270,35 @@ public partial class ALoadoutSynchronizer : ILoadoutSynchronizer
         }
 
         MergeStates(latestDiskState, previousDiskState, syncTree);
+        DropUnreachableWhitelisted(syncTree, loadout.InstallationInstance.Locations);
         return syncTree;
+    }
+
+    /// <summary>
+    /// A whitelisted location (the Wine prefix) is never ours to create, and a listed file that is a symlink
+    /// or sits under one is never ours to touch: with the root gone, or the path linked, the file is simply
+    /// not there for the app. Dropping the node means no action (not even extracting an adopted original back
+    /// into a deleted prefix), nothing pending and nothing in the diff. The disk state is kept by
+    /// <see cref="ReindexState"/>, which already skips the same files. A mod's own file at such a path is
+    /// kept on purpose: EnsureDiskChangesStayInside refuses it out loud, the user has to see that.
+    /// </summary>
+    private static void DropUnreachableWhitelisted(Dictionary<GamePath, SyncNode> tree, GameLocations locations)
+    {
+        foreach (var (path, node) in tree.ToArray())
+        {
+            if (node.SourceItemType == LoadoutSourceItemType.Loadout) continue;
+            if (IsUnreachableWhitelisted(locations, path)) tree.Remove(path);
+        }
+    }
+
+    private static bool IsUnreachableWhitelisted(GameLocations locations, GamePath path)
+    {
+        if (!locations.TryGetValue(path.LocationId, out var location) || location.ManagedFiles is null) return false;
+        if (!location.Path.DirectoryExists()) return true;
+        // A path outside the whitelist stays in the tree: EnsureDiskChangesStayInside refuses it out loud
+        if (!location.ManagedFiles.Contains(path.Path)) return false;
+        var resolved = locations.ToAbsolutePath(path);
+        return SafePath.IsSymlink(resolved) || SafePath.IsUnderSymlink(location.Path.ToString(), resolved.ToString());
     }
 
     /// <inheritdoc />
@@ -1863,6 +1891,7 @@ public partial class ALoadoutSynchronizer : ILoadoutSynchronizer
         // This fakes the synchronizer into thinking that there are no changes on disk and we only want to do a
         // hard reset to the desired state.
         MergeStates(diskState, diskState, desiredState);
+        DropUnreachableWhitelisted(desiredState, installation.Locations);
         
         // Process the tree
         ProcessSyncTree(desiredState);

@@ -10,6 +10,7 @@ using NexusMods.MnemonicDB.Abstractions.TxFunctions;
 using NexusMods.Sdk;
 using NexusMods.Paths;
 using NexusMods.Sdk.Games;
+using NexusMods.Sdk.IO;
 using NexusMods.Sdk.Loadouts;
 using Xunit;
 
@@ -159,6 +160,20 @@ public class IntrinsicSettingsFileTests(ITestOutputHelper helper) : ACyberpunkIs
         await LoadoutManager.DeleteLoadout(loadout.LoadoutId);
 
         IntrinsicFileState.FindByLoadout(Connection.Db, loadout.LoadoutId).Should().BeEmpty("the state is not a LoadoutItem, it has to be deleted on its own");
+    }
+
+    [Fact]
+    public async Task PrefixDeletedAfterApply_TheOriginalIsNotExtractedBack()
+    {
+        var loadout = await ManagedWith(Original);
+        await ModWithEntry(loadout, "DLSS Off", Dlss, "\"Off\"");
+        loadout = await Apply(loadout);
+
+        // Storage Manager "Borrar prefix de Proton"
+        GameInstallation.Locations[LocationId.WinePrefix].Path.DeleteDirectoryNoFollow();
+        await Apply(loadout);
+
+        GameInstallation.Locations[LocationId.WinePrefix].Path.DirectoryExists().Should().BeFalse("the app never recreates the prefix, not even for an original");
     }
 
     [Fact]
