@@ -79,4 +79,18 @@ public class LoadoutSettingsTests(ITestOutputHelper helper) : ACyberpunkIsolated
         error.Should().Contain(Dlss);
         IntrinsicFileEntry.FindByFile(Connection.Db, path).Should().BeEmpty();
     }
+
+    [Fact]
+    public async Task Remove_DeletesTheEntryFromAjustes_AndReportsWhetherItExisted()
+    {
+        var loadout = await CreateLoadout();
+        LoadoutSettings.TryResolveFile(loadout, null, out var path, out _, out _).Should().BeTrue();
+        await LoadoutSettings.Upsert(Connection, loadout, path, Dlss, "\"Off\"");
+        Refresh(ref loadout);
+
+        (await LoadoutSettings.Remove(Connection, loadout, path, Dlss)).Should().BeTrue();
+        Refresh(ref loadout);
+        IntrinsicFileEntry.FindByFile(Connection.Db, path).Where(e => e.AsLoadoutItem().LoadoutId == loadout.LoadoutId).Should().BeEmpty();
+        (await LoadoutSettings.Remove(Connection, loadout, path, Dlss)).Should().BeFalse("nothing left to remove");
+    }
 }
