@@ -153,6 +153,23 @@ public class WinePrefixLocationTests(ITestOutputHelper helper) : ACyberpunkIsola
     }
 
     [Fact]
+    public async Task SettingsFileCreatedByTheLoadout_UnManageRemovesTheFile_NeverItsFolders()
+    {
+        // Wine created the user folders, the game never wrote its settings yet: the only file in the chain is ours
+        PrefixFile(SettingsFolder).CreateDirectory();
+        var loadout = await ManagedLoadout();
+        loadout = await WithSettingsEntry(loadout, "/g/k", "2");
+        await Synchronizer.Synchronize(loadout);
+        PrefixFile(Settings).FileExists.Should().BeTrue();
+
+        await LoadoutManager.UnManage(GameInstallation);
+
+        PrefixFile(Settings).FileExists.Should().BeFalse("nothing but the loadout ever put it there");
+        PrefixFile(SettingsFolder).DirectoryExists().Should().BeTrue("folders inside the prefix are Wine's, never cleaned as empty");
+        PrefixFile("drive_c/users/steamuser").DirectoryExists().Should().BeTrue();
+    }
+
+    [Fact]
     public async Task ModFileOutsideTheWhitelist_FailsTheSyncWithoutWriting()
     {
         var loadout = await ManagedLoadout();

@@ -147,6 +147,7 @@ public static class LibraryColumns
         public static readonly ComponentKey ViewChangelogComponentKey = ComponentKey.From(ColumnTemplateResourceKey + "_" + nameof(Actions) + "_" + "ViewChangelog");
         public static readonly ComponentKey ViewModPageComponentKey = ComponentKey.From(ColumnTemplateResourceKey + "_" + nameof(Actions) + "_" + "ViewModPage");
         public static readonly ComponentKey DeleteItemComponentKey = ComponentKey.From(ColumnTemplateResourceKey + "_" + nameof(Actions) + "_" + "DeleteItem");
+        public static readonly ComponentKey EditLocalFileComponentKey = ComponentKey.From(ColumnTemplateResourceKey + "_" + nameof(Actions) + "_" + "EditLocalFile");
         public static readonly ComponentKey HideUpdatesComponentKey = ComponentKey.From(ColumnTemplateResourceKey + "_" + nameof(Actions) + "_" + "HideUpdates");
         public static string GetColumnHeader() => "Actions";
         public static string GetColumnTemplateResourceKey() => ColumnTemplateResourceKey;
@@ -603,6 +604,26 @@ public static class LibraryComponents
     }
 
     
+    /// <summary>Row-menu action of a file added by hand: edit its name, version, source and page.</summary>
+    public sealed class EditLocalFileAction : ReactiveR3Object, IItemModelComponent<EditLocalFileAction>, IComparable<EditLocalFileAction>
+    {
+        public ReactiveCommand<Unit> CommandEditLocalFile { get; } = new();
+
+        public int CompareTo(EditLocalFileAction? other) => other is null ? 1 : 0;
+
+        private bool _isDisposed;
+        protected override void Dispose(bool disposing)
+        {
+            if (!_isDisposed)
+            {
+                if (disposing) CommandEditLocalFile.Dispose();
+                _isDisposed = true;
+            }
+
+            base.Dispose(disposing);
+        }
+    }
+
     public sealed class DeleteItemAction : ReactiveR3Object, IItemModelComponent<DeleteItemAction>, IComparable<DeleteItemAction>
     {
         public ReactiveCommand<Unit> CommandDeleteItem { get; } = new();

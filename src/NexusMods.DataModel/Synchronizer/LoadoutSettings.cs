@@ -14,6 +14,9 @@ public static class LoadoutSettings
 {
     public const string GroupName = "Ajustes";
 
+    /// <summary>The form <c>-f</c> accepts, <c>Location:relative/path</c>, so what the CLI prints can be pasted back.</summary>
+    public static string Format(GamePath path) => $"{path.LocationId}:{path.Path}";
+
     /// <summary>
     /// Resolves which intrinsic file an entry targets: <paramref name="fileArg"/> as "Location:relative/path",
     /// or the game's only intrinsic file when omitted.
@@ -30,7 +33,7 @@ public static class LoadoutSettings
             {
                 error = intrinsics.Count == 0
                     ? "Este juego no declara archivos de configuración gestionados (¿falta el prefix de Wine?)"
-                    : "Hay varios archivos de configuración; indicá cuál con -f Ubicación:ruta. Opciones: " + string.Join(", ", intrinsics.Keys);
+                    : "Hay varios archivos de configuración; indicá cuál con -f Ubicación:ruta. Opciones: " + string.Join(", ", intrinsics.Keys.Select(Format));
                 return false;
             }
             (path, file) = (intrinsics.Keys.First(), intrinsics.Values.First());
@@ -45,7 +48,7 @@ public static class LoadoutSettings
         path = new GamePath(LocationId.From(fileArg[..colon]), (RelativePath)fileArg[(colon + 1)..]);
         if (!intrinsics.TryGetValue(path, out file!))
         {
-            error = $"'{fileArg}' no es un archivo de configuración gestionado. Opciones: " + string.Join(", ", intrinsics.Keys);
+            error = $"'{fileArg}' no es un archivo de configuración gestionado. Opciones: " + string.Join(", ", intrinsics.Keys.Select(Format));
             return false;
         }
         return true;

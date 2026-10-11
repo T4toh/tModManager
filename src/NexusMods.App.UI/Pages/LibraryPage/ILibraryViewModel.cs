@@ -27,7 +27,6 @@ public interface ILibraryViewModel : IPageViewModelInterface
     ReactiveCommand<Unit> UpdateSelectedItemsCommand { get; }
     ReactiveCommand<Unit> UpdateAndKeepOldSelectedItemsCommand { get; }
     ReactiveCommand<Unit> RemoveSelectedItemsCommand { get; }
-    ReactiveCommand<Unit> EditLocalFileMetadataCommand { get; }
     ReactiveCommand<Unit> DeselectItemsCommand { get; }
 
     public int SelectionCount { get; } 

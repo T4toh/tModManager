@@ -16,6 +16,7 @@ namespace NexusMods.Games.RedEngine.Cyberpunk2077;
 public class Cyberpunk2077Synchronizer : ALoadoutSynchronizer
 {
     private Cyberpunk2077Settings _settings;
+    private readonly HashSet<GamePath> _warnedSymlinkedSettings = [];
     
     /// <summary>
     /// Redmod deploys combined mods to the redmod cache folder
@@ -78,7 +79,8 @@ public class Cyberpunk2077Synchronizer : ALoadoutSynchronizer
         // would make every sync refuse: leave it alone and say so, the rest of the loadout still applies.
         if (SafePath.IsSymlink(resolved) || SafePath.IsUnderSymlink(prefix.Path.ToString(), resolved.ToString()))
         {
-            Logger.LogWarning("`{Path}` es un symlink o está bajo uno; tModManager no gestiona sus ajustes", path);
+            if (_warnedSymlinkedSettings.Add(path))
+                Logger.LogWarning("`{Path}` es un symlink o está bajo uno; tModManager no gestiona sus ajustes", path);
             return new Dictionary<GamePath, IIntrinsicFile>();
         }
         return new Dictionary<GamePath, IIntrinsicFile> { [path] = new UserSettingsFile(path) };

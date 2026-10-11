@@ -115,6 +115,26 @@
             </controls:ComponentControl.ComponentTemplate>
         </controls:ComponentControl>
         
+        <!-- Edit local file (name, version, source, page) -->
+        <controls:ComponentControl x:TypeArguments="abstractions:EntityId" Content="{CompiledBinding}">
+            <controls:ComponentControl.ComponentTemplate>
+                <controls:ComponentTemplate x:TypeArguments="local:LibraryComponents+EditLocalFileAction"
+                                            ComponentKey="{x:Static local:LibraryColumns+Actions.EditLocalFileComponentKey}">
+                    <controls:ComponentTemplate.DataTemplate>
+                        <DataTemplate DataType="{x:Type local:LibraryComponents+EditLocalFileAction}">
+                            <MenuItem Header="Editar"
+                                      Command="{CompiledBinding CommandEditLocalFile}"
+                                      ToolTip.Tip="Editar nombre, versión, fuente y página de un archivo agregado a mano">
+                                <MenuItem.Icon>
+                                    <icons:UnifiedIcon Value="{x:Static icons:IconValues.Pencil}" />
+                                </MenuItem.Icon>
+                            </MenuItem>
+                        </DataTemplate>
+                    </controls:ComponentTemplate.DataTemplate>
+                </controls:ComponentTemplate>
+            </controls:ComponentControl.ComponentTemplate>
+        </controls:ComponentControl>
+
         <!-- Delete item -->
         <controls:ComponentControl x:TypeArguments="abstractions:EntityId" Content="{CompiledBinding}">
             <controls:ComponentControl.ComponentTemplate>

@@ -32,7 +32,7 @@ public class UserSettingsFile(GamePath path) : ASettingsIntrinsicFile<JsonNode>(
     {
         value = string.Empty;
         var (group, name) = Split(key);
-        var option = FindGroup(document, group)?["options"]?.AsArray().FirstOrDefault(o => NameOf(o) == name);
+        var option = OptionsOf(FindGroup(document, group))?.FirstOrDefault(o => NameOf(o) == name);
         if (option is null) return false;
         value = option["value"]?.ToJsonString() ?? "null";
         return true;
@@ -57,9 +57,10 @@ public class UserSettingsFile(GamePath path) : ASettingsIntrinsicFile<JsonNode>(
             groupNode = new JsonObject { ["group_name"] = group, ["options"] = new JsonArray() };
             document["data"]!.AsArray().Add(groupNode);
         }
-        var options = groupNode["options"]?.AsArray();
+        var options = OptionsOf(groupNode);
         if (options is null)
         {
+            // Missing or not an array (a broken file): the group gets a fresh list
             options = new JsonArray();
             groupNode["options"] = options;
         }
@@ -81,8 +82,15 @@ public class UserSettingsFile(GamePath path) : ASettingsIntrinsicFile<JsonNode>(
         return (key[..slash], key[(slash + 1)..]);
     }
 
+    // The game writes strings here; a file edited by hand may not. Anything else is simply "not that group/option",
+    // never an exception in the middle of an apply.
     private static JsonNode? FindGroup(JsonNode document, string group) =>
-        document["data"]?.AsArray().FirstOrDefault(g => g?["group_name"]?.GetValue<string>() == group);
+        (document["data"] as JsonArray)?.FirstOrDefault(g => StringOf(g?["group_name"]) == group);
 
-    private static string? NameOf(JsonNode? option) => option?["name"]?.GetValue<string>();
+    private static JsonArray? OptionsOf(JsonNode? group) => group?["options"] as JsonArray;
+
+    private static string? NameOf(JsonNode? option) => StringOf(option?["name"]);
+
+    private static string? StringOf(JsonNode? node) =>
+        node is JsonValue value && value.TryGetValue<string>(out var text) ? text : null;
 }

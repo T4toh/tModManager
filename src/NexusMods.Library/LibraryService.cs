@@ -53,8 +53,10 @@ public sealed class LibraryService : ILibraryService
         var local = LocalFile.Load(db, id);
         if (!local.IsValid()) throw new InvalidOperationException($"No existe el archivo local {id}");
 
+        metadata.EnsureValidPageUri();
         using var tx = _connection.BeginTransaction();
-        var name = string.IsNullOrWhiteSpace(metadata.Name) ? local.AsLibraryFile().FileName.ToString() : metadata.Name.Trim();
+        // The copy in Downloads may be renamed (Mod_1.zip); the file the user picked keeps its real name
+        var name = string.IsNullOrWhiteSpace(metadata.Name) ? Path.GetFileName(local.OriginalPath) : metadata.Name.Trim();
         if (name != local.AsLibraryFile().AsLibraryItem().Name) tx.Add(id, LibraryItem.Name, name);
         SetOrRetract(tx, id, LocalFile.Version, local, metadata.Version);
         SetOrRetract(tx, id, LocalFile.Source, local, metadata.Source);
@@ -62,7 +64,8 @@ public sealed class LibraryService : ILibraryService
         {
             if (LocalFile.PageUri.TryGetValue(local, out var old)) tx.Retract(id, LocalFile.PageUri, old);
         }
-        else if (!LocalFile.PageUri.TryGetValue(local, out var current) || current != metadata.PageUri)
+        // Uri equality ignores the fragment: compare the text so a "#section" change is saved too
+        else if (!LocalFile.PageUri.TryGetValue(local, out var current) || current.OriginalString != metadata.PageUri.OriginalString)
         {
             tx.Add(id, LocalFile.PageUri, metadata.PageUri);
         }

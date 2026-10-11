@@ -127,6 +127,30 @@ public class UserSettingsFileTests
     }
 
     [Fact]
+    public void HandEditedShapes_NeverThrow()
+    {
+        // A numeric "name", a numeric "group_name" and an "options" that is not an array: not ours, not a crash
+        const string broken = """
+            {"version":140,"data":[
+              {"group_name":7,"options":[]},
+              {"group_name":"/a","options":{"name":"x"}},
+              {"group_name":"/b","options":[{"name":3,"value":1},{"name":"k","value":2}]},
+              "junk", null
+            ]}
+            """;
+        var doc = _file.P(broken);
+
+        _file.G(doc, "/b/k", out var value).Should().BeTrue();
+        value.Should().Be("2");
+        _file.G(doc, "/a/x", out _).Should().BeFalse();
+        _file.G(doc, "/b/3", out _).Should().BeFalse();
+
+        _file.Put(doc, "/a/x", "true");
+        _file.G(doc, "/a/x", out value).Should().BeTrue("a non-array options is replaced by a fresh list");
+        value.Should().Be("true");
+    }
+
+    [Fact]
     public void NormalizeLiteral_MakesNumbersComparable_AndLeavesTheRestAlone()
     {
         _file.N("5.0").Should().Be(_file.N("5"));
