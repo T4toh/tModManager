@@ -6,11 +6,11 @@ Todo lo mergeado hasta #55 está probado con el juego real. Última prueba compl
 
 **Próximo:**
 1. Bugs chicos que salieron de las pruebas (lista de abajo).
-2. Pieza 5 (load order que se escribe a archivo) o pieza 6 (requisitos del prefix como datos) de "Piezas genéricas para el segundo juego". Las piezas 2, 3 y 4 están hechas (PRs #73, #74, #75) y probadas con el juego (la 4 salvo el paso de quitar el External Change). Witcher 3 arranca cuando estén las piezas que necesita.
+2. Pieza 5 (load order que se escribe a archivo) o pieza 6 (requisitos del prefix como datos) de "Piezas genéricas para el segundo juego". Las piezas 2, 3 y 4 están hechas (PRs #73, #74, #75) y probadas con el juego. Witcher 3 arranca cuando estén las piezas que necesita.
 
 ### Pruebas reales
 
-- **2026-10-10** (rama `feat/intrinsic-settings-file`, PR #75): pieza 4 con el juego real. `loadout settings set -k /graphics/basic/FieldOfView -v 90.0` + sincronizar escribió el valor y el juego mostró FOV 90; cambiado a 75 en el menú del juego y sincronizado, apareció el External Change `75.0` (gana) y el archivo quedó sin tocar (formato del juego); `UserSettings.json` borrado y sincronizado se regeneró entero (328 opciones) desde la base. Salió de ahí: los External Changes guardan el literal del juego (`75.0`, no `75`) y `unset -g Overrides` (commit `32b32c712`). Falta probar el paso 5 (quitar el External Change y volver a 90). El crash "archivos corruptos" del primer lanzamiento fue el `.archive` de bytes aleatorios de la prueba de la pieza 3, ya quitado del loadout
+- **2026-10-10** (rama `feat/intrinsic-settings-file`, PR #75): pieza 4 con el juego real. `loadout settings set -k /graphics/basic/FieldOfView -v 90.0` + sincronizar escribió el valor y el juego mostró FOV 90; cambiado a 75 en el menú del juego y sincronizado, apareció el External Change `75.0` (gana) y el archivo quedó sin tocar (formato del juego); `UserSettings.json` borrado y sincronizado se regeneró entero (328 opciones) desde la base. Salió de ahí: los External Changes guardan el literal del juego (`75.0`, no `75`) y `unset -g Overrides` (commit `32b32c712`). Quitado el External Change con `unset -g Overrides` y sincronizado, el archivo volvió a 90.0. El crash "archivos corruptos" del primer lanzamiento fue el `.archive` de bytes aleatorios de la prueba de la pieza 3, ya quitado del loadout
 
 - **2026-10-10** (rama `feat/local-mods-first-class`, PR #74): pieza 3 en la app con un zip en `~/Downloads`: diálogo prellenado (nombre y versión `1.2.3`), Enter agrega, copia en `tModManager/Downloads` y original intacto; "Editar" habilitado solo con una fila local, la fila se refresca al guardar, "Ver página del mod" abre el navegador; agregar el mismo zip otra vez no crea fila ni copia ("ya estaba en la biblioteca"); instalar y sincronizar sin errores. Backfill sin nada que hacer (no había locales viejos)
 
@@ -35,7 +35,6 @@ Mergeado o en PR, compilado en Mac pero sin correr en la PC con el juego (en Mac
 
 - [ ] **Ícono nuevo en el AppImage:** el de `./dev.sh` opción 10 usa el logo de capas (en la app ya probado 2026-10-07: barra lateral, ventana y barra de tareas)
 - [ ] **Metadata genérica en el AppImage:** el de `./dev.sh` opción 10 muestra el resumen nuevo en el lanzador (la bienvenida de la app ya probada 2026-10-07)
-- [ ] **Pieza 4, paso 5** (PR #75): con el External Change `FieldOfView = 75.0` en el loadout, `loadout settings unset -l "Loadout A" -k /graphics/basic/FieldOfView -g Overrides` + `loadout synchronize`: el archivo vuelve a 90.0 (la entrada de "Ajustes" gana de nuevo)
 
 ### Cómo probar con datos reales
 
