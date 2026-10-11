@@ -67,7 +67,6 @@ public class LibraryViewModel : APageViewModel<ILibraryViewModel>, ILibraryViewM
     public ReactiveCommand<Unit> UpdateAndKeepOldSelectedItemsCommand { get; }
 
     public ReactiveCommand<Unit> RemoveSelectedItemsCommand { get; }
-    public ReactiveCommand<Unit> EditLocalFileMetadataCommand { get; }
     
     public ReactiveCommand<Unit> DeselectItemsCommand { get; }
 
@@ -221,18 +220,6 @@ public class LibraryViewModel : APageViewModel<ILibraryViewModel>, ILibraryViewM
             configureAwait: false
         );
 
-        var hasSingleLocalFile = Adapter.SelectedModels
-            .ObserveChanged()
-            .Select(change => TryGetSingleSelectedLocalFile(out var unused))
-            .Prepend(false);
-
-        EditLocalFileMetadataCommand = hasSingleLocalFile.ToReactiveCommand<Unit>(
-            executeAsync: (_, cancellationToken) => EditLocalFileMetadata(cancellationToken),
-            awaitOperation: AwaitOperation.Drop,
-            initialCanExecute: false,
-            configureAwait: false
-        );
-
         var canUseFilePicker = this.WhenAnyValue(vm => vm.StorageProvider)
             .ToObservable()
             .WhereNotNull()
@@ -298,7 +285,8 @@ public class LibraryViewModel : APageViewModel<ILibraryViewModel>, ILibraryViewM
                         async viewChangelogMessage => await HandleViewChangelogMessage(viewChangelogMessage, cancellationToken),
                         async viewModPageMessage => await HandleViewModPageMessage(viewModPageMessage, cancellationToken),
                         async hideUpdatesMessage => await HandleHideUpdatesMessage(hideUpdatesMessage, cancellationToken),
-                        async deleteItemMessage => await HandleDeleteItemMessage(deleteItemMessage, cancellationToken)
+                        async deleteItemMessage => await HandleDeleteItemMessage(deleteItemMessage, cancellationToken),
+                        async editLocalFileMessage => await EditLocalFileMetadata(editLocalFileMessage.Id)
                     );
                 },
                 awaitOperation: AwaitOperation.Parallel,
@@ -908,20 +896,10 @@ After asking design, we're choosing to simply open the mod page for now.
         _notificationService.ShowToast(Language.ToastNotification_Items_deleted);
     }
 
-    private bool TryGetSingleSelectedLocalFile(out LocalFile.ReadOnly localFile)
+    private async ValueTask EditLocalFileMetadata(LocalFileId id)
     {
-        localFile = default;
-        var ids = GetSelectedIds();
-        if (ids.Length != 1) return false;
-        var candidate = LocalFile.Load(_connection.Db, ids[0]);
-        if (!candidate.IsValid()) return false;
-        localFile = candidate;
-        return true;
-    }
-
-    private async ValueTask EditLocalFileMetadata(CancellationToken cancellationToken)
-    {
-        if (!TryGetSingleSelectedLocalFile(out var localFile)) return;
+        var localFile = LocalFile.Load(_connection.Db, id);
+        if (!localFile.IsValid()) return;
         var libraryItem = localFile.AsLibraryFile().AsLibraryItem();
         var initial = new LocalFileMetadata(
             Name: libraryItem.Name,
@@ -975,7 +953,14 @@ After asking design, we're choosing to simply open the mod page for now.
 
             try
             {
-                await _libraryService.AddLocalFile(path, result.Metadata);
+                var added = await _libraryService.AddLocalFile(path, result.Metadata);
+                // Same content already in the library: the existing item (and its name) was reused
+                if (added.OriginalPath != path.ToString())
+                    _notificationService.ShowToast($"'{path.FileName}' ya estaba en la biblioteca como '{added.AsLibraryFile().AsLibraryItem().Name}'", ToastNotificationVariant.Neutral);
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
             }
             catch (Exception ex)
             {
@@ -1090,16 +1075,17 @@ public readonly record struct ViewChangelogMessage(OneOf<NexusModsModPageMetadat
 public readonly record struct ViewModPageMessage(OneOf<NexusModsModPageMetadataId, NexusModsLibraryItemId, LocalFileId> Id);
 public readonly record struct HideUpdatesMessage(OneOf<NexusModsModPageMetadataId, NexusModsLibraryItemId> Id);
 public readonly record struct DeleteItemMessage(LibraryItemId[] Ids);
+public readonly record struct EditLocalFileMessage(LocalFileId Id);
 
 public class LibraryTreeDataGridAdapter :
     TreeDataGridAdapter<CompositeItemModel<EntityId>, EntityId>,
-    ITreeDataGirdMessageAdapter<OneOf<InstallMessage, UpdateAndReplaceMessage, UpdateAndKeepOldMessage, ViewChangelogMessage, ViewModPageMessage, HideUpdatesMessage, DeleteItemMessage>>
+    ITreeDataGirdMessageAdapter<OneOf<InstallMessage, UpdateAndReplaceMessage, UpdateAndKeepOldMessage, ViewChangelogMessage, ViewModPageMessage, HideUpdatesMessage, DeleteItemMessage, EditLocalFileMessage>>
 {
     private readonly ILibraryDataProvider[] _libraryDataProviders;
     private readonly LibraryFilter _libraryFilter;
     private readonly IConnection _connection;
 
-    public Subject<OneOf<InstallMessage, UpdateAndReplaceMessage, UpdateAndKeepOldMessage, ViewChangelogMessage, ViewModPageMessage, HideUpdatesMessage, DeleteItemMessage>> MessageSubject { get; } = new();
+    public Subject<OneOf<InstallMessage, UpdateAndReplaceMessage, UpdateAndKeepOldMessage, ViewChangelogMessage, ViewModPageMessage, HideUpdatesMessage, DeleteItemMessage, EditLocalFileMessage>> MessageSubject { get; } = new();
 
     public LibraryTreeDataGridAdapter(IServiceProvider serviceProvider, LibraryFilter libraryFilter) : base(serviceProvider)
     {
@@ -1212,6 +1198,16 @@ public class LibraryTreeDataGridAdapter :
                 var ids = GetLibraryItemIds(model).ToArray();
 
                 self.MessageSubject.OnNext(new DeleteItemMessage(ids));
+            })
+        );
+
+        model.SubscribeToComponentAndTrack<LibraryComponents.EditLocalFileAction, LibraryTreeDataGridAdapter>(
+            key: LibraryColumns.Actions.EditLocalFileComponentKey,
+            state: this,
+            factory: static (self, itemModel, component) => component.CommandEditLocalFile.Subscribe((self, itemModel), static (_, state) =>
+            {
+                var (self, model) = state;
+                self.MessageSubject.OnNext(new EditLocalFileMessage(LocalFileId.From(model.Key)));
             })
         );
 

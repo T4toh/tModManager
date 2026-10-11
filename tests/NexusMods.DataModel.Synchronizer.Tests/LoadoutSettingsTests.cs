@@ -33,6 +33,7 @@ public class LoadoutSettingsTests(ITestOutputHelper helper) : ACyberpunkIsolated
         path.Should().Be(expected);
         LoadoutSettings.TryResolveFile(loadout, "Game:nope.json", out _, out _, out error).Should().BeFalse();
         error.Should().Contain("nope.json");
+        error.Should().Contain($"WinePrefix:{expected.Path}", "the options are printed in the form -f accepts");
     }
 
     [Fact]

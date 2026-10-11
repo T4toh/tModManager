@@ -114,15 +114,6 @@
                                                      LeftIcon="{x:Static icons:IconValues.DeleteOutline}"
                                                      ToolTip.Tip="{x:Static resources:Language.FileOriginPage_DeleteMod_ToolTip}"
                                                      Classes="Danger" />
-
-                            <controls:StandardButton x:Name="EditLocalFileButton"
-                                                     Text="Editar"
-                                                     Type="Tertiary"
-                                                     Size="Toolbar"
-                                                     Fill="None"
-                                                     ShowIcon="Left"
-                                                     LeftIcon="{x:Static icons:IconValues.Pencil}"
-                                                     ToolTip.Tip="Editar nombre, versión, fuente y página de un archivo agregado a mano" />
                         </ItemsControl>
 
                         <ItemsControl x:Name="InstallationTargetControlGroup">

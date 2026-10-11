@@ -48,6 +48,8 @@ internal class GameLocationsService : IGameLocationsService
             try
             {
                 var gamePath = installation.Locations.ToGamePath(file);
+                // A prefix nested inside the game folder resolves to WinePrefix paths outside its whitelist
+                if (!installation.Locations.IsManaged(gamePath)) return;
                 if (filter.ShouldFilter(gamePath)) return;
                 if (!seenPaths.TryAdd(gamePath, true)) return;
 
@@ -93,9 +95,9 @@ internal class GameLocationsService : IGameLocationsService
         {
             return managed
                 .Select(relative => root.Combine(relative))
-                .Where(file => file.FileExists
-                               && !SafePath.IsUnderSymlink(root.ToString(), file.ToString())
-                               && !SafePath.IsSymlink(file));
+                .Where(file => !SafePath.IsUnderSymlink(root.ToString(), file.ToString())
+                               && !SafePath.IsSymlink(file)
+                               && file.FileExists);
         }
         return SafePath.EnumerateFilesNoFollow(root).Where(file => SafePath.IsStrictlyInside(root, file));
     }

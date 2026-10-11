@@ -39,7 +39,7 @@ public static class LoadoutManagementVerbs
             .AddModule("loadout group", "Commands for managing a specific group of files in a loadout")
             .AddModule("loadout group items", "Commands for managing the items in a group of files in a loadout")
             .AddModule("loadout version", "Commands for managing the version of a loadout")
-            .AddModule("loadout settings", "Entradas de archivos de configuración que el loadout posee (UserSettings.json en CP2077)")
+            .AddModule("loadout settings", "Entradas de archivos de configuración que el loadout posee")
             .AddVerb(() => SetVersion)
             .AddVerb(() => Synchronize)
             .AddVerb(() => InstallMod)
@@ -58,8 +58,8 @@ public static class LoadoutManagementVerbs
     [Verb("loadout settings set", "Fija el valor de una clave de un archivo de configuración gestionado")]
     private static async Task<int> SettingsSet([Injected] IRenderer renderer,
         [Option("l", "loadout", "Loadout")] Loadout.ReadOnly loadout,
-        [Option("k", "key", "Clave (CP2077: grupo/opción, ej. /graphics/advanced/DLSS)")] string key,
-        [Option("v", "value", "Valor como literal del formato (CP2077: JSON, ej. \"Off\", 5.0, true)")] string value,
+        [Option("k", "key", "Clave, en la forma que define el archivo (ej. /graphics/advanced/DLSS)")] string key,
+        [Option("v", "value", "Valor como literal del formato del archivo (JSON: \"Off\", 5.0, true)")] string value,
         [Option("f", "file", "Archivo como Ubicación:ruta; por defecto el único del juego", isOptional: true)] string? file,
         [Injected] IConnection connection)
     {
@@ -111,7 +111,7 @@ public static class LoadoutManagementVerbs
         [Option("l", "loadout", "Loadout")] Loadout.ReadOnly loadout)
     {
         await LoadoutSettings.List(loadout)
-            .Select(r => (r.File.ToString(), r.Key, r.Value, r.Group, r.Wins ? "sí" : ""))
+            .Select(r => (LoadoutSettings.Format(r.File), r.Key, r.Value, r.Group, r.Wins ? "sí" : ""))
             .RenderTable(renderer, "Archivo", "Clave", "Valor", "Grupo", "Gana");
         return 0;
     }
