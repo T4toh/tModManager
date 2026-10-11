@@ -13,8 +13,6 @@ public interface ISettingsIntrinsicFile : IIntrinsicFile
     bool TryValidate(string key, string value, out string? error);
     /// <summary>Enabled entries for this file, one per key: External Changes win, otherwise the newest entity.</summary>
     IReadOnlyDictionary<string, IntrinsicFileEntry.ReadOnly> WinningEntries(Loadout.ReadOnly loadout);
-    /// <summary>True when every owned key already has its value in <paramref name="diskText"/> (always true with nothing owned).</summary>
-    bool IsUpToDate(string diskText, Loadout.ReadOnly loadout);
 }
 
 /// <summary>
@@ -77,6 +75,7 @@ public abstract class ASettingsIntrinsicFile<TDoc>(GamePath path) : ISettingsInt
         return winners;
     }
 
+    /// <summary>True when every owned key already has its value in <paramref name="diskText"/> (always true with nothing owned).</summary>
     public bool IsUpToDate(string diskText, Loadout.ReadOnly loadout)
     {
         var wanted = WinningValues(loadout);

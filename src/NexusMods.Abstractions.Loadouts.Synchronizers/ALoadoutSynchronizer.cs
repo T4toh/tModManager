@@ -1222,10 +1222,10 @@ public partial class ALoadoutSynchronizer : ILoadoutSynchronizer
 
     private static bool IntrinsicIsUpToDate(GamePath path, Loadout.ReadOnly loadout, Dictionary<GamePath, IIntrinsicFile> intrinsics)
     {
-        if (!intrinsics.TryGetValue(path, out var file) || file is not ISettingsIntrinsicFile settings) return false;
+        if (!intrinsics.TryGetValue(path, out var file)) return false;
         var resolved = loadout.InstallationInstance.Locations.ToAbsolutePath(path);
         var text = resolved.FileExists ? File.ReadAllText(resolved.ToString()) : string.Empty;
-        return settings.IsUpToDate(text, loadout);
+        return file.IsUpToDate(text, loadout);
     }
     
     /// <inheritdoc />
