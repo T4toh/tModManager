@@ -34,6 +34,11 @@ public abstract class ASettingsIntrinsicFile<TDoc>(GamePath path) : ISettingsInt
     protected abstract bool TryGet(TDoc document, string key, out string value);
     /// <summary>Throws InvalidOperationException naming the key when the value is not valid for this format.</summary>
     protected abstract void Set(TDoc document, string key, string value);
+    /// <summary>
+    /// Comparable form of a literal, for "is this the same value" checks only ("5.0" and "5" for a JSON
+    /// number). What goes into the file and into an External Change entry is always the literal itself.
+    /// </summary>
+    protected virtual string NormalizeLiteral(string literal) => literal;
 
     public bool TryValidate(string key, string value, out string? error)
     {
@@ -80,7 +85,7 @@ public abstract class ASettingsIntrinsicFile<TDoc>(GamePath path) : ISettingsInt
         TDoc disk;
         try { disk = Parse(diskText); }
         catch (Exception e) when (e is not OutOfMemoryException) { return false; }
-        return wanted.All(kv => TryGet(disk, kv.Key, out var onDisk) && onDisk == kv.Value);
+        return wanted.All(kv => TryGet(disk, kv.Key, out var onDisk) && NormalizeLiteral(onDisk) == kv.Value);
     }
 
     public Task Write(Stream stream, Loadout.ReadOnly loadout, Dictionary<GamePath, SyncNode> syncTree)
@@ -152,8 +157,8 @@ public abstract class ASettingsIntrinsicFile<TDoc>(GamePath path) : ISettingsInt
         {
             var want = wanted[key];
             var found = TryGet(disk, key, out var onDisk);
-            if (found && onDisk == want) continue;
-            var gameChanged = found && state.IsValid() && !(TryGet(previousBase!, key, out var before) && before == onDisk);
+            if (found && NormalizeLiteral(onDisk) == want) continue;
+            var gameChanged = found && state.IsValid() && !(TryGet(previousBase!, key, out var before) && NormalizeLiteral(before) == NormalizeLiteral(onDisk));
             if (!gameChanged)
             {
                 mustWrite = true;
@@ -183,7 +188,7 @@ public abstract class ASettingsIntrinsicFile<TDoc>(GamePath path) : ISettingsInt
         return new ReadOnlyMemory<byte>(Encoding.UTF8.GetBytes(rendered));
     }
 
-    /// <summary>Values the loadout wants, run through the format so "5.0" and "5" compare equal to what TryGet returns.</summary>
+    /// <summary>Values the loadout wants in comparable form (written through the format, then normalized).</summary>
     private Dictionary<string, string> WinningValues(Loadout.ReadOnly loadout) =>
         WinningEntries(loadout).ToDictionary(kv => kv.Key, kv => Normalize(kv.Key, kv.Value.Value));
 
@@ -193,11 +198,11 @@ public abstract class ASettingsIntrinsicFile<TDoc>(GamePath path) : ISettingsInt
         {
             var doc = Parse(string.Empty);
             Set(doc, key, value);
-            return TryGet(doc, key, out var normalized) ? normalized : value;
+            return NormalizeLiteral(TryGet(doc, key, out var written) ? written : value);
         }
         catch (Exception e) when (e is InvalidOperationException or FormatException)
         {
-            return value;
+            return NormalizeLiteral(value);
         }
     }
 

@@ -89,13 +89,17 @@ public static class LoadoutSettings
         return result.Remap(entry);
     }
 
-    /// <summary>Deletes the hand-set entry for <paramref name="key"/> (the one in the "Ajustes" group). False when there was none.</summary>
-    public static async Task<bool> Remove(IConnection connection, Loadout.ReadOnly loadout, GamePath file, string key)
+    /// <summary>
+    /// Deletes the entry for <paramref name="key"/>: the hand-set one in the "Ajustes" group, or with
+    /// <paramref name="external"/> the External Change the game produced. False when there was none.
+    /// </summary>
+    public static async Task<bool> Remove(IConnection connection, Loadout.ReadOnly loadout, GamePath file, string key, bool external)
     {
         var db = connection.Db;
         var entry = IntrinsicFileEntry.FindByFile(db, file)
             .FirstOrDefault(e => e.Key == key && e.AsLoadoutItem().LoadoutId == loadout.LoadoutId
-                                 && LoadoutItem.Parent.TryGetValue(e.AsLoadoutItem(), out var p) && LoadoutItem.Load(db, p).Name == GroupName);
+                                 && LoadoutItem.Parent.TryGetValue(e.AsLoadoutItem(), out var p)
+                                 && (external ? LoadoutOverridesGroup.Load(db, p).IsValid() : LoadoutItem.Load(db, p).Name == GroupName));
         if (!entry.IsValid()) return false;
         using var tx = connection.BeginTransaction();
         tx.Delete(entry.Id, recursive: false);

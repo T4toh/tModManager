@@ -30,6 +30,7 @@ public class UserSettingsFileTests
         public string S(JsonNode doc) => Serialize(doc);
         public bool G(JsonNode doc, string key, out string value) => TryGet(doc, key, out value);
         public void Put(JsonNode doc, string key, string value) => Set(doc, key, value);
+        public string N(string literal) => NormalizeLiteral(literal);
     }
 
     private readonly Exposed _file = new();
@@ -39,7 +40,7 @@ public class UserSettingsFileTests
     {
         var doc = _file.P(Sample);
         _file.G(doc, "/controls/fpp_camera/FPP_MouseX", out var v).Should().BeTrue();
-        v.Should().Be("5");
+        v.Should().Be("5.0", "the literal as the file has it");
         _file.G(doc, "/graphics/advanced/DLSS", out v).Should().BeTrue();
         v.Should().Be("\"Auto\"");
         _file.G(doc, "/controls/fpp_camera/FPP_MouseInvertY", out v).Should().BeTrue();
@@ -123,5 +124,14 @@ public class UserSettingsFileTests
         var text = _file.S(_file.P(Sample));
         text.Should().StartWith("{");
         text.Should().Contain("\n  \"version\": 140");
+    }
+
+    [Fact]
+    public void NormalizeLiteral_MakesNumbersComparable_AndLeavesTheRestAlone()
+    {
+        _file.N("5.0").Should().Be(_file.N("5"));
+        _file.N("7.50").Should().Be(_file.N("7.5"));
+        _file.N("\"Off\"").Should().Be("\"Off\"");
+        _file.N("true").Should().Be("true");
     }
 }

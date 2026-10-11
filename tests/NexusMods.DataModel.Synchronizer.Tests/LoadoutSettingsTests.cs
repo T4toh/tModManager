@@ -88,9 +88,37 @@ public class LoadoutSettingsTests(ITestOutputHelper helper) : ACyberpunkIsolated
         await LoadoutSettings.Upsert(Connection, loadout, path, Dlss, "\"Off\"");
         Refresh(ref loadout);
 
-        (await LoadoutSettings.Remove(Connection, loadout, path, Dlss)).Should().BeTrue();
+        (await LoadoutSettings.Remove(Connection, loadout, path, Dlss, external: false)).Should().BeTrue();
         Refresh(ref loadout);
         IntrinsicFileEntry.FindByFile(Connection.Db, path).Where(e => e.AsLoadoutItem().LoadoutId == loadout.LoadoutId).Should().BeEmpty();
-        (await LoadoutSettings.Remove(Connection, loadout, path, Dlss)).Should().BeFalse("nothing left to remove");
+        (await LoadoutSettings.Remove(Connection, loadout, path, Dlss, external: false)).Should().BeFalse("nothing left to remove");
+    }
+
+    [Fact]
+    public async Task Remove_External_DeletesTheExternalChangeEntry_NotTheHandSetOne()
+    {
+        var loadout = await CreateLoadout();
+        LoadoutSettings.TryResolveFile(loadout, null, out var path, out _, out _).Should().BeTrue();
+        await LoadoutSettings.Upsert(Connection, loadout, path, Dlss, "\"Off\"");
+        using (var tx = Connection.BeginTransaction())
+        {
+            Refresh(ref loadout);
+            var overrides = LoadoutOverrides.GetOrCreate(tx, loadout);
+            _ = new IntrinsicFileEntry.New(tx, out var id)
+            {
+                File = path, Key = Dlss, Value = "\"Quality\"",
+                LoadoutItem = new LoadoutItem.New(tx, id) { Name = Dlss, LoadoutId = loadout.LoadoutId, ParentId = LoadoutItemGroupId.From(overrides.Value) },
+            };
+            await tx.Commit();
+        }
+        Refresh(ref loadout);
+
+        (await LoadoutSettings.Remove(Connection, loadout, path, Dlss, external: false)).Should().BeTrue();
+        Refresh(ref loadout);
+        LoadoutSettings.List(loadout).Should().ContainSingle().Which.Group.Should().Be("Overrides");
+
+        (await LoadoutSettings.Remove(Connection, loadout, path, Dlss, external: true)).Should().BeTrue();
+        Refresh(ref loadout);
+        LoadoutSettings.List(loadout).Should().BeEmpty();
     }
 }

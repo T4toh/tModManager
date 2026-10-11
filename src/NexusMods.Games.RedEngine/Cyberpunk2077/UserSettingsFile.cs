@@ -34,13 +34,15 @@ public class UserSettingsFile(GamePath path) : ASettingsIntrinsicFile<JsonNode>(
         var (group, name) = Split(key);
         var option = FindGroup(document, group)?["options"]?.AsArray().FirstOrDefault(o => NameOf(o) == name);
         if (option is null) return false;
-        var node = option["value"];
-        // Numbers normalized ("5.0" and "5" are the same setting), everything else as the literal prints
-        value = node is JsonValue scalar && scalar.TryGetValue<double>(out var number)
-            ? number.ToString("R", CultureInfo.InvariantCulture)
-            : node?.ToJsonString() ?? "null";
+        value = option["value"]?.ToJsonString() ?? "null";
         return true;
     }
+
+    /// <summary>JSON numbers compare by value ("5.0" is "5"); strings, bools and the rest compare as printed.</summary>
+    protected override string NormalizeLiteral(string literal) =>
+        double.TryParse(literal, NumberStyles.Float, CultureInfo.InvariantCulture, out var number)
+            ? number.ToString("R", CultureInfo.InvariantCulture)
+            : literal;
 
     protected override void Set(JsonNode document, string key, string value)
     {

@@ -296,6 +296,20 @@ public class IntrinsicSettingsFileTests(ITestOutputHelper helper) : ACyberpunkIs
     }
 
     [Fact]
+    public async Task GameChangesANumber_TheExternalChangeKeepsTheGamesLiteral()
+    {
+        var loadout = await ManagedWith(Original);
+        await ModWithEntry(loadout, "Mouse", "/controls/fpp_camera/FPP_MouseX", "7.0");
+        loadout = await Apply(loadout);
+
+        await GameWrites(doc => { doc["data"]![0]!["options"]![0]!["value"] = 12.5; return doc; });
+        loadout = await Apply(loadout);
+
+        ExternalChangeEntries(loadout).Should().ContainSingle().Which.Value.Should().Be("12.5", "the game's own literal, not a normalized form");
+        (await ValueOnDisk("/controls/fpp_camera", "FPP_MouseX")).Should().Be("12.5");
+    }
+
+    [Fact]
     public async Task SettingsFileThatIsASymlink_IsNeverWritten()
     {
         var outside = TemporaryFileManager.CreateFolder().Path.Combine("UserSettings.json");
