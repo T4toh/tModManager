@@ -55,6 +55,8 @@ public partial class ALoadoutSynchronizer : ILoadoutSynchronizer
     private readonly ILoadoutManager _loadoutManager;
     private readonly IGameLocationsService _gameLocationsService;
     private readonly IGameRegistry _gameRegistry;
+    private readonly Lazy<ISortOrderFile[]> _sortOrderFiles;
+    private readonly HashSet<GamePath> _warnedIntrinsics = [];
 
     private readonly StringPool _fileNamePool = new();
 
@@ -80,6 +82,8 @@ public partial class ALoadoutSynchronizer : ILoadoutSynchronizer
         IGarbageCollectorRunner garbageCollectorRunner)
     {
         _serviceProvider = serviceProvider;
+        // Lazy: a variety takes IServiceProvider itself, resolving it here would cycle on construction
+        _sortOrderFiles = new Lazy<ISortOrderFile[]>(() => serviceProvider.GetServices<ISortOrderFile>().ToArray());
         _synchronizerService = serviceProvider.GetRequiredService<ISynchronizerService>();
         _jobMonitor = serviceProvider.GetRequiredService<IJobMonitor>();
         _loadoutManager = serviceProvider.GetRequiredService<ILoadoutManager>();
@@ -1771,13 +1775,48 @@ public partial class ALoadoutSynchronizer : ILoadoutSynchronizer
     protected virtual IGamePathFilter GamePathFilter { get; } = Synchronizers.GamePathFilters.Empty;
 
     /// <summary>
-    /// Gets a set of files intrinsic to this game. Such as mod order files, preference files, etc.
-    /// These files will not be backed up and will not be included in the loadout directly. Instead, they are
-    /// generated at sync time by calling the implementations of the files themselves. 
+    /// Files generated from the loadout at sync time (load orders, settings): never backed up, never part of
+    /// the loadout as files. By default every <see cref="ISortOrderFile"/> registered for this game; a game
+    /// adds its own through <see cref="DeclareIntrinsic"/>.
     /// </summary>
     public virtual Dictionary<GamePath, IIntrinsicFile> IntrinsicFiles(Loadout.ReadOnly loadout)
     {
-        return new();
+        var result = new Dictionary<GamePath, IIntrinsicFile>();
+        var gameId = loadout.InstallationInstance.Game.GameId;
+        foreach (var order in _sortOrderFiles.Value)
+        {
+            if (!order.GameIds.Contains(gameId)) continue;
+            if (DeclareIntrinsic(loadout, order.Path, _ => new SortOrderIntrinsicFile(order)) is { } file)
+                result[order.Path] = file;
+        }
+        return result;
+    }
+
+    /// <summary>
+    /// Builds an intrinsic for <paramref name="path"/> when it can be written: its location is declared and
+    /// exists on disk (a Wine prefix may not, yet or any more), the path is managed (whitelist), and it is
+    /// neither a symlink nor under one (never written through; said once per path, the rest of the loadout
+    /// still applies). Null otherwise.
+    /// </summary>
+    protected IIntrinsicFile? DeclareIntrinsic(Loadout.ReadOnly loadout, GamePath path, Func<GamePath, IIntrinsicFile> factory)
+    {
+        var locations = loadout.InstallationInstance.Locations;
+        if (!locations.TryGetValue(path.LocationId, out var location)) return null;
+        if (!location.Path.DirectoryExists()) return null;
+        if (!locations.IsManaged(path))
+        {
+            if (_warnedIntrinsics.Add(path))
+                Logger.LogWarning("`{Path}` no está entre los archivos gestionados de su ubicación; no se genera", path);
+            return null;
+        }
+        var resolved = locations.ToAbsolutePath(path);
+        if (SafePath.IsSymlink(resolved) || SafePath.IsUnderSymlink(location.Path.ToString(), resolved.ToString()))
+        {
+            if (_warnedIntrinsics.Add(path))
+                Logger.LogWarning("`{Path}` es un symlink o está bajo uno; tModManager no lo genera", path);
+            return null;
+        }
+        return factory(path);
     }
 
     public async Task ResetToOriginalGameState(GameInstallation installation)
