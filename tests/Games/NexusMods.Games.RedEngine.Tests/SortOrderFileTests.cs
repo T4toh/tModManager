@@ -107,6 +107,19 @@ public class SortOrderFileTests(ITestOutputHelper helper) : ACyberpunkIsolatedGa
     }
 
     [Fact]
+    public async Task NoRedMods_PreexistingModlist_IsLeftAlone()
+    {
+        ModList.Parent.CreateDirectory();
+        await ModList.WriteAllTextAsync("vortex_mod\r\n");
+        var loadout = await ManagedLoadout();
+
+        loadout = await Apply(loadout);
+
+        (await ModList.ReadAllTextAsync()).Should().Be("vortex_mod\r\n", "with nothing to order the file is not ours to empty");
+        NeedsSync(loadout).Should().BeFalse();
+    }
+
+    [Fact]
     public async Task DisablingARedMod_RemovesItFromTheFile()
     {
         var loadout = await ManagedLoadout();

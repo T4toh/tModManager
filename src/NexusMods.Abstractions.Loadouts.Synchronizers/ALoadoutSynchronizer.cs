@@ -56,7 +56,9 @@ public partial class ALoadoutSynchronizer : ILoadoutSynchronizer
     private readonly IGameLocationsService _gameLocationsService;
     private readonly IGameRegistry _gameRegistry;
     private readonly Lazy<ISortOrderFile[]> _sortOrderFiles;
+    // IntrinsicFiles also runs outside the sync semaphore (intrinsic_files table function, status check)
     private readonly HashSet<GamePath> _warnedIntrinsics = [];
+    private bool WarnOnce(GamePath path) { lock (_warnedIntrinsics) return _warnedIntrinsics.Add(path); }
 
     private readonly StringPool _fileNamePool = new();
 
@@ -1833,14 +1835,14 @@ public partial class ALoadoutSynchronizer : ILoadoutSynchronizer
         if (!location.Path.DirectoryExists()) return null;
         if (!locations.IsManaged(path))
         {
-            if (_warnedIntrinsics.Add(path))
+            if (WarnOnce(path))
                 Logger.LogWarning("`{Path}` no está entre los archivos gestionados de su ubicación; no se genera", path);
             return null;
         }
         var resolved = locations.ToAbsolutePath(path);
         if (SafePath.IsSymlink(resolved) || SafePath.IsUnderSymlink(location.Path.ToString(), resolved.ToString()))
         {
-            if (_warnedIntrinsics.Add(path))
+            if (WarnOnce(path))
                 Logger.LogWarning("`{Path}` es un symlink o está bajo uno; tModManager no lo genera", path);
             return null;
         }

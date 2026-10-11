@@ -65,14 +65,15 @@ public class SortOrderIntrinsicFileTests
     }
 
     [Fact]
-    public async Task Ingest_NothingToOrderButFileHasContent_EmptiesIt()
+    public async Task Ingest_NothingToOrder_LeavesAForeignFileAlone()
     {
+        // Another manager's file with nothing of ours to write: not ours to empty
         var file = new SortOrderIntrinsicFile(new FakeOrder(string.Empty));
 
-        var rewrite = await file.Ingest(Disk("stale"), default, new Dictionary<GamePath, SyncNode>(), null!);
+        var rewrite = await file.Ingest(Disk("vortex_mod"), default, new Dictionary<GamePath, SyncNode>(), null!);
 
-        rewrite.Should().NotBeNull();
-        rewrite!.Value.Length.Should().Be(0);
+        rewrite.Should().BeNull();
+        file.IsUpToDate("vortex_mod", default).Should().BeTrue("nothing to write means nothing pending");
     }
 
     [Fact]

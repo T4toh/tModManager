@@ -34,6 +34,7 @@ Todo lo mergeado hasta #75 está probado con el juego real. Última prueba compl
 Mergeado o en PR, compilado en Mac pero sin correr en la PC con el juego (en Mac la app no arranca y casi toda la suite falla por `LinuxInterop`). Borrar cada línea cuando quede probada.
 
 - [ ] **Ícono nuevo en el AppImage:** el de `./dev.sh` opción 10 usa el logo de capas (en la app ya probado 2026-10-07: barra lateral, ventana y barra de tareas)
+- [ ] **Pieza 5, menores diferidos de la revisión (PR #77, 2026-10-11):** `SortOrderIntrinsicFile` compara texto decodificado, un BOM que agregue Notepad bajo Wine a `modlist.txt` no se detecta ni se reescribe (si REDmod se queja en la prueba real, comparar bytes); sin test para "original ya en la base borrado y recreado a mano → se pisa sin respaldo" ni "otro manager edita el archivo después de gestionar → se pisa" (ambos según spec: el loadout gana)
 - [ ] **Pieza 5 con el juego real:** reordenar REDmods en la UI, aplicar, confirmar `drive_c/modlist.txt` (CRLF, orden de la UI) y que el deploy de REDmod lo use (log de redMod, `r6/cache/modded` regenerado)
 - [ ] **Metadata genérica en el AppImage:** el de `./dev.sh` opción 10 muestra el resumen nuevo en el lanzador (la bienvenida de la app ya probada 2026-10-07)
 

@@ -8,7 +8,7 @@ namespace NexusMods.Abstractions.Loadouts.Synchronizers;
 /// <summary>
 /// Writes an <see cref="ISortOrderFile"/> as an intrinsic file. The loadout is the source of truth:
 /// a file that differs from the rendered order is rewritten in the same apply, no External Change is
-/// created (the game never writes this file). An empty order never creates a file out of nothing.
+/// created (the game never writes this file). An empty order never creates, empties or counts as pending a file.
 /// </summary>
 public sealed class SortOrderIntrinsicFile(ISortOrderFile source) : IIntrinsicFile
 {
@@ -25,10 +25,14 @@ public sealed class SortOrderIntrinsicFile(ISortOrderFile source) : IIntrinsicFi
         using var reader = new StreamReader(stream, Encoding.UTF8, detectEncodingFromByteOrderMarks: true, leaveOpen: true);
         var diskText = await reader.ReadToEndAsync();
         var wanted = source.Render(loadout, loadout.Db);
-        // Same text, or nothing to order and no file (Stream.Null reads as empty): leave the disk alone
-        if (diskText == wanted) return null;
+        // Nothing to order: the file (another manager's, or none) is not ours to create or empty
+        if (wanted.Length == 0 || diskText == wanted) return null;
         return new ReadOnlyMemory<byte>(Encoding.UTF8.GetBytes(wanted));
     }
 
-    public bool IsUpToDate(string diskText, Loadout.ReadOnly loadout) => diskText == source.Render(loadout, loadout.Db);
+    public bool IsUpToDate(string diskText, Loadout.ReadOnly loadout)
+    {
+        var wanted = source.Render(loadout, loadout.Db);
+        return wanted.Length == 0 || diskText == wanted;
+    }
 }
