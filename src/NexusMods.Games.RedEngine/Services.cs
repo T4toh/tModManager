@@ -4,6 +4,7 @@ using NexusMods.Abstractions.Loadouts;
 using NexusMods.Sdk.Settings;
 using NexusMods.Games.RedEngine.Cyberpunk2077;
 using NexusMods.Games.RedEngine.Cyberpunk2077.Models;
+using NexusMods.Abstractions.Loadouts.Synchronizers;
 using NexusMods.Games.RedEngine.Cyberpunk2077.SortOrder;
 
 namespace NexusMods.Games.RedEngine;
@@ -19,6 +20,7 @@ public static class Services
             .AddRedModSortOrderItemModel()
             .AddRedModQueriesSql()
             .AddSingleton<RedModSortOrderVariety, RedModSortOrderVariety>()
+            .AddSingleton<ISortOrderFile>(provider => provider.GetRequiredService<RedModSortOrderVariety>())
             .AddSingleton<ITool, RunCyberpunk2077Game>()
             .AddSingleton<ITool, RedModDeployTool>()
             .AddSingleton<ITool, CyberpunkDeepCleanTool>()

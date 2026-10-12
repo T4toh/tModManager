@@ -3,11 +3,13 @@ using DynamicData;
 using DynamicData.Kernel;
 using NexusMods.Abstractions.Games;
 using NexusMods.Abstractions.Loadouts;
+using NexusMods.Abstractions.Loadouts.Synchronizers;
 using NexusMods.Games.RedEngine.Cyberpunk2077.Extensions;
 using NexusMods.Games.RedEngine.Cyberpunk2077.Models;
 using NexusMods.MnemonicDB.Abstractions;
 using NexusMods.MnemonicDB.Abstractions.TxFunctions;
 using NexusMods.Paths;
+using NexusMods.Sdk.Games;
 using NexusMods.Sdk.Loadouts;
 using OneOf;
 
@@ -17,7 +19,7 @@ public class RedModSortOrderVariety : ASortOrderVariety<
     SortItemKey<string>, 
     RedModReactiveSortItem, 
     SortItemLoadoutData<SortItemKey<string>>, 
-    SortItemData<SortItemKey<string>> >
+    SortItemData<SortItemKey<string>> >, ISortOrderFile
 {
     private static readonly SortOrderVarietyId StaticVarietyId = SortOrderVarietyId.From(new Guid("9120C6F5-E0DD-4AD2-A99E-836F56796950"));
     
@@ -147,6 +149,18 @@ public class RedModSortOrderVariety : ASortOrderVariety<
                 };
             }
         ).ToList();
+    }
+
+    public IEnumerable<GameId> GameIds => [Cyberpunk2077Game.GameId];
+    public GamePath Path => Constants.RedModListPath;
+
+    /// <summary>REDmod only accepts CRLF; anything else ends in "Non-existant mod selected".</summary>
+    public string Render(Loadout.ReadOnly loadout, IDb db)
+    {
+        // TODO: this currently uses the loadout sort order, change this to use the "Active" sort order,
+        // once we support switching between collection and loadout sort orders
+        var order = GetRedModOrder(loadout.LoadoutId, Optional<CollectionGroupId>.None, db);
+        return order.Count > 0 ? string.Join("\r\n", order) : string.Empty;
     }
 
     /// <summary>

@@ -6,7 +6,7 @@ Todo lo mergeado hasta #75 está probado con el juego real. Última prueba compl
 
 **Próximo:**
 1. Bugs chicos que salieron de las pruebas (lista de abajo). Los menores de revisión de #73/#74/#75 se cerraron en PR #76 (2026-10-10).
-2. Pieza 5 (load order que se escribe a archivo) o pieza 6 (requisitos del prefix como datos) de "Piezas genéricas para el segundo juego". Las piezas 2, 3 y 4 están hechas (PRs #73, #74, #75) y probadas con el juego. Witcher 3 arranca cuando estén las piezas que necesita.
+2. Pieza 6 (requisitos del prefix como datos) de "Piezas genéricas para el segundo juego". Las piezas 2 a 5 están hechas (PRs #73, #74, #75, #77); la 5 queda por probar con el juego real (abajo). Witcher 3 arranca cuando estén las piezas que necesita.
 
 ### Pruebas reales
 
@@ -34,6 +34,8 @@ Todo lo mergeado hasta #75 está probado con el juego real. Última prueba compl
 Mergeado o en PR, compilado en Mac pero sin correr en la PC con el juego (en Mac la app no arranca y casi toda la suite falla por `LinuxInterop`). Borrar cada línea cuando quede probada.
 
 - [ ] **Ícono nuevo en el AppImage:** el de `./dev.sh` opción 10 usa el logo de capas (en la app ya probado 2026-10-07: barra lateral, ventana y barra de tareas)
+- [ ] **Pieza 5, menores diferidos de la revisión (PR #77, 2026-10-11):** `SortOrderIntrinsicFile` compara texto decodificado, un BOM que agregue Notepad bajo Wine a `modlist.txt` no se detecta ni se reescribe (si REDmod se queja en la prueba real, comparar bytes); sin test para "original ya en la base borrado y recreado a mano → se pisa sin respaldo" ni "otro manager edita el archivo después de gestionar → se pisa" (ambos según spec: el loadout gana)
+- [ ] **Pieza 5 con el juego real:** reordenar REDmods en la UI, aplicar, confirmar `drive_c/modlist.txt` (CRLF, orden de la UI) y que el deploy de REDmod lo use (log de redMod, `r6/cache/modded` regenerado)
 - [ ] **Metadata genérica en el AppImage:** el de `./dev.sh` opción 10 muestra el resumen nuevo en el lanzador (la bienvenida de la app ya probada 2026-10-07)
 
 ### Cómo probar con datos reales
@@ -178,7 +180,7 @@ No se escribe código de Witcher 3 ni de KOTOR hasta que estas piezas existan. C
 | 2 | Ubicaciones dentro del prefix, con whitelist de archivos gestionados (hecha 2026-10-09, probada en el juego 2026-10-10; `LocationId.WinePrefix` + `IGameData.GetManagedFiles`; spec en `docs/superpowers/specs/2026-10-09-wine-prefix-location-design.md`) | `UserSettings.json` (saves y `modlist.txt` de REDmod cuando haga falta) | saves, `Documents/The Witcher 3/user.settings`, `mods.settings` | cualquier juego con prefix |
 | 3 | Mods locales de primera clase (hecha y probada en la app 2026-10-10, PR #74; `LocalFile.Version/Source/PageUri`, copia a Descargas, diálogo al agregar y botón "Editar"; spec en `docs/superpowers/specs/2026-10-10-local-mods-first-class-design.md`) | archivos agregados a mano | mods de mod.io/GitHub/foros | KOTOR |
 | 4 | Primer uso real de `IIntrinsicFile` (hecha y probada con el juego 2026-10-10, PR #75; `ASettingsIntrinsicFile<TDoc>` + `IntrinsicFileEntry`/`IntrinsicFileState`, `Ingest` → External Changes y reescritura en el mismo apply; CP2077: `UserSettings.json`; spec en `docs/superpowers/specs/2026-10-10-intrinsic-settings-file-design.md`) | `UserSettings.json` (`loadout settings set`) | `mods.settings`, `dx12user.settings`/`input.settings` (formato INI pendiente), XML de menús | `plugins.txt` (formato de líneas pendiente) |
-| 5 | Load order que se escribe a archivo (variedad de sort order + writer) | `modlist` de REDmod | `Priority` de `mods.settings` | Skyrim, orden de patchers KOTOR |
+| 5 | Load order que se escribe a archivo (hecha 2026-10-11, PR #77; `ISortOrderFile` + `SortOrderIntrinsicFile`, `DeclareIntrinsic` en la base; CP2077: `drive_c/modlist.txt` de REDmod lo escribe el apply, el deploy solo lo lee; spec en `docs/superpowers/specs/2026-10-11-sort-order-file-design.md`) | `modlist` de REDmod | `Priority` de `mods.settings` | Skyrim, orden de patchers KOTOR |
 | 6 | Requisitos del prefix como datos (= item de la fase 2) | `WinePrefixRequirementsEmitter` | `dinput8=n,b` para ASI, aviso DLSS bajo Proton | cualquier juego |
 | 7 | Runner de herramientas Windows en el prefix (generaliza `GameToolRunner`) | deploy de REDmod | Script Merger, `wcc_lite` | HoloPatcher, xEdit |
 | 8 | Archivos derivados: grupo generado con fuentes + hashes, se marca viejo y se regenera | **salida del deploy de REDmod** (hoy entra como "External Changes" y nada la invalida) | `mod0000_MergedFiles` | patchers de KOTOR, bashed patch |

@@ -51,7 +51,7 @@ public class WinePrefixLocationTests(ITestOutputHelper helper) : ACyberpunkIsola
     public void ThePrefixIsALocationWithAWhitelist()
     {
         GameInstallation.Locations[LocationId.WinePrefix].Path.ToString().Should().EndWith("/pfx");
-        GameInstallation.Locations[LocationId.WinePrefix].ManagedFiles.Should().BeEquivalentTo([(RelativePath)Settings]);
+        GameInstallation.Locations[LocationId.WinePrefix].ManagedFiles.Should().BeEquivalentTo([(RelativePath)Settings, (RelativePath)"drive_c/modlist.txt"]);
         GameInstallation.Locations[LocationId.Game].ManagedFiles.Should().BeNull();
     }
 

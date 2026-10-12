@@ -1,10 +1,8 @@
 using System.Reflection;
 using CliWrap;
-using DynamicData.Kernel;
 using Microsoft.Extensions.Logging;
 using NexusMods.Abstractions.Loadouts;
 using NexusMods.Games.Generic;
-using NexusMods.Games.RedEngine.Cyberpunk2077.SortOrder;
 using NexusMods.Paths;
 using NexusMods.Sdk.Games;
 using NexusMods.Sdk.Jobs;
@@ -19,87 +17,52 @@ public class RedModDeployTool : ITool
     private readonly GameToolRunner _toolRunner;
     private readonly TemporaryFileManager _temporaryFileManager;
     private readonly ILogger _logger;
-    private readonly RedModSortOrderVariety _redModSortOrderVariety;
 
-    public RedModDeployTool(GameToolRunner toolRunner, TemporaryFileManager temporaryFileManager, ILogger<RedModDeployTool> logger, RedModSortOrderVariety sortOrderVariety)
+    public RedModDeployTool(GameToolRunner toolRunner, TemporaryFileManager temporaryFileManager, ILogger<RedModDeployTool> logger)
     {
         _logger = logger;
         _toolRunner = toolRunner;
         _temporaryFileManager = temporaryFileManager;
-        _redModSortOrderVariety = sortOrderVariety;
     }
     
     public IEnumerable<GameId> GameIds => [Cyberpunk2077.Cyberpunk2077Game.GameId];
 
     public async Task Execute(Loadout.ReadOnly loadout, CancellationToken cancellationToken)
     {
-        var exe = loadout.InstallationInstance.Locations.ToAbsolutePath(RedModPath);
         var deployFolder = loadout.InstallationInstance.Locations.ToAbsolutePath(RedModDeployFolder);
 
-        await using var loadorderFile = _temporaryFileManager.CreateFile();
-        await WriteLoadOrderFile(loadorderFile.Path, loadout);
-        
+        if (loadout.Installation.Store != GameStore.Steam)
+        {
+            _logger.LogWarning("Skip running redmod, it's only supported for Steam on Linux at the moment");
+            return;
+        }
+        // The apply wrote the load order (RedModSortOrderVariety as ISortOrderFile) before this tool runs.
+        // No file means no prefix, or the file is a symlink the app refuses to write: nothing to deploy with.
+        if (!loadout.InstallationInstance.Locations.TryGetValue(RedModListPath.LocationId, out _))
+        {
+            _logger.LogWarning("Sin prefix de Wine no hay {Path}; no se corre el deploy de REDmod", RedModListPath);
+            return;
+        }
+        var modList = loadout.InstallationInstance.Locations.ToAbsolutePath(RedModListPath);
+        if (!modList.FileExists)
+        {
+            _logger.LogWarning("No existe {Path}; no se corre el deploy de REDmod", modList);
+            return;
+        }
+
         // RedMod deploys to this folder and freaks out if it doesn't exist, but our synchronizer will
         // delete it if it's empty, so we need to recreate it here.
         if (!deployFolder.DirectoryExists())
             deployFolder.CreateDirectory();
 
         // Note (halgari): When we change the redmod order, we need to force redmod to re-run. This is due to a bug in redmod
-        // not recognizing order as a change in the mod configuration. If that bug ever gets fixed (does an order check) then  
+        // not recognizing order as a change in the mod configuration. If that bug ever gets fixed (does an order check) then
         // we can resolve this by removing the -force flag.
-        var fs = FileSystem.Shared;
-        if (fs.OS.IsWindows)
-        {
-            var command = Cli.Wrap(exe.ToString())
-                .WithArguments(["deploy", "-force", "-modlist=" + loadorderFile.Path], true)
-                .WithWorkingDirectory(exe.Parent.ToString());
-            await _toolRunner.ExecuteAsync(loadout, command, true, cancellationToken);
-        }
-        else
-        {
-            if (loadout.Installation.Store == GameStore.Steam)
-            {
-                var linuxCompatibilityDataProvider = loadout.InstallationInstance.LocatorResult.LinuxCompatabilityDataProvider;
-                if (linuxCompatibilityDataProvider is null) return;
-
-                var wineDirectory = linuxCompatibilityDataProvider.WinePrefixDirectoryPath;
-                var cDriveDirectory = wineDirectory.Combine("drive_c");
-
-                if (!cDriveDirectory.DirectoryExists()) cDriveDirectory.CreateDirectory();
-                var tmpFile = cDriveDirectory.Combine("modlist.txt");
-                await using (var input = loadorderFile.Path.Read())
-                await using (var output = tmpFile.Open(FileMode.Create, FileAccess.ReadWrite, FileShare.None))
-                {
-                    await input.CopyToAsync(output, cancellationToken: cancellationToken);
-                }
-
-                await using var batchPath = await ExtractTemporaryDeployScript();
-                var command = Cli.Wrap(batchPath.ToString()).WithArguments(["deploy", "-force", "-modlist=C:\\modlist.txt"], escape: true);
-                await _toolRunner.ExecuteAsync(loadout, command, true, cancellationToken);
-            }            
-            else
-            {
-                _logger.LogWarning("Skip running redmod, it's only supported for Steam on Linux at the moment");
-            }
-        }
+        await using var batchPath = await ExtractTemporaryDeployScript();
+        var command = Cli.Wrap(batchPath.ToString()).WithArguments(["deploy", "-force", "-modlist=C:\\modlist.txt"], escape: true);
+        await _toolRunner.ExecuteAsync(loadout, command, true, cancellationToken);
     }
 
-    internal async Task WriteLoadOrderFile(AbsolutePath loadorderFilePath, Loadout.ReadOnly loadout)
-    {
-        // TODO: this currently uses the loadout sort order, change this to use the "Active" sort order,
-        // once we support switching between collection and loadout sort orders
-        var collectionId = Optional.None<CollectionGroupId>();
-        
-        var output = string.Empty;
-        // Note(AL12rs): this will get the Load Order for the specific revision of the DB of loadout, which might not be the latest
-        var order = _redModSortOrderVariety.GetRedModOrder(loadout, collectionId, loadout.Db);
-        
-        // NOTE(erri120): redmod only accepts CRLR line breaks, everything else breaks the program
-        // and results in getting errors like `Non-existant mod selected`
-        output = order.Count > 0 ? string.Join("\r\n", order) : string.Empty;
-        
-        await loadorderFilePath.WriteAllTextAsync(output);
-    }
     public string Name => "RedMod Deploy";
 
     public IJobTask<ITool, Unit> StartJob(Loadout.ReadOnly loadout, IJobMonitor monitor, CancellationToken cancellationToken)

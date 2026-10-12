@@ -22,4 +22,10 @@ public interface IIntrinsicFile
     /// null when the disk already matches. The synchronizer writes them in the same apply.
     /// </summary>
     public Task<ReadOnlyMemory<byte>?> Ingest(Stream stream, Loadout.ReadOnly loadout, Dictionary<GamePath, SyncNode> syncTree, ITransaction tx);
+
+    /// <summary>
+    /// True when the file on disk already holds what this loadout would write, so "WriteIntrinsic" is not a
+    /// pending change. Default false: an intrinsic that cannot tell always counts as pending.
+    /// </summary>
+    public bool IsUpToDate(string diskText, Loadout.ReadOnly loadout) => false;
 }

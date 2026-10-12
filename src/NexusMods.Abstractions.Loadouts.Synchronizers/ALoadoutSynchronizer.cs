@@ -55,6 +55,10 @@ public partial class ALoadoutSynchronizer : ILoadoutSynchronizer
     private readonly ILoadoutManager _loadoutManager;
     private readonly IGameLocationsService _gameLocationsService;
     private readonly IGameRegistry _gameRegistry;
+    private readonly Lazy<ISortOrderFile[]> _sortOrderFiles;
+    // IntrinsicFiles also runs outside the sync semaphore (intrinsic_files table function, status check)
+    private readonly HashSet<GamePath> _warnedIntrinsics = [];
+    private bool WarnOnce(GamePath path) { lock (_warnedIntrinsics) return _warnedIntrinsics.Add(path); }
 
     private readonly StringPool _fileNamePool = new();
 
@@ -80,6 +84,8 @@ public partial class ALoadoutSynchronizer : ILoadoutSynchronizer
         IGarbageCollectorRunner garbageCollectorRunner)
     {
         _serviceProvider = serviceProvider;
+        // Lazy: a variety takes IServiceProvider itself, resolving it here would cycle on construction
+        _sortOrderFiles = new Lazy<ISortOrderFile[]>(() => serviceProvider.GetServices<ISortOrderFile>().ToArray());
         _synchronizerService = serviceProvider.GetRequiredService<ISynchronizerService>();
         _jobMonitor = serviceProvider.GetRequiredService<IJobMonitor>();
         _loadoutManager = serviceProvider.GetRequiredService<ILoadoutManager>();
@@ -266,7 +272,35 @@ public partial class ALoadoutSynchronizer : ILoadoutSynchronizer
         }
 
         MergeStates(latestDiskState, previousDiskState, syncTree);
+        DropUnreachableWhitelisted(syncTree, loadout.InstallationInstance.Locations);
         return syncTree;
+    }
+
+    /// <summary>
+    /// A whitelisted location (the Wine prefix) is never ours to create, and a listed file that is a symlink
+    /// or sits under one is never ours to touch: with the root gone, or the path linked, the file is simply
+    /// not there for the app. Dropping the node means no action (not even extracting an adopted original back
+    /// into a deleted prefix), nothing pending and nothing in the diff. The disk state is kept by
+    /// <see cref="ReindexState"/>, which already skips the same files. A mod's own file at such a path is
+    /// kept on purpose: EnsureDiskChangesStayInside refuses it out loud, the user has to see that.
+    /// </summary>
+    private static void DropUnreachableWhitelisted(Dictionary<GamePath, SyncNode> tree, GameLocations locations)
+    {
+        foreach (var (path, node) in tree.ToArray())
+        {
+            if (node.SourceItemType == LoadoutSourceItemType.Loadout) continue;
+            if (IsUnreachableWhitelisted(locations, path)) tree.Remove(path);
+        }
+    }
+
+    private static bool IsUnreachableWhitelisted(GameLocations locations, GamePath path)
+    {
+        if (!locations.TryGetValue(path.LocationId, out var location) || location.ManagedFiles is null) return false;
+        if (!location.Path.DirectoryExists()) return true;
+        // A path outside the whitelist stays in the tree: EnsureDiskChangesStayInside refuses it out loud
+        if (!location.ManagedFiles.Contains(path.Path)) return false;
+        var resolved = locations.ToAbsolutePath(path);
+        return SafePath.IsSymlink(resolved) || SafePath.IsUnderSymlink(location.Path.ToString(), resolved.ToString());
     }
 
     /// <inheritdoc />
@@ -1222,10 +1256,10 @@ public partial class ALoadoutSynchronizer : ILoadoutSynchronizer
 
     private static bool IntrinsicIsUpToDate(GamePath path, Loadout.ReadOnly loadout, Dictionary<GamePath, IIntrinsicFile> intrinsics)
     {
-        if (!intrinsics.TryGetValue(path, out var file) || file is not ISettingsIntrinsicFile settings) return false;
+        if (!intrinsics.TryGetValue(path, out var file)) return false;
         var resolved = loadout.InstallationInstance.Locations.ToAbsolutePath(path);
         var text = resolved.FileExists ? File.ReadAllText(resolved.ToString()) : string.Empty;
-        return settings.IsUpToDate(text, loadout);
+        return file.IsUpToDate(text, loadout);
     }
     
     /// <inheritdoc />
@@ -1771,13 +1805,48 @@ public partial class ALoadoutSynchronizer : ILoadoutSynchronizer
     protected virtual IGamePathFilter GamePathFilter { get; } = Synchronizers.GamePathFilters.Empty;
 
     /// <summary>
-    /// Gets a set of files intrinsic to this game. Such as mod order files, preference files, etc.
-    /// These files will not be backed up and will not be included in the loadout directly. Instead, they are
-    /// generated at sync time by calling the implementations of the files themselves. 
+    /// Files generated from the loadout at sync time (load orders, settings): never backed up, never part of
+    /// the loadout as files. By default every <see cref="ISortOrderFile"/> registered for this game; a game
+    /// adds its own through <see cref="DeclareIntrinsic"/>.
     /// </summary>
     public virtual Dictionary<GamePath, IIntrinsicFile> IntrinsicFiles(Loadout.ReadOnly loadout)
     {
-        return new();
+        var result = new Dictionary<GamePath, IIntrinsicFile>();
+        var gameId = loadout.InstallationInstance.Game.GameId;
+        foreach (var order in _sortOrderFiles.Value)
+        {
+            if (!order.GameIds.Contains(gameId)) continue;
+            if (DeclareIntrinsic(loadout, order.Path, _ => new SortOrderIntrinsicFile(order)) is { } file)
+                result[order.Path] = file;
+        }
+        return result;
+    }
+
+    /// <summary>
+    /// Builds an intrinsic for <paramref name="path"/> when it can be written: its location is declared and
+    /// exists on disk (a Wine prefix may not, yet or any more), the path is managed (whitelist), and it is
+    /// neither a symlink nor under one (never written through; said once per path, the rest of the loadout
+    /// still applies). Null otherwise.
+    /// </summary>
+    protected IIntrinsicFile? DeclareIntrinsic(Loadout.ReadOnly loadout, GamePath path, Func<GamePath, IIntrinsicFile> factory)
+    {
+        var locations = loadout.InstallationInstance.Locations;
+        if (!locations.TryGetValue(path.LocationId, out var location)) return null;
+        if (!location.Path.DirectoryExists()) return null;
+        if (!locations.IsManaged(path))
+        {
+            if (WarnOnce(path))
+                Logger.LogWarning("`{Path}` no está entre los archivos gestionados de su ubicación; no se genera", path);
+            return null;
+        }
+        var resolved = locations.ToAbsolutePath(path);
+        if (SafePath.IsSymlink(resolved) || SafePath.IsUnderSymlink(location.Path.ToString(), resolved.ToString()))
+        {
+            if (WarnOnce(path))
+                Logger.LogWarning("`{Path}` es un symlink o está bajo uno; tModManager no lo genera", path);
+            return null;
+        }
+        return factory(path);
     }
 
     public async Task ResetToOriginalGameState(GameInstallation installation)
@@ -1824,6 +1893,7 @@ public partial class ALoadoutSynchronizer : ILoadoutSynchronizer
         // This fakes the synchronizer into thinking that there are no changes on disk and we only want to do a
         // hard reset to the desired state.
         MergeStates(diskState, diskState, desiredState);
+        DropUnreachableWhitelisted(desiredState, installation.Locations);
         
         // Process the tree
         ProcessSyncTree(desiredState);

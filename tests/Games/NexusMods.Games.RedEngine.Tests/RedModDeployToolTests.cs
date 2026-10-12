@@ -5,11 +5,13 @@ using FluentAssertions;
 using Microsoft.Extensions.DependencyInjection;
 using NexusMods.Abstractions.Games;
 using NexusMods.Abstractions.Loadouts;
+using NexusMods.Abstractions.Loadouts.Synchronizers;
 using NexusMods.Games.RedEngine.Cyberpunk2077;
 using NexusMods.Games.RedEngine.Cyberpunk2077.SortOrder;
 using NexusMods.Games.TestFramework;
 using NexusMods.MnemonicDB.Abstractions.ElementComparers;
 using NexusMods.Paths;
+using NexusMods.Sdk.Games;
 using NexusMods.Sdk.Loadouts;
 using OneOf;
 using R3;
@@ -214,12 +216,20 @@ public class RedModDeployToolTests : ACyberpunkIsolatedGameTest<Cyberpunk2077Gam
         await Verify(sb.ToString()).UseParameters(sourceIndices, targetIndex, position);
     }
     
-    internal async Task<string> WriteLoadoutFile(Loadout.ReadOnly loadout)
+    internal Task<string> WriteLoadoutFile(Loadout.ReadOnly loadout)
     {
-        await using var tempFile = TemporaryFileManager.CreateFile();
         loadout = loadout.Rebase();
-        await _tool.WriteLoadOrderFile(tempFile.Path, loadout);
-        return await tempFile.Path.ReadAllTextAsync();
+        var variety = ServiceProvider.GetRequiredService<RedModSortOrderVariety>();
+        return Task.FromResult(variety.Render(loadout, loadout.Db));
+    }
+
+    [Fact]
+    public void TheVarietyIsRegisteredAsASortOrderFile_ForCyberpunk()
+    {
+        var files = ServiceProvider.GetServices<ISortOrderFile>().ToArray();
+        files.Should().ContainSingle(f => f is RedModSortOrderVariety);
+        files.Single().GameIds.Should().Contain(Cyberpunk2077Game.GameId);
+        files.Single().Path.Should().Be(new GamePath(LocationId.WinePrefix, "drive_c/modlist.txt"));
     }
     
     internal string AddLineNumbers(string text)
