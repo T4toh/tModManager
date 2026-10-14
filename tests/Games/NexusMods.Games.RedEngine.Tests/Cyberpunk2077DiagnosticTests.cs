@@ -34,6 +34,15 @@ public class Cyberpunk2077DiagnosticTests(ITestOutputHelper outputHelper) : ACyb
         => PatternDefinitions.Definitions.Select(t => new object[] { t.DependencyName });
 
     [Fact]
+    public void CyberpunkDeclaresItsWinePrefixRequirements()
+    {
+        var requirements = Game.WinePrefixRequirements;
+        requirements.Should().NotBeNull();
+        requirements!.DllOverrides.Select(o => o.ToString()).Should().Equal("winmm=n,b", "version=n,b");
+        requirements.WinetricksPackages.Should().Equal("d3dcompiler_47", "vcrun2022");
+    }
+
+    [Fact]
     public void CyberpunkGameExposesPatternBasedDiagnostics()
     {
         Game.DiagnosticEmitters.Should().ContainSingle(e => e.GetType() == typeof(PatternBasedDependencyEmitter));

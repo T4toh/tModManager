@@ -1,11 +1,9 @@
-using System.Collections.Immutable;
 using System.Reactive;
 using System.Reactive.Disposables;
 using System.Reactive.Linq;
 using System.Text;
 using CliWrap;
 using NexusMods.Games.Generic.Dependencies;
-using NexusMods.Games.RedEngine.Cyberpunk2077;
 using NexusMods.Sdk;
 using NexusMods.Sdk.Games;
 using NexusMods.UI.Sdk;
@@ -16,18 +14,11 @@ namespace NexusMods.App.UI.Pages.MyGames.WinePrefix;
 
 public class WinePrefixStatusViewModel : AViewModel<IWinePrefixStatusViewModel>, IWinePrefixStatusViewModel
 {
-    private static readonly WineDllOverride[] RequiredOverrides =
-    [
-        new("winmm", [WineDllOverrideType.Native, WineDllOverrideType.BuiltIn]),
-        new("version", [WineDllOverrideType.Native, WineDllOverrideType.BuiltIn]),
-    ];
-
-    public static readonly ImmutableHashSet<string> RequiredWinetricksPackages = ["d3dcompiler_47", "vcrun2022"];
-
-    /// <summary>The requirements above (and the view's labels) are Cyberpunk's; other games get no panel yet.</summary>
-    public static bool AppliesTo(IGameData game) => game.GameId == Cyberpunk2077Game.GameId;
+    /// <summary>Only games that declare prefix requirements get the panel.</summary>
+    public static bool AppliesTo(IGameData game) => game.WinePrefixRequirements is not null;
 
     private readonly GameInstallation _installation;
+    private readonly WinePrefixRequirements _requirements;
     private readonly ILinuxCompatabilityDataProvider? _linuxCompat;
     private readonly IRuntimeDependency? _protontricks;
     private readonly IProcessRunner _processRunner;
@@ -37,8 +28,7 @@ public class WinePrefixStatusViewModel : AViewModel<IWinePrefixStatusViewModel>,
     [Reactive] public bool IsExpanded { get; set; }
     [Reactive] public bool HasIssues { get; set; }
     [Reactive] public bool IsProtontricksInstalled { get; set; }
-    [Reactive] public bool IsD3dCompiler47Installed { get; set; }
-    [Reactive] public bool IsVcRun2022Installed { get; set; }
+    [Reactive] public IReadOnlyList<WinetricksPackageStatus> Packages { get; set; } = [];
     [Reactive] public bool HasCorrectDllOverrides { get; set; }
     [Reactive] public string? DllOverridesInstructions { get; set; }
     [Reactive] public string? WinetricksInstructions { get; set; }
@@ -56,6 +46,7 @@ public class WinePrefixStatusViewModel : AViewModel<IWinePrefixStatusViewModel>,
     {
         _processRunner = processRunner;
         _installation = installation;
+        _requirements = installation.Game.WinePrefixRequirements ?? new WinePrefixRequirements([], []);
         _linuxCompat = installation.LocatorResult.LinuxCompatabilityDataProvider;
         _protontricks = runtimeDependencies
             .FirstOrDefault(d => d.DisplayName == "Protontricks");
@@ -99,14 +90,18 @@ public class WinePrefixStatusViewModel : AViewModel<IWinePrefixStatusViewModel>,
 
         // Check winetricks packages
         var installedPackages = await _linuxCompat.GetInstalledWinetricksComponents(cancellationToken: ct);
-        IsD3dCompiler47Installed = installedPackages.Contains("d3dcompiler_47");
-        IsVcRun2022Installed = installedPackages.Contains("vcrun2022");
+        Packages = _requirements.WinetricksPackages.Select(p => new WinetricksPackageStatus(p, installedPackages.Contains(p))).ToArray();
 
-        var missingPackages = RequiredWinetricksPackages.Except(installedPackages);
+        var missingPackages = Packages.Where(p => !p.IsInstalled).Select(p => p.Name).ToArray();
         _installCommand = null;
-        if (missingPackages.Count == 0)
+        if (missingPackages.Length == 0)
         {
             WinetricksInstructions = null;
+        }
+        else if (!_linuxCompat.WinePrefixDirectoryPath.DirectoryExists())
+        {
+            // A prefix just deleted: protontricks would fail until Steam creates it again
+            WinetricksInstructions = "El prefix de Proton todavía no existe. Lanzá el juego una vez desde Steam para que lo cree, cerralo y tocá \"Verificar de nuevo\"";
         }
         else if (IsProtontricksInstalled && _protontricks is IProtontricksDependency protontricks && long.TryParse(_installation.LocatorResult.StoreIdentifier, out var appId))
         {
@@ -124,7 +119,7 @@ public class WinePrefixStatusViewModel : AViewModel<IWinePrefixStatusViewModel>,
         var existingOverrides = await _linuxCompat.GetWineDllOverrides(cancellationToken: ct);
         var allOverridesCorrect = true;
 
-        foreach (var required in RequiredOverrides)
+        foreach (var required in _requirements.DllOverrides)
         {
             var found = existingOverrides.FirstOrDefault(o =>
                 o.DllName.Equals(required.DllName, StringComparison.OrdinalIgnoreCase));
@@ -140,7 +135,7 @@ public class WinePrefixStatusViewModel : AViewModel<IWinePrefixStatusViewModel>,
 
         if (!allOverridesCorrect)
         {
-            var dllOverridesString = RequiredOverrides
+            var dllOverridesString = _requirements.DllOverrides
                 .Select(x => x.ToString())
                 .Aggregate((a, b) => $"{a};{b}");
 
@@ -161,9 +156,13 @@ WINEDLLOVERRIDES="{dllOverridesString}" %command%
             DllOverridesInstructions = null;
         }
 
-        HasIssues = !IsProtontricksInstalled || !IsD3dCompiler47Installed || !IsVcRun2022Installed || !HasCorrectDllOverrides;
+        HasIssues = ComputeHasIssues(IsProtontricksInstalled, Packages, HasCorrectDllOverrides);
         IsExpanded = HasIssues;
     }
+
+    /// <summary>Protontricks only matters when the game needs winetricks packages.</summary>
+    internal static bool ComputeHasIssues(bool isProtontricksInstalled, IReadOnlyList<WinetricksPackageStatus> packages, bool hasCorrectDllOverrides) =>
+        (!isProtontricksInstalled && packages.Count > 0) || packages.Any(p => !p.IsInstalled) || !hasCorrectDllOverrides;
 
     private async Task InstallPackagesAsync(CancellationToken ct)
     {

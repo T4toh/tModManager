@@ -49,6 +49,12 @@ public interface IGameData
         => ImmutableDictionary<LocationId, ImmutableHashSet<RelativePath>>.Empty;
 
     /// <summary>
+    /// What the game's Wine/Proton prefix needs for modding; null when nothing. Drives the prefix diagnostics
+    /// and the "Wine prefix" panel in My Games.
+    /// </summary>
+    WinePrefixRequirements? WinePrefixRequirements => null;
+
+    /// <summary>
     /// Returns the primary (executable) file for the game.
     /// </summary>
     GamePath GetPrimaryFile(GameInstallation installation);

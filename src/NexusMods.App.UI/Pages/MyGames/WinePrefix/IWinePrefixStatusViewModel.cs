@@ -10,8 +10,8 @@ public interface IWinePrefixStatusViewModel : IViewModelInterface
     bool IsExpanded { get; set; }
     bool HasIssues { get; }
     bool IsProtontricksInstalled { get; }
-    bool IsD3dCompiler47Installed { get; }
-    bool IsVcRun2022Installed { get; }
+    /// <summary>The game's winetricks packages, in declared order.</summary>
+    IReadOnlyList<WinetricksPackageStatus> Packages { get; }
     bool HasCorrectDllOverrides { get; }
     string? DllOverridesInstructions { get; }
     string? WinetricksInstructions { get; }
@@ -21,3 +21,5 @@ public interface IWinePrefixStatusViewModel : IViewModelInterface
     ReactiveCommand<Unit, Unit> RefreshCommand { get; }
     ReactiveCommand<Unit, Unit> InstallPackagesCommand { get; }
 }
+
+public record WinetricksPackageStatus(string Name, bool IsInstalled);
