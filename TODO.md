@@ -2,13 +2,15 @@
 
 ## 📍 Estado y próximos pasos (2026-10-14)
 
-Todo lo mergeado hasta #75 está probado con el juego real. Última prueba completa: 2026-10-06, colección "Welcome to Night City 2.31a" (283 mods) agregada, bajada, instalada, aplicada y jugada. Sin CI: **la verificación es local** (`./dev.sh` opción 4, un proyecto por vez).
+Todo lo mergeado hasta #87 está probado con el juego real (ronda del 2026-10-14, abajo). Última prueba completa: 2026-10-06, colección "Welcome to Night City 2.31a" (283 mods) agregada, bajada, instalada, aplicada y jugada. Sin CI: **la verificación es local** (`./dev.sh` opción 4, un proyecto por vez).
 
 **Próximo:**
 1. Bugs chicos que salieron de las pruebas (lista de abajo). Los menores de revisión de #73/#74/#75 se cerraron en PR #76 (2026-10-10).
-2. Piezas 7 (runner de herramientas Windows en el prefix) y 8 (archivos derivados) de "Piezas genéricas para el segundo juego". Las piezas 2 a 6 están hechas (PRs #73, #74, #75, #77 y la PR #79); la 5 y la 6 quedan por probar con el juego real (abajo). Witcher 3 arranca cuando estén las piezas que necesita.
+2. Piezas 7 (runner de herramientas Windows en el prefix) y 8 (archivos derivados) de "Piezas genéricas para el segundo juego". Las piezas 2 a 6 están hechas y probadas con el juego (PRs #73, #74, #75, #77, #79). La 7 arranca con spec y plan, idealmente con el juego a mano para probar `protontricks-launch`. Witcher 3 arranca cuando estén las piezas que necesita.
 
 ### Pruebas reales
+
+- **2026-10-14** (rama local `prueba/2026-10-15` = `main` + PRs #78 a #87, después mergeadas en ese orden): suite completa (opción 4) verde con 0 warnings; #85 sin archivos nuevos en `~/.local/state/tModManager/Logs`; #82 el AppImage trae solo `runtimes/linux-x64/native/7zz` 26.04, byte a byte igual al del tarball oficial (SHA-256 `fc0327…` del `.tar.xz`); ícono y metadata genérica del AppImage correctos; #83 con XDG aislado: doble lanzamiento abre una sola ventana ("Otra instancia se está iniciando como principal"), `kill -STOP` + relanzar mata al viejo a los 6 s ("force closing process"), `kill -9` + relanzar arranca normal. En la jaula: panel "Wine prefix" igual que antes (#79/#80), sin `pfx/` aviso sin botón y vuelve tras lanzar el juego (#87), Storage Location rechaza `~` y la biblioteca de Steam y acepta `~/Mods` (#81), el apply con carpeta-link nombra las dos rutas (#84), botones del Storage Manager grises durante GC (#86). **Super Clean no se pudo probar en la jaula** (ver "Pendiente de las pruebas")
 
 - **2026-10-10** (rama `feat/intrinsic-settings-file`, PR #75): pieza 4 con el juego real. `loadout settings set -k /graphics/basic/FieldOfView -v 90.0` + sincronizar escribió el valor y el juego mostró FOV 90; cambiado a 75 en el menú del juego y sincronizado, apareció el External Change `75.0` (gana) y el archivo quedó sin tocar (formato del juego); `UserSettings.json` borrado y sincronizado se regeneró entero (328 opciones) desde la base. Salió de ahí: los External Changes guardan el literal del juego (`75.0`, no `75`) y `unset -g Overrides` (commit `32b32c712`). Quitado el External Change con `unset -g Overrides` y sincronizado, el archivo volvió a 90.0. El crash "archivos corruptos" del primer lanzamiento fue el `.archive` de bytes aleatorios de la prueba de la pieza 3, ya quitado del loadout
 
@@ -28,17 +30,15 @@ Todo lo mergeado hasta #75 está probado con el juego real. Última prueba compl
 - [x] **Avisar al borrar el prefix de Proton** que después hacen falta `vcrun2022` y `d3dcompiler_47` (2026-10-07): el diálogo del Storage Manager y el checkbox del asistente de limpieza lo dicen, y el panel "Wine prefix" de Mis juegos los instala con un botón "Instalar" (protontricks nativo o flatpak, el que haya; `IProtontricksDependency.MakeInstallCommand`) y muestra el mismo comando con "Copiar". Antes era prosa con backticks sin copiar
 - [x] **FOMOD: instrucción `enableallplugins` desconocida** (visto 2026-10-06, WARN de `FomodXmlInstaller` al instalar `WTNC Config` y un mod más de la colección; resuelto 2026-10-07): no era un bug. La librería FOMOD la emite al final de **toda** instalación XML que sale bien (`XmlScriptInstaller.cs` de `Nexus-Mods/fomod-installer`) y significa "activar los plugins `.esp`/`.esm` del mod": load order de Bethesda, nada que hacer en CP2077. Ahora se reconoce sin warning. Hace falta de verdad cuando llegue Skyrim/Fallout 4 (`plugins.txt`, pieza 5)
 - [ ] **Instaladores FOMOD que nunca se ven** (anotado 2026-10-07): la ventana existe y está registrada (`NexusMods.Games.FOMOD.UI`, `GuidedInstallerUi`, `AddGuidedInstallerUi`) y `FomodXmlInstaller` es el primero de la cadena de CP2077, pero en una colección las opciones salen del `collection.json` (`PresetGuidedInstaller`): nunca se pregunta nada. Instalado a mano desde la biblioteca sí abre la ventana (probado 2026-10-07 con `WTNC Config`). Falta un "Reconfigurar" para correr de nuevo el instalador con la ventana sobre un mod ya instalado (si es de una colección, el mod sale del grupo de solo lectura y pasa a "My Mods")
+- [ ] **Super Clean nunca corre si el apply previo falla** (visto 2026-10-14 en la jaula): `StorageAnalyzer.RunDeepClean` → `ToolManager.RunTool` aplica el loadout antes de la herramienta; el apply de CP2077 termina con el deploy de REDmod (`Cyberpunk2077Synchronizer`, `RedModDeployTool`), `protontricks-launch` salió con exit 1 (`Read-only file system: ~/.cache/protontricks/proton/.../bin`, la jaula) y la excepción abortó el job de sync, el Deep Clean nunca arrancó y la UI mostró "unhandled exception in R3". Dos arreglos independientes: (a) `sandbox-run.sh` bindea `~/.cache/protontricks` escribible, así el deploy anda adentro; (b) un deploy de REDmod fallido no tira abajo el apply (los archivos ya están en disco: loguear error, seguir) y/o `RunDeepClean` cae al camino `skipSync` cuando el apply previo falla, porque la herramienta existe justamente para salir de un estado roto. Mientras tanto: Super Clean fuera de la jaula o con los REDmods desactivados
+- [ ] **Menores diferidos de la revisión de pieza 6** (PR #79, no bloquean): falta test de la rama `null` del overload de loadout de `WinePrefixRequirementsEmitter`; `default(ImmutableArray)` en `WinePrefixRequirements` sin guarda; el `Diagnose` estático del emitter podría ser `internal`; el spec dice `ItemsControl` y las filas de paquetes se arman en code-behind
 - [ ] **Super Clean con varios loadouts:** hoy se niega (guarda del 2026-09-25). Arreglo real: conservar todos los snapshots de una corrida (cada pasada con sync crea uno y `PruneOldBackups` se lleva el primero, el único con archivos no gestionados). El orden de snapshots es por nombre (hora local): un cambio de horario o una carpeta ajena en `Backups/` puede elegir mal
 
 ### Para probar en Linux
 
 Mergeado o en PR, compilado en Mac pero sin correr en la PC con el juego (en Mac la app no arranca y casi toda la suite falla por `LinuxInterop`). Borrar cada línea cuando quede probada.
 
-- [ ] **Ícono nuevo en el AppImage:** el de `./dev.sh` opción 10 usa el logo de capas (en la app ya probado 2026-10-07: barra lateral, ventana y barra de tareas)
 - [ ] **Pieza 5, menores diferidos de la revisión (PR #77, 2026-10-11):** `SortOrderIntrinsicFile` compara texto decodificado, un BOM que agregue Notepad bajo Wine a `modlist.txt` no se detecta ni se reescribe (si REDmod se queja en la prueba real, comparar bytes); sin test para "original ya en la base borrado y recreado a mano → se pisa sin respaldo" ni "otro manager edita el archivo después de gestionar → se pisa" (ambos según spec: el loadout gana)
-- [ ] **Pieza 6 con el juego real** (PR #79, 2026-10-14; los tests nuevos ya corrieron en Linux arm64 con apple/container): panel "Wine prefix" de Mis juegos con las mismas filas y estados que antes (d3dcompiler_47, vcrun2022, overrides); con un paquete faltante, el diagnóstico "Missing Winetricks packages" y el botón "Instalar" igual que antes; el diálogo de borrar el prefix sigue nombrando d3dcompiler_47 y vcrun2022
-- [ ] **Storage Location validada** (PR #81, 2026-10-14): Settings → Storage Location → "Change location" con `~` (rechazada, con motivo debajo del botón), una biblioteca de Steam (rechazada) y `~/Mods` (aceptada, pide reiniciar como antes)
-- [ ] **Metadata genérica en el AppImage:** el de `./dev.sh` opción 10 muestra el resumen nuevo en el lanzador (la bienvenida de la app ya probada 2026-10-07)
 
 ### Cómo probar con datos reales
 
@@ -46,46 +46,9 @@ Mergeado o en PR, compilado en Mac pero sin correr en la PC con el juego (en Mac
 
 Recorrido que cubrió las pruebas de arriba: suite local (opción 4) → agregar e instalar una colección (anotar cuántos mods reutiliza el rescan MD5) → aplicar y lanzar (Redscript, CET y RED4ext sin errores) → borrar `DataModel/Archives/` con la app cerrada y abierta y volver a aplicar (se reextrae de Descargas, nada se baja de Nexus) → Storage Manager (Deep Clean deja `Downloads/` intacta y crea el backup en `tModManager/Backups/<GameId>/`; "Borrar descargas" y "Borrar prefix" piden confirmación).
 
+**Suite en la Mac** (para repetirlo): apple/container con `mcr.microsoft.com/dotnet/sdk:10.0` + `libc6:amd64 libstdc++6:amd64 libgcc-s1:amd64 libfontconfig1` (las fuentes amd64 de `archive.ubuntu.com`, porque `ports.ubuntu.com` no las sirve), `container run --rosetta` para que corra el `7zz` x64 empaquetado, compilando sobre una copia dentro del contenedor (sobre el mount de macOS fallan los archivos modo 000) y con los tests como usuario no-root (root lee archivos modo 000). Así la suite da verde completa; sin `libfontconfig1` fallan 7 tests de `UI.Tests` (SkiaSharp) y sin Rosetta unos 36 de RedEngine y DataModel. Pesa mucho: un solo contenedor a la vez.
+
 Logs: `~/.local/state/tModManager/Logs/nexusmods.app.main.current.log`. Login desde un build de `bin/` necesita `/etc/dotnet/install_location` apuntando a `~/.dotnet` (ya está en esta PC). Si algo crashea solo en Debug con `Assertion failed`, es un `Debug.Assert`: anotar cuál.
-
-### ⏯️ Retomar en la PC (2026-10-14, hecho en la Mac)
-
-Nueve PRs abiertas, ninguna probada con el juego. Están juntas en esta sección para probarlas de una sola vez en casa.
-
-| PR | Rama | Base | Qué | Prueba en la PC |
-|---|---|---|---|---|
-| #78 | `docs/pieza5-real-game-test` | `main` | Solo docs: pieza 5 probada con el juego (2026-10-11) | nada |
-| #79 | `feat/prefix-requirements-data` | `main` | Pieza 6: `IGameData.WinePrefixRequirements`, emitter y panel "Wine prefix" genéricos | "Pieza 6 con el juego real" (está en la rama de #79, sección "Para probar en Linux") |
-| #80 | `fix/wine-prefix-panel-minors` | #79 | Juego sin paquetes de winetricks: no marca protontricks ni deja hueco | con #79: para CP el panel se ve igual que antes |
-| #87 | `fix/wine-prefix-install-without-pfx` | #80 | Sin `pfx/` el panel no ofrece "Instalar" y dice que hay que lanzar el juego | Storage Manager → "Borrar prefix de Proton" → Mis juegos: el aviso, sin botón. Lanzar el juego desde Steam, cerrarlo, "Verificar de nuevo": vuelven el comando y el botón |
-| #81 | `feat/storage-safety` | `main` | Storage Location validada + backups de Deep Clean inyectables con test de `Execute` | Settings → Storage Location → "Change location": `~` y una biblioteca de Steam rechazadas con motivo, `~/Mods` aceptada |
-| #82 | `chore/7zz-26.04` | `main` | `7zz` 26.04 (SHA-256 verificado en GitHub y 7-zip.org); sin binarios de Windows/macOS | instalar unos mods o una colección (todo se extrae con el `7zz` nuevo); el AppImage de la opción 10 trae solo `runtimes/linux-x64/native/7zz` |
-| #83 | `fix/single-instance` | `main` | PID reusado: solo se mata al main anotado (PID + start time). Doble apertura: `flock` sobre `<sync file>.lock` | `./tModManager & ./tModManager` abre una sola ventana (log del segundo: "Otra instancia se está iniciando como principal"); `kill -STOP <pid>` de la app abierta y lanzar otra vez: a los ~6 s loguea `force closing process` y arranca; `kill -9` y relanzar: arranca normal |
-| #84 | `fix/symlink-folder-message` | `main` | El error del apply nombra la carpeta-link y a dónde apunta | en la jaula (opción 11): `ln -s /tmp/afuera <juego>/archive/pc/linked`, un mod local que escriba en `archive/pc/linked/`, aplicar: el error nombra las dos rutas y no escribe nada en `/tmp/afuera` |
-| #85 | `fix/test-isolation` | `main` | Los tests ya no escriben en los XDG reales (`tests/TestIsolation.cs`) | `ls -lt ~/.local/state/tModManager/Logs \| head -3`, correr la opción 4 y listar de nuevo: sin archivos nuevos |
-| #86 | `fix/storage-manager-busy` | `main` | Botones del Storage Manager deshabilitados mientras corre una operación | Storage Manager → "Run GC" o Deep Clean: los otros botones quedan grises hasta que termina |
-
-**Probar todo junto** (rama local descartable). Probado en la Mac: el código mezcla sin conflictos y todo junto compila con `-p:TreatWarningsAsErrors=true` (0 warnings). Solo choca este `TODO.md` (#87 y #81 contra #78, en la línea "Próximo" y en "Para probar en Linux"); en la rama de prueba alcanza con quedarse con cualquier versión:
-
-```bash
-git fetch && git switch -c prueba/2026-10-15 origin/main
-for b in docs/pieza5-real-game-test fix/wine-prefix-install-without-pfx feat/storage-safety chore/7zz-26.04 \
-         fix/single-instance fix/symlink-folder-message fix/test-isolation fix/storage-manager-busy; do
-  git merge --no-edit origin/$b || { git checkout --ours TODO.md && git add TODO.md && git commit --no-edit; }
-done
-```
-
-(`fix/wine-prefix-install-without-pfx` trae #79 y #80 adentro.)
-
-1. `./dev.sh` opción 4 (x64). En la Mac pasaron la suite completa (abajo cómo) `main` y #82 a #86; #87 solo `UI.Tests` (lo único que toca, 564/564). #79, #80 y #81 corrieron sus tests nuevos en arm64 sin Rosetta (ver cada PR): falta su suite completa
-2. `./dev.sh` opción 11 (jaula) y la columna "Prueba en la PC" de la tabla, de arriba a abajo
-3. Si todo da bien, mergear: #78; #79 → #80 → #87 (GitHub pasa cada una a `main` cuando se borra la rama de la anterior); #81; #82 a #86 en cualquier orden. En cada merge el conflicto es solo en `TODO.md`: quedarse con las dos partes. Al final, borrar esta sección
-
-**Cómo se testeó en la Mac** (para repetirlo): apple/container con `mcr.microsoft.com/dotnet/sdk:10.0` + `libc6:amd64 libstdc++6:amd64 libgcc-s1:amd64 libfontconfig1` (las fuentes amd64 de `archive.ubuntu.com`, porque `ports.ubuntu.com` no las sirve), `container run --rosetta` para que corra el `7zz` x64 empaquetado, compilando sobre una copia dentro del contenedor (sobre el mount de macOS fallan los archivos modo 000) y con los tests como usuario no-root (root lee archivos modo 000). Así la suite da verde completa; sin `libfontconfig1` fallan 7 tests de `UI.Tests` (SkiaSharp) y sin Rosetta unos 36 de RedEngine y DataModel. Pesa mucho: un solo contenedor a la vez.
-
-**Menores diferidos de la revisión de pieza 6 (no arreglados, no bloquean):** falta test de la rama `null` del overload de loadout de `WinePrefixRequirementsEmitter`; `default(ImmutableArray)` en `WinePrefixRequirements` sin guarda; el `Diagnose` estático del emitter podría ser `internal`; el spec dice `ItemsControl` y las filas de paquetes se arman en code-behind.
-
-**Después:** pieza 7 (arrancar con spec y plan, idealmente con el juego a mano para probar `protontricks-launch`); menores de pieza 5 solo si la prueba real de REDmod se queja; Super Clean con varios loadouts (después de #81, que toca `CyberpunkDeepCleanTool`); "El asistente mueve `NexusMods.App/Downloads`" quedó sin tocar a propósito (migración vieja, probablemente ya usada).
 
 ## ✅ Completado
 
