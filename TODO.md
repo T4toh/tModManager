@@ -8,32 +8,6 @@ Todo lo mergeado hasta #75 está probado con el juego real. Última prueba compl
 1. Bugs chicos que salieron de las pruebas (lista de abajo). Los menores de revisión de #73/#74/#75 se cerraron en PR #76 (2026-10-10).
 2. Piezas 7 (runner de herramientas Windows en el prefix) y 8 (archivos derivados) de "Piezas genéricas para el segundo juego". Las piezas 2 a 6 están hechas (PRs #73, #74, #75, #77, #79); la 5 y la 6 quedan por probar con el juego real (abajo). Witcher 3 arranca cuando estén las piezas que necesita.
 
-### ⏯️ Retomar en la PC (2026-10-14, hecho en la Mac)
-
-Tres PRs abiertas, ninguna probada con el juego. Todas compilan con `-p:TreatWarningsAsErrors=true` y sus tests nuevos pasaron en apple/container (linux/arm64); allá fallan siempre los tests que extraen con el `7zz` x64 (los mismos en `main`), así que la suite completa hay que correrla en la PC.
-
-| PR | Rama | Base | Qué |
-|---|---|---|---|
-| #79 | `feat/prefix-requirements-data` | `main` | Pieza 6: `IGameData.WinePrefixRequirements`, `WinePrefixRequirementsEmitter` y panel "Wine prefix" genéricos (spec `docs/superpowers/specs/2026-10-14-prefix-requirements-data-design.md`) |
-| #80 | `fix/wine-prefix-panel-minors` | #79 | Juego sin paquetes de winetricks: no marca protontricks como problema ni deja hueco en el panel (`WinePrefixStatusViewModel.ComputeHasIssues`) |
-| #81 | `feat/storage-safety` | `main` | Validar la Storage Location al elegirla + carpeta de backups de Deep Clean inyectable y test de `Execute` |
-
-**Probar todo junto** (rama local descartable; el único conflicto esperable es este `TODO.md`, quedarse con las dos partes):
-
-```bash
-git fetch && git switch -c prueba/2026-10-14 origin/fix/wine-prefix-panel-minors
-git merge origin/feat/storage-safety
-```
-
-1. `./dev.sh` opción 4 (x64): en especial `Games.Generic.Tests`, `Games.RedEngine.Tests`, `DataModel.Tests` y `UI.Tests`. En arm64 fallaban 27 de RedEngine, 9 de DataModel (`LibraryServiceTests`, `LocalFileBackfillTests`) y 7 de UI (`IconUtilsTests`, `LocalFileDataProviderTests`, `LibraryInstalledCollectionsTests`), igual que en `main`; en x64 deberían pasar
-2. Pieza 6 + #80 con el juego: los dos ítems de abajo ("Pieza 6 con el juego real" está en la rama de #79)
-3. #81: el ítem "Storage Location validada" de abajo
-4. Si todo da bien: mergear #79, después #80 (GitHub la pasa a `main` sola al borrar la rama de #79), después #81, resolviendo `TODO.md`
-
-**Menores diferidos de la revisión de pieza 6 (no arreglados, no bloquean):** falta test de la rama `null` del overload de loadout de `WinePrefixRequirementsEmitter`; `default(ImmutableArray)` en `WinePrefixRequirements` sin guarda; el `Diagnose` estático del emitter podría ser `internal`; el spec dice `ItemsControl` y las filas de paquetes se arman en code-behind.
-
-**Después:** pieza 7 (arrancar con spec y plan, idealmente con el juego a mano para probar `protontricks-launch`); menores de pieza 5 (más abajo) solo si la prueba real de REDmod se queja.
-
 ### Pruebas reales
 
 - **2026-10-10** (rama `feat/intrinsic-settings-file`, PR #75): pieza 4 con el juego real. `loadout settings set -k /graphics/basic/FieldOfView -v 90.0` + sincronizar escribió el valor y el juego mostró FOV 90; cambiado a 75 en el menú del juego y sincronizado, apareció el External Change `75.0` (gana) y el archivo quedó sin tocar (formato del juego); `UserSettings.json` borrado y sincronizado se regeneró entero (328 opciones) desde la base. Salió de ahí: los External Changes guardan el literal del juego (`75.0`, no `75`) y `unset -g Overrides` (commit `32b32c712`). Quitado el External Change con `unset -g Overrides` y sincronizado, el archivo volvió a 90.0. El crash "archivos corruptos" del primer lanzamiento fue el `.archive` de bytes aleatorios de la prueba de la pieza 3, ya quitado del loadout
