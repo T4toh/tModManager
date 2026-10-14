@@ -17,7 +17,6 @@ namespace NexusMods.Games.RedEngine.Cyberpunk2077;
 
 public class CyberpunkDeepCleanTool : ITool
 {
-    private readonly IFileSystem _fileSystem;
     private readonly ILogger<CyberpunkDeepCleanTool> _logger;
     private readonly ISynchronizerService _synchronizerService;
     private readonly IConnection _connection;
@@ -28,11 +27,17 @@ public class CyberpunkDeepCleanTool : ITool
         ISynchronizerService synchronizerService,
         IConnection connection)
     {
-        _fileSystem = fileSystem;
         _logger = logger;
         _synchronizerService = synchronizerService;
         _connection = connection;
+        BackupsRootProvider = () => GameBackups.ForGame(fileSystem, Cyberpunk2077Game.GameId);
     }
+
+    /// <summary>
+    /// Directory where this game's Deep Clean backups are stored, outside the game folder. Test seam: overridden in
+    /// tests so they never write to (or prune) the real backups under <c>~/.local/share</c>.
+    /// </summary>
+    internal Func<AbsolutePath> BackupsRootProvider { get; set; }
 
     public IEnumerable<GameId> GameIds => [Cyberpunk2077Game.GameId];
     public string Name => "Deep Clean (Disable all mods)";
@@ -119,11 +124,6 @@ public class CyberpunkDeepCleanTool : ITool
         logger.LogWarning("Todavía no hay lista de archivos originales; se omite la búsqueda de archivos sueltos de mods");
         return [];
     }
-
-    /// <summary>
-    /// Directory where this game's Deep Clean backups are stored, outside the game folder.
-    /// </summary>
-    public static AbsolutePath BackupsRoot(IFileSystem fs) => GameBackups.ForGame(fs, Cyberpunk2077Game.GameId);
 
     /// <summary>
     /// Moves <paramref name="from"/> into the backup. Returns false only when the move failed (e.g. no space left or
@@ -218,7 +218,7 @@ public class CyberpunkDeepCleanTool : ITool
         // Step 1: Move mod files to a timestamped backup directory outside the game folder.
         // Keeping backups outside the game folder prevents the sync from tracking or trying to restore them.
         var timestamp = DateTime.Now.ToString(GameBackups.SnapshotNameFormat);
-        var backupsRoot = BackupsRoot(_fileSystem);
+        var backupsRoot = BackupsRootProvider();
         var backupDir = backupsRoot.Combine(RelativePath.FromUnsanitizedInput(timestamp));
         var backupCreated = false;
 
