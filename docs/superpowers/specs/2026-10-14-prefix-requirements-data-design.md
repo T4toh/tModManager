@@ -64,7 +64,7 @@ WinePrefixRequirements? WinePrefixRequirements => null;
 - `WinePrefixRequirementsEmitter` se mueve de `RedEngine/Cyberpunk2077/Emitters` a `Games.Generic`.
   Lee `loadout.InstallationInstance.Game.WinePrefixRequirements`; si es `null` no emite nada. Con
   requisitos usa `WineDiagnosticHelper` como hoy.
-- Las dos plantillas pasan a un `Diagnostics` nuevo de `Games.Generic` (source
+- Las dos plantillas pasan a una clase nueva `WinePrefixDiagnostics` de `Games.Generic` (source
   `NexusMods.Games.Generic`, números 1 y 2) con un valor `{Game}` en lugar de "Cyberpunk 2077". En
   RedEngine se borran #5 y #6 (los números no se reusan).
 - Cambia el `DiagnosticId`. Los diagnósticos no se persisten, no hay migración.
