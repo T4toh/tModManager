@@ -6,7 +6,7 @@ Todo lo mergeado hasta #75 está probado con el juego real. Última prueba compl
 
 **Próximo:**
 1. Bugs chicos que salieron de las pruebas (lista de abajo). Los menores de revisión de #73/#74/#75 se cerraron en PR #76 (2026-10-10).
-2. Pieza 6 (requisitos del prefix como datos) de "Piezas genéricas para el segundo juego". Las piezas 2 a 5 están hechas (PRs #73, #74, #75, #77); la 5 queda por probar con el juego real (abajo). Witcher 3 arranca cuando estén las piezas que necesita.
+2. Pieza 6 (requisitos del prefix como datos) de "Piezas genéricas para el segundo juego". Las piezas 2 a 5 están hechas (PRs #73, #74, #75, #77); la 5 probada con el juego real el 2026-10-11. Witcher 3 arranca cuando estén las piezas que necesita.
 
 ### Pruebas reales
 
@@ -23,6 +23,7 @@ Todo lo mergeado hasta #75 está probado con el juego real. Última prueba compl
 ### Pendiente de las pruebas
 
 - [x] **Pieza 2 en el juego real** (probado 2026-10-10 en la jaula, instalación ya gestionada): al sincronizar, `UserSettings.json` pasó a original y se respaldó (sin External Change); un cambio de idioma hecho en el juego apareció como External Change con respaldo; al borrar ese ítem y aplicar volvió el original byte a byte; `cache/` y `CrashInfo.json` intactos, ninguna línea `WinePrefix` en los borrados/extracciones de la colección. Queda sin probar en real: borrar el prefix desde el Storage Manager, reiniciar la app y sincronizar (cubierto por tests; requiere `protontricks 1091500 -q vcrun2022 d3dcompiler_47` después)
+- [x] **Pieza 5 en el juego real** (probado 2026-10-11 en la jaula, dos REDmods vacíos agregados como archivo local): el apply creó `drive_c/modlist.txt` con los dos (CRLF, sin línea final extra), reordenar en Rules dejó el loadout en "falta aplicar" y el apply reescribió el archivo en el orden de la UI, quitar uno lo sacó del archivo y de `mods/`, sin ningún External Change. El deploy dentro de la jaula falla (`Read-only file system: ~/.cache/protontricks/...`, limitación conocida de `sandbox-run.sh`, marca el job de sync como fallido); corrido a mano afuera con el mismo `.bat` y `-modlist=C:\modlist.txt`: exit 0, REDmod listó los dos mods sin `Non-existant mod selected` y regeneró `r6/cache/modded` (`mods.json` en el orden del archivo). REDmod no se quejó del archivo, así que el BOM sigue diferido
 - [x] **El rescan MD5 no es automático** (solo el botón "Rescan downloads"): con el reset se bajó todo de nuevo aunque las descargas estaban. Desde 2026-10-07 corre solo antes de "bajar requeridos/opcionales". No rehashea lo que la biblioteca ya registró (usa su MD5) y lo que no conoce lo hashea una vez por sesión; vincular por nombre ahora exige también el tamaño cuando Nexus lo da
 - [x] **Avisar al borrar el prefix de Proton** que después hacen falta `vcrun2022` y `d3dcompiler_47` (2026-10-07): el diálogo del Storage Manager y el checkbox del asistente de limpieza lo dicen, y el panel "Wine prefix" de Mis juegos los instala con un botón "Instalar" (protontricks nativo o flatpak, el que haya; `IProtontricksDependency.MakeInstallCommand`) y muestra el mismo comando con "Copiar". Antes era prosa con backticks sin copiar
 - [x] **FOMOD: instrucción `enableallplugins` desconocida** (visto 2026-10-06, WARN de `FomodXmlInstaller` al instalar `WTNC Config` y un mod más de la colección; resuelto 2026-10-07): no era un bug. La librería FOMOD la emite al final de **toda** instalación XML que sale bien (`XmlScriptInstaller.cs` de `Nexus-Mods/fomod-installer`) y significa "activar los plugins `.esp`/`.esm` del mod": load order de Bethesda, nada que hacer en CP2077. Ahora se reconoce sin warning. Hace falta de verdad cuando llegue Skyrim/Fallout 4 (`plugins.txt`, pieza 5)
@@ -35,7 +36,6 @@ Mergeado o en PR, compilado en Mac pero sin correr en la PC con el juego (en Mac
 
 - [ ] **Ícono nuevo en el AppImage:** el de `./dev.sh` opción 10 usa el logo de capas (en la app ya probado 2026-10-07: barra lateral, ventana y barra de tareas)
 - [ ] **Pieza 5, menores diferidos de la revisión (PR #77, 2026-10-11):** `SortOrderIntrinsicFile` compara texto decodificado, un BOM que agregue Notepad bajo Wine a `modlist.txt` no se detecta ni se reescribe (si REDmod se queja en la prueba real, comparar bytes); sin test para "original ya en la base borrado y recreado a mano → se pisa sin respaldo" ni "otro manager edita el archivo después de gestionar → se pisa" (ambos según spec: el loadout gana)
-- [ ] **Pieza 5 con el juego real:** reordenar REDmods en la UI, aplicar, confirmar `drive_c/modlist.txt` (CRLF, orden de la UI) y que el deploy de REDmod lo use (log de redMod, `r6/cache/modded` regenerado)
 - [ ] **Metadata genérica en el AppImage:** el de `./dev.sh` opción 10 muestra el resumen nuevo en el lanzador (la bienvenida de la app ya probada 2026-10-07)
 
 ### Cómo probar con datos reales
