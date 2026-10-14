@@ -422,7 +422,7 @@ Incidente 2026-09-25, primera prueba real del asistente de limpieza:
 - [ ] **El asistente mueve `NexusMods.App/Downloads` de la app oficial** (paso 2): si la oficial se sigue usando le rompe la biblioteca. Copiar, o mover solo lo que la base de tModManager referencia
 - [ ] **Limpiador de PID viejo compara `ProcessName`:** bajo `dotnet NexusMods.App.dll` el nombre es `dotnet`. Comparar `/proc/<pid>/exe` con el ejecutable propio (ojo: el AppImage monta en un `/tmp/.mount_*` distinto cada vez)
 - [x] **Cookie de Nexus en el argv de curl** (`NexusApiClient.cs`): era visible en `ps` para otros usuarios locales. Desde 2026-10-07 va por stdin (`-H @-`, curl 7.55+)
-- [ ] **7zz 21.03 (2021) empaquetado.** Rechaza links peligrosos (probado), pero es viejo: hay CVEs posteriores (p. ej. zstd, links en ZIP). Actualizar a 25.x
+- [x] **7zz 21.03 (2021) empaquetado** (2026-10-14): ahora 26.04 (`7z2604-linux-x64.tar.xz`, mismo SHA-256 en GitHub `ip7z/7zip` y 7-zip.org: `fc0327ba…ffcd`). Cambio de comportamiento: un symlink absoluto ya no da error, se extrae reescrito para apuntar dentro del destino (los relativos que escapan siguen rechazados); la biblioteca igual rechaza cualquier archivo con symlinks (`ArchiveWithSymlink_IsRejected`). Se borraron los binarios de Windows y macOS (`runtimes/win-x64`, `osx-x64`), que el fork no usa
 
 Encontrado el 2026-09-24 en la eliminación de `.nx` (revisiones de implementación):
 
