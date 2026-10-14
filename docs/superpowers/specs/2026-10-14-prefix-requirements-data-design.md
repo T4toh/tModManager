@@ -1,6 +1,6 @@
 # Requisitos del prefix como datos (pieza 6)
 
-Fecha: 2026-10-14 · Estado: diseño aprobado, rama `feat/prefix-requirements-data`
+Fecha: 2026-10-14 · Estado: implementado en la rama `feat/prefix-requirements-data`, tests corridos en Linux arm64 (apple/container); pendiente de prueba con el juego real
 
 ## Objetivo
 
