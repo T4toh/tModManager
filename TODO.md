@@ -1,12 +1,38 @@
 # TODO
 
-## 📍 Estado y próximos pasos (2026-10-10)
+## 📍 Estado y próximos pasos (2026-10-14)
 
 Todo lo mergeado hasta #75 está probado con el juego real. Última prueba completa: 2026-10-06, colección "Welcome to Night City 2.31a" (283 mods) agregada, bajada, instalada, aplicada y jugada. Sin CI: **la verificación es local** (`./dev.sh` opción 4, un proyecto por vez).
 
 **Próximo:**
 1. Bugs chicos que salieron de las pruebas (lista de abajo). Los menores de revisión de #73/#74/#75 se cerraron en PR #76 (2026-10-10).
-2. Pieza 6 (requisitos del prefix como datos) de "Piezas genéricas para el segundo juego". Las piezas 2 a 5 están hechas (PRs #73, #74, #75, #77); la 5 queda por probar con el juego real (abajo). Witcher 3 arranca cuando estén las piezas que necesita.
+2. Piezas 7 (runner de herramientas Windows en el prefix) y 8 (archivos derivados) de "Piezas genéricas para el segundo juego". Las piezas 2 a 6 están hechas (PRs #73, #74, #75, #77, #79); la 5 y la 6 quedan por probar con el juego real (abajo). Witcher 3 arranca cuando estén las piezas que necesita.
+
+### ⏯️ Retomar en la PC (2026-10-14, hecho en la Mac)
+
+Tres PRs abiertas, ninguna probada con el juego. Todas compilan con `-p:TreatWarningsAsErrors=true` y sus tests nuevos pasaron en apple/container (linux/arm64); allá fallan siempre los tests que extraen con el `7zz` x64 (los mismos en `main`), así que la suite completa hay que correrla en la PC.
+
+| PR | Rama | Base | Qué |
+|---|---|---|---|
+| #79 | `feat/prefix-requirements-data` | `main` | Pieza 6: `IGameData.WinePrefixRequirements`, `WinePrefixRequirementsEmitter` y panel "Wine prefix" genéricos (spec `docs/superpowers/specs/2026-10-14-prefix-requirements-data-design.md`) |
+| #80 | `fix/wine-prefix-panel-minors` | #79 | Juego sin paquetes de winetricks: no marca protontricks como problema ni deja hueco en el panel (`WinePrefixStatusViewModel.ComputeHasIssues`) |
+| #81 | `feat/storage-safety` | `main` | Validar la Storage Location al elegirla + carpeta de backups de Deep Clean inyectable y test de `Execute` |
+
+**Probar todo junto** (rama local descartable; el único conflicto esperable es este `TODO.md`, quedarse con las dos partes):
+
+```bash
+git fetch && git switch -c prueba/2026-10-14 origin/fix/wine-prefix-panel-minors
+git merge origin/feat/storage-safety
+```
+
+1. `./dev.sh` opción 4 (x64): en especial `Games.Generic.Tests`, `Games.RedEngine.Tests`, `DataModel.Tests` y `UI.Tests`. En arm64 fallaban 27 de RedEngine, 9 de DataModel (`LibraryServiceTests`, `LocalFileBackfillTests`) y 7 de UI (`IconUtilsTests`, `LocalFileDataProviderTests`, `LibraryInstalledCollectionsTests`), igual que en `main`; en x64 deberían pasar
+2. Pieza 6 + #80 con el juego: los dos ítems de abajo ("Pieza 6 con el juego real" está en la rama de #79)
+3. #81: el ítem "Storage Location validada" de abajo
+4. Si todo da bien: mergear #79, después #80 (GitHub la pasa a `main` sola al borrar la rama de #79), después #81, resolviendo `TODO.md`
+
+**Menores diferidos de la revisión de pieza 6 (no arreglados, no bloquean):** falta test de la rama `null` del overload de loadout de `WinePrefixRequirementsEmitter`; `default(ImmutableArray)` en `WinePrefixRequirements` sin guarda; el `Diagnose` estático del emitter podría ser `internal`; el spec dice `ItemsControl` y las filas de paquetes se arman en code-behind.
+
+**Después:** pieza 7 (arrancar con spec y plan, idealmente con el juego a mano para probar `protontricks-launch`); menores de pieza 5 (más abajo) solo si la prueba real de REDmod se queja.
 
 ### Pruebas reales
 
