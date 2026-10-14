@@ -151,9 +151,13 @@ WINEDLLOVERRIDES="{dllOverridesString}" %command%
             DllOverridesInstructions = null;
         }
 
-        HasIssues = !IsProtontricksInstalled || Packages.Any(p => !p.IsInstalled) || !HasCorrectDllOverrides;
+        HasIssues = ComputeHasIssues(IsProtontricksInstalled, Packages, HasCorrectDllOverrides);
         IsExpanded = HasIssues;
     }
+
+    /// <summary>Protontricks only matters when the game needs winetricks packages.</summary>
+    internal static bool ComputeHasIssues(bool isProtontricksInstalled, IReadOnlyList<WinetricksPackageStatus> packages, bool hasCorrectDllOverrides) =>
+        (!isProtontricksInstalled && packages.Count > 0) || packages.Any(p => !p.IsInstalled) || !hasCorrectDllOverrides;
 
     private async Task InstallPackagesAsync(CancellationToken ct)
     {
