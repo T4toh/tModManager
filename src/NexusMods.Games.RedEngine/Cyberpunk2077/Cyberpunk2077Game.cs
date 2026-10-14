@@ -12,6 +12,7 @@ using NexusMods.Games.RedEngine.Cyberpunk2077.Emitters;
 using NexusMods.Games.RedEngine.Cyberpunk2077.SortOrder;
 using NexusMods.Games.RedEngine.ModInstallers;
 using NexusMods.Paths;
+using NexusMods.Sdk;
 using NexusMods.Sdk.Games;
 using NexusMods.Sdk.IO;
 
@@ -94,6 +95,15 @@ public class Cyberpunk2077Game : IGame, IGameData<Cyberpunk2077Game>, IDisposabl
             locations[LocationId.WinePrefix] = linux.WinePrefixDirectoryPath;
         return locations.ToImmutableDictionary();
     }
+
+    // https://wiki.redmodding.org/cyberpunk-2077-modding/for-mod-users/users-modding-cyberpunk-2077/modding-on-linux
+    public WinePrefixRequirements WinePrefixRequirements { get; } = new(
+        DllOverrides:
+        [
+            new WineDllOverride("winmm", [WineDllOverrideType.Native, WineDllOverrideType.BuiltIn]),
+            new WineDllOverride("version", [WineDllOverrideType.Native, WineDllOverrideType.BuiltIn]),
+        ],
+        WinetricksPackages: ["d3dcompiler_47", "vcrun2022"]);
 
     public ImmutableDictionary<LocationId, ImmutableHashSet<RelativePath>> GetManagedFiles(IFileSystem fileSystem, GameLocatorResult gameLocatorResult)
     {
