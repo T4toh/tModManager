@@ -104,6 +104,19 @@ public class Program
         if (cleanupTask.Status != TaskStatus.RanToCompletion)
             _logger.LogWarning("No se pudo determinar si otra instancia principal sigue corriendo (la comprobación no terminó); se asume que sí por seguridad");
 
+        // Two launches inside the startup window both get here with no main in the sync file: only the one
+        // holding the lock may run a pending reset. The other waits for it to register, then forwards its
+        // arguments like a second instance (without the wait it would find no main and start another one).
+        var syncFile = services.GetRequiredService<SyncFile>();
+        if (startupMode.RunAsMain && !anotherMainIsAlive && !syncFile.TryLockMain())
+        {
+            _logger.LogWarning("Otra instancia se está iniciando como principal; se espera a que termine de arrancar");
+            anotherMainIsAlive = true;
+            var waited = Stopwatch.StartNew();
+            while (!syncFile.IsMainRunning && waited.Elapsed < TimeSpan.FromSeconds(60))
+                Thread.Sleep(100);
+        }
+
         // Okay to do wait here, as we are in the main process thread.
         host.StartAsync().Wait(timeout: TimeSpan.FromMinutes(5));
 
@@ -255,13 +268,10 @@ public class Program
         var canConnect = await CanConnectToProcess(logger, port, timeout: TimeSpan.FromSeconds(6), services: serviceProvider);
         if (canConnect) return true;
 
-        // The PID in the sync file outlives a crash and gets reused: never kill a process that isn't tModManager
-        string processName;
-        try { processName = process.ProcessName; }
-        catch (Exception) { return false; }
-        if (processName != Process.GetCurrentProcess().ProcessName)
+        // The PID in the sync file outlives a crash and gets reused: never kill a process that isn't the recorded main
+        if (!syncFile.IsRecordedMain(process))
         {
-            logger.LogWarning("PID `{PID}` from the sync file now belongs to `{Name}`, not tModManager; leaving it alone", pid, processName);
+            logger.LogWarning("PID `{PID}` from the sync file is not the recorded main (reused PID or unknown start time); leaving it alone", pid);
             return false;
         }
 
@@ -270,6 +280,8 @@ public class Program
         try
         {
             process.Kill(entireProcessTree: true);
+            // Its main lock (SyncFile.TryLockMain) is released only once it's gone
+            process.WaitForExit(TimeSpan.FromSeconds(5));
         }
         catch (Exception e)
         {
