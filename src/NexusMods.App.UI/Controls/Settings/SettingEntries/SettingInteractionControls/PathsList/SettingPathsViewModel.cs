@@ -21,11 +21,12 @@ public class SettingPathsViewModel : AViewModel<ISettingPathsViewModel>, ISettin
     public IPropertyValueContainer ValueContainer => ConfigurablePathsContainer;
     public ConfigurablePathsContainer ConfigurablePathsContainer { get; }
     [Reactive] public bool HasChanged { get; private set; }
+    [Reactive] public string? ErrorMessage { get; private set; }
 
     public IStorageProvider? StorageProvider { get; set; }
     public ReactiveCommand CommandChangeLocation { get; }
 
-    public SettingPathsViewModel(IOSInterop osInterop, ConfigurablePathsContainer pathsContainer)
+    public SettingPathsViewModel(IOSInterop osInterop, ConfigurablePathsContainer pathsContainer, Func<object, ValidationResult>? validation = null)
     {
         ConfigurablePathsContainer = pathsContainer;
 
@@ -42,7 +43,16 @@ public class SettingPathsViewModel : AViewModel<ISettingPathsViewModel>, ISettin
                 var localPath = paths[0].TryGetLocalPath();
                 if (localPath is null) return;
 
-                ConfigurablePathsContainer.CurrentValue = [new ConfigurablePath(null, localPath)];
+                ConfigurablePath[] picked = [new ConfigurablePath(null, localPath)];
+                var result = validation?.Invoke(picked) ?? ValidationResult.CreateSuccessful();
+                if (result.IsFailed())
+                {
+                    ErrorMessage = result.Value.AsT0.Reason;
+                    return;
+                }
+
+                ErrorMessage = null;
+                ConfigurablePathsContainer.CurrentValue = picked;
             }, awaitOperation: AwaitOperation.Drop, configureAwait: false, maxSequential: 1
         );
 
@@ -72,7 +82,8 @@ public class SettingPathsFactory : IInteractionControlFactory<ConfigurablePathsC
                  value: propertyConfig.GetValueCasted<ConfigurablePath[]>(settingsManager),
                  defaultValue: propertyConfig.GetDefaultValueCasted<ConfigurablePath[]>(settingsManager),
                  config: propertyConfig
-             )
+             ),
+             validation: propertyConfig.Options.Validation
         );
     }
 }

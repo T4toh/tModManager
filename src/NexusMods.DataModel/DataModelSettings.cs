@@ -48,9 +48,40 @@ public record DataModelSettings : ISettings
                           *Important: Existing files won’t move automatically when you change storage location, you’ll need to move them manually.* [Need help?](https://nexus-mods.github.io/NexusMods.App/users/faq/MoveLibraryLocation/)
                           """,
                     RequiresRestart = true,
+                    Validation = paths => ArchiveLocationProblem(paths[0].ToPath(FileSystem.Shared), FileSystem.Shared) is { } problem
+                        ? ValidationResult.CreateFailed(problem)
+                        : ValidationResult.CreateSuccessful(),
                 },
                 new ConfigurablePathsContainerOption()
             );
+    }
+
+    /// <summary>
+    /// Why <paramref name="path"/> can't be the Storage Location, or null when it can: the store would mix with the
+    /// user's own files (filesystem root, home, XDG roots) or with Steam's (a library or anything inside one).
+    /// </summary>
+    public static string? ArchiveLocationProblem(AbsolutePath path, IFileSystem fs)
+    {
+        if (path == path.GetRootComponent)
+            return "No se puede usar la raíz del disco: elegí una carpeta propia para los mods.";
+
+        KnownPath[] userRoots = [KnownPath.HomeDirectory, KnownPath.XDG_DATA_HOME, KnownPath.XDG_CONFIG_HOME, KnownPath.XDG_CACHE_HOME, KnownPath.XDG_STATE_HOME];
+        foreach (var knownPath in userRoots)
+        {
+            if (fs.HasKnownPath(knownPath) && fs.GetKnownPath(knownPath) is var root && path == root)
+                return $"No se puede usar {root} directamente: elegí o creá una subcarpeta propia para los mods.";
+        }
+
+        if (path.Combine("steamapps").DirectoryExists())
+            return "Esa carpeta es una biblioteca de Steam: elegí una carpeta fuera de ella.";
+
+        for (var dir = path; dir != dir.GetRootComponent; dir = dir.Parent)
+        {
+            if (dir.FileName.Equals("steamapps", StringComparison.OrdinalIgnoreCase))
+                return "Esa carpeta está dentro de una biblioteca de Steam: elegí una carpeta fuera de ella.";
+        }
+
+        return null;
     }
 
     /// <summary>
