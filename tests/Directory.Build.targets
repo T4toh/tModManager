@@ -17,6 +17,11 @@
         <PackageReference Include="Xunit.DependencyInjection.Logging" />
     </ItemGroup>
 
+    <!-- Every test process (xunit and TUnit) keeps off the user's real XDG folders -->
+    <ItemGroup Condition="$(MSBuildProjectName.EndsWith('.Tests'))">
+        <Compile Include="$(MSBuildThisFileDirectory)TestIsolation.cs" Link="TestIsolation.cs" />
+    </ItemGroup>
+
     <!-- Shared test helper libraries only need the xunit abstractions -->
     <ItemGroup Condition="!$(MSBuildProjectName.EndsWith('.Tests'))">
         <PackageReference Include="xunit.v3.extensibility.core" />
