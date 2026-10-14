@@ -42,14 +42,22 @@ public static class SafePath
     /// True when any directory between <paramref name="root"/> (exclusive) and <paramref name="path"/> (exclusive)
     /// is a symbolic link, i.e. the path really lives somewhere else.
     /// </summary>
-    public static bool IsUnderSymlink(string root, string path)
+    public static bool IsUnderSymlink(string root, string path) => SymlinkedAncestor(root, path) is not null;
+
+    /// <summary>
+    /// The outermost folder between <paramref name="root"/> and <paramref name="path"/> that is a symbolic link, or
+    /// null (same rules as <see cref="IsUnderSymlink"/>). Used to tell the user which folder blocks a write.
+    /// </summary>
+    public static DirectoryInfo? SymlinkedAncestor(string root, string path)
     {
         var trimmedRoot = Path.TrimEndingDirectorySeparator(root);
+        DirectoryInfo? outermost = null;
         for (var dir = Path.GetDirectoryName(path); dir is not null && dir.Length > trimmedRoot.Length; dir = Path.GetDirectoryName(dir))
         {
-            if (new DirectoryInfo(dir).LinkTarget is not null) return true;
+            var info = new DirectoryInfo(dir);
+            if (info.LinkTarget is not null) outermost = info;
         }
-        return false;
+        return outermost;
     }
 
     /// <summary>

@@ -606,8 +606,8 @@ public partial class ALoadoutSynchronizer : ILoadoutSynchronizer
             if (!locations.IsManaged(path))
                 throw new InvalidOperationException($"`{path}` no está entre los archivos que tModManager gestiona en esa ubicación; no se escribe ni se borra nada ahí");
             var resolved = locations.ToAbsolutePath(path);
-            if (SafePath.IsUnderSymlink(locations[path.LocationId].Path.ToString(), resolved.ToString()))
-                throw new InvalidOperationException($"`{path}` está dentro de una carpeta que es un symlink; tModManager no escribe ni borra a través de links");
+            if (SafePath.SymlinkedAncestor(locations[path.LocationId].Path.ToString(), resolved.ToString()) is { } link)
+                throw new InvalidOperationException($"`{path}` está dentro de `{link.FullName}`, que es un symlink a `{link.LinkTarget}`; tModManager no escribe ni borra a través de links. Reemplazá el link por una carpeta real o sacá el mod que escribe ahí");
             if (locations[path.LocationId].ManagedFiles is not null && SafePath.IsSymlink(resolved))
                 throw new InvalidOperationException($"`{path}` es un symlink; tModManager no escribe ni borra a través de links");
         }

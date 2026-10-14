@@ -52,6 +52,12 @@ public class SafePathTests
             await Assert.That(SafePath.IsUnderSymlink(root, Path.Combine(root, "linked/file.txt"))).IsTrue();
             // The path itself being a link is fine: deleting or moving it only touches the link
             await Assert.That(SafePath.IsUnderSymlink(root, Path.Combine(root, "linked"))).IsFalse();
+
+            // The outermost link is the one to name: linked/inner also resolves through it
+            Directory.CreateDirectory(Path.Combine(outside, "real-inner"));
+            File.CreateSymbolicLink(Path.Combine(outside, "inner"), Path.Combine(outside, "real-inner"));
+            await Assert.That(SafePath.SymlinkedAncestor(root, Path.Combine(root, "linked/inner/file.txt"))?.FullName).IsEqualTo(Path.Combine(root, "linked"));
+            await Assert.That(SafePath.SymlinkedAncestor(root, Path.Combine(root, "real/file.txt"))).IsNull();
         }
         finally
         {
