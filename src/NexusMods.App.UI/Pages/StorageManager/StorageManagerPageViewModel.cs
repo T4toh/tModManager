@@ -1,3 +1,4 @@
+using System.Reactive.Linq;
 using Humanizer;
 using JetBrains.Annotations;
 using NexusMods.Abstractions.GC;
@@ -48,7 +49,10 @@ internal class StorageManagerPageViewModel : APageViewModel<IStorageManagerPageV
             await RefreshStatsAsync(storageAnalyzer, ct);
         });
 
-        RunGarbageCollectionCommand = new ReactiveCommand<Unit>(async (_, ct) =>
+        // One storage operation at a time: the buttons stay disabled while one runs
+        var notBusy = this.WhenAnyValue(vm => vm.IsBusy).Select(busy => !busy).ToObservable();
+
+        RunGarbageCollectionCommand = notBusy.ToReactiveCommand<Unit>(async (_, ct) =>
         {
             if (IsBusy) return;
             IsBusy = true;
@@ -63,7 +67,7 @@ internal class StorageManagerPageViewModel : APageViewModel<IStorageManagerPageV
             }
         });
 
-        DeepCleanCommand = new ReactiveCommand<Unit>(async (_, ct) =>
+        DeepCleanCommand = notBusy.ToReactiveCommand<Unit>(async (_, ct) =>
         {
             if (IsBusy) return;
 
@@ -104,7 +108,7 @@ internal class StorageManagerPageViewModel : APageViewModel<IStorageManagerPageV
             }
         });
 
-        DeleteDownloadsCommand = new ReactiveCommand<Unit>(async (_, ct) =>
+        DeleteDownloadsCommand = notBusy.ToReactiveCommand<Unit>(async (_, ct) =>
         {
             if (IsBusy) return;
 
@@ -136,7 +140,7 @@ internal class StorageManagerPageViewModel : APageViewModel<IStorageManagerPageV
             }
         });
 
-        DeleteProtonPrefixCommand = new ReactiveCommand<Unit>(async (_, ct) =>
+        DeleteProtonPrefixCommand = notBusy.ToReactiveCommand<Unit>(async (_, ct) =>
         {
             if (IsBusy) return;
 
