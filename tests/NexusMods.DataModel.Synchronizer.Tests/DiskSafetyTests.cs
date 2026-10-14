@@ -63,7 +63,8 @@ public class DiskSafetyTests(ITestOutputHelper helper) : ACyberpunkIsolatedGameT
         Refresh(ref loadout);
 
         var act = () => Synchronizer.Synchronize(loadout);
-        await act.Should().ThrowAsync<InvalidOperationException>().WithMessage("*symlink*");
+        var link = GameInstallation.Locations.ToAbsolutePath(new GamePath(LocationId.Game, "bin/linked"));
+        await act.Should().ThrowAsync<InvalidOperationException>().WithMessage($"*`{link}`, que es un symlink a `{outside}`*");
         outside.Combine("mod.txt").FileExists.Should().BeFalse();
     }
 
