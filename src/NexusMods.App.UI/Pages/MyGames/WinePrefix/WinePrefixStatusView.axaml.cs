@@ -1,6 +1,8 @@
 using System.Reactive.Disposables;
 using System.Reactive.Linq;
 using Avalonia.Controls;
+using Avalonia.Layout;
+using Avalonia.Styling;
 using Avalonia.ReactiveUI;
 using NexusMods.UI.Sdk.Icons;
 using ReactiveUI;
@@ -45,25 +47,29 @@ public partial class WinePrefixStatusView : ReactiveUserControl<IWinePrefixStatu
                 })
                 .DisposeWith(d);
 
-            // d3dcompiler_47 status
-            this.WhenAnyValue(v => v.ViewModel!.IsD3dCompiler47Installed)
-                .Subscribe(installed =>
+            // Winetricks packages status
+            this.WhenAnyValue(v => v.ViewModel!.Packages)
+                .Subscribe(packages =>
                 {
-                    D3dCompilerIcon.Value = installed ? CheckIcon : WarningIcon;
-                    D3dCompilerText.Text = installed
-                        ? "d3dcompiler_47: Instalado"
-                        : "d3dcompiler_47: Faltante";
-                })
-                .DisposeWith(d);
-
-            // vcrun2022 status
-            this.WhenAnyValue(v => v.ViewModel!.IsVcRun2022Installed)
-                .Subscribe(installed =>
-                {
-                    VcRunIcon.Value = installed ? CheckIcon : WarningIcon;
-                    VcRunText.Text = installed
-                        ? "vcrun2022: Instalado"
-                        : "vcrun2022: Faltante";
+                    PackagesPanel.Children.Clear();
+                    foreach (var package in packages)
+                    {
+                        PackagesPanel.Children.Add(new StackPanel
+                        {
+                            Orientation = Orientation.Horizontal,
+                            Spacing = 8,
+                            Children =
+                            {
+                                new UnifiedIcon { Size = 16, Value = package.IsInstalled ? CheckIcon : WarningIcon },
+                                new TextBlock
+                                {
+                                    Text = package.IsInstalled ? $"{package.Name}: Instalado" : $"{package.Name}: Faltante",
+                                    Theme = this.FindResource("BodyMDNormalTheme") as ControlTheme,
+                                    VerticalAlignment = VerticalAlignment.Center,
+                                },
+                            },
+                        });
+                    }
                 })
                 .DisposeWith(d);
 
