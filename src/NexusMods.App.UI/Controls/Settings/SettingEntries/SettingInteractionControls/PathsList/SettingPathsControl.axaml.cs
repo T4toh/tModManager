@@ -24,6 +24,14 @@ public partial class SettingPathsControl : ReactiveUserControl<ISettingPathsView
 
             this.BindCommand(ViewModel, vm => vm.CommandChangeLocation, view => view.ButtonChangeLocation)
                 .AddTo(disposables);
+
+            this.WhenAnyValue(view => view.ViewModel!.ErrorMessage)
+                .SubscribeWithErrorLogging(message =>
+                {
+                    ErrorText.Text = message;
+                    ErrorText.IsVisible = message is not null;
+                })
+                .AddTo(disposables);
         });
     }
 }

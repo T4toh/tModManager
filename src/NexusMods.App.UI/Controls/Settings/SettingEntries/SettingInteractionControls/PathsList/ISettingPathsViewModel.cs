@@ -9,4 +9,7 @@ public interface ISettingPathsViewModel : IInteractionControl
 
     R3.ReactiveCommand CommandChangeLocation { get; }
     IStorageProvider? StorageProvider { get; set; }
+
+    /// <summary>Why the last picked folder was rejected, or null.</summary>
+    string? ErrorMessage { get; }
 }

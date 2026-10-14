@@ -11,10 +11,16 @@
     mc:Ignorable="d"
     x:Class="NexusMods.App.UI.Controls.Settings.SettingEntries.PathsList.SettingPathsControl">
 
-    <controls:StandardButton
-        x:Name="ButtonChangeLocation"
-        Text="Change location"
-        LeftIcon="{x:Static icons:IconValues.Folder}"
-        ShowIcon="Left" />
+    <StackPanel Spacing="8">
+        <controls:StandardButton
+            x:Name="ButtonChangeLocation"
+            Text="Change location"
+            LeftIcon="{x:Static icons:IconValues.Folder}"
+            ShowIcon="Left" />
+        <TextBlock x:Name="ErrorText"
+                   Foreground="{StaticResource DangerStrongBrush}"
+                   TextWrapping="Wrap"
+                   IsVisible="False" />
+    </StackPanel>
 
 </reactiveUi:ReactiveUserControl>
