@@ -46,6 +46,45 @@ Recorrido que cubrió las pruebas de arriba: suite local (opción 4) → agregar
 
 Logs: `~/.local/state/tModManager/Logs/nexusmods.app.main.current.log`. Login desde un build de `bin/` necesita `/etc/dotnet/install_location` apuntando a `~/.dotnet` (ya está en esta PC). Si algo crashea solo en Debug con `Assertion failed`, es un `Debug.Assert`: anotar cuál.
 
+### ⏯️ Retomar en la PC (2026-10-14, hecho en la Mac)
+
+Nueve PRs abiertas, ninguna probada con el juego. Están juntas en esta sección para probarlas de una sola vez en casa.
+
+| PR | Rama | Base | Qué | Prueba en la PC |
+|---|---|---|---|---|
+| #78 | `docs/pieza5-real-game-test` | `main` | Solo docs: pieza 5 probada con el juego (2026-10-11) | nada |
+| #79 | `feat/prefix-requirements-data` | `main` | Pieza 6: `IGameData.WinePrefixRequirements`, emitter y panel "Wine prefix" genéricos | "Pieza 6 con el juego real" (está en la rama de #79, sección "Para probar en Linux") |
+| #80 | `fix/wine-prefix-panel-minors` | #79 | Juego sin paquetes de winetricks: no marca protontricks ni deja hueco | con #79: para CP el panel se ve igual que antes |
+| #87 | `fix/wine-prefix-install-without-pfx` | #80 | Sin `pfx/` el panel no ofrece "Instalar" y dice que hay que lanzar el juego | Storage Manager → "Borrar prefix de Proton" → Mis juegos: el aviso, sin botón. Lanzar el juego desde Steam, cerrarlo, "Verificar de nuevo": vuelven el comando y el botón |
+| #81 | `feat/storage-safety` | `main` | Storage Location validada + backups de Deep Clean inyectables con test de `Execute` | Settings → Storage Location → "Change location": `~` y una biblioteca de Steam rechazadas con motivo, `~/Mods` aceptada |
+| #82 | `chore/7zz-26.04` | `main` | `7zz` 26.04 (SHA-256 verificado en GitHub y 7-zip.org); sin binarios de Windows/macOS | instalar unos mods o una colección (todo se extrae con el `7zz` nuevo); el AppImage de la opción 10 trae solo `runtimes/linux-x64/native/7zz` |
+| #83 | `fix/single-instance` | `main` | PID reusado: solo se mata al main anotado (PID + start time). Doble apertura: `flock` sobre `<sync file>.lock` | `./tModManager & ./tModManager` abre una sola ventana (log del segundo: "Otra instancia se está iniciando como principal"); `kill -STOP <pid>` de la app abierta y lanzar otra vez: a los ~6 s loguea `force closing process` y arranca; `kill -9` y relanzar: arranca normal |
+| #84 | `fix/symlink-folder-message` | `main` | El error del apply nombra la carpeta-link y a dónde apunta | en la jaula (opción 11): `ln -s /tmp/afuera <juego>/archive/pc/linked`, un mod local que escriba en `archive/pc/linked/`, aplicar: el error nombra las dos rutas y no escribe nada en `/tmp/afuera` |
+| #85 | `fix/test-isolation` | `main` | Los tests ya no escriben en los XDG reales (`tests/TestIsolation.cs`) | `ls -lt ~/.local/state/tModManager/Logs \| head -3`, correr la opción 4 y listar de nuevo: sin archivos nuevos |
+| #86 | `fix/storage-manager-busy` | `main` | Botones del Storage Manager deshabilitados mientras corre una operación | Storage Manager → "Run GC" o Deep Clean: los otros botones quedan grises hasta que termina |
+
+**Probar todo junto** (rama local descartable). Probado en la Mac: el código mezcla sin conflictos y todo junto compila con `-p:TreatWarningsAsErrors=true` (0 warnings). Solo choca este `TODO.md` (#87 y #81 contra #78, en la línea "Próximo" y en "Para probar en Linux"); en la rama de prueba alcanza con quedarse con cualquier versión:
+
+```bash
+git fetch && git switch -c prueba/2026-10-15 origin/main
+for b in docs/pieza5-real-game-test fix/wine-prefix-install-without-pfx feat/storage-safety chore/7zz-26.04 \
+         fix/single-instance fix/symlink-folder-message fix/test-isolation fix/storage-manager-busy; do
+  git merge --no-edit origin/$b || { git checkout --ours TODO.md && git add TODO.md && git commit --no-edit; }
+done
+```
+
+(`fix/wine-prefix-install-without-pfx` trae #79 y #80 adentro.)
+
+1. `./dev.sh` opción 4 (x64). En la Mac pasaron la suite completa (abajo cómo) `main` y #82 a #86; #87 solo `UI.Tests` (lo único que toca, 564/564). #79, #80 y #81 corrieron sus tests nuevos en arm64 sin Rosetta (ver cada PR): falta su suite completa
+2. `./dev.sh` opción 11 (jaula) y la columna "Prueba en la PC" de la tabla, de arriba a abajo
+3. Si todo da bien, mergear: #78; #79 → #80 → #87 (GitHub pasa cada una a `main` cuando se borra la rama de la anterior); #81; #82 a #86 en cualquier orden. En cada merge el conflicto es solo en `TODO.md`: quedarse con las dos partes. Al final, borrar esta sección
+
+**Cómo se testeó en la Mac** (para repetirlo): apple/container con `mcr.microsoft.com/dotnet/sdk:10.0` + `libc6:amd64 libstdc++6:amd64 libgcc-s1:amd64 libfontconfig1` (las fuentes amd64 de `archive.ubuntu.com`, porque `ports.ubuntu.com` no las sirve), `container run --rosetta` para que corra el `7zz` x64 empaquetado, compilando sobre una copia dentro del contenedor (sobre el mount de macOS fallan los archivos modo 000) y con los tests como usuario no-root (root lee archivos modo 000). Así la suite da verde completa; sin `libfontconfig1` fallan 7 tests de `UI.Tests` (SkiaSharp) y sin Rosetta unos 36 de RedEngine y DataModel. Pesa mucho: un solo contenedor a la vez.
+
+**Menores diferidos de la revisión de pieza 6 (no arreglados, no bloquean):** falta test de la rama `null` del overload de loadout de `WinePrefixRequirementsEmitter`; `default(ImmutableArray)` en `WinePrefixRequirements` sin guarda; el `Diagnose` estático del emitter podría ser `internal`; el spec dice `ItemsControl` y las filas de paquetes se arman en code-behind.
+
+**Después:** pieza 7 (arrancar con spec y plan, idealmente con el juego a mano para probar `protontricks-launch`); menores de pieza 5 solo si la prueba real de REDmod se queja; Super Clean con varios loadouts (después de #81, que toca `CyberpunkDeepCleanTool`); "El asistente mueve `NexusMods.App/Downloads`" quedó sin tocar a propósito (migración vieja, probablemente ya usada).
+
 ## ✅ Completado
 
 - [x] Descarga automatizada de colecciones (sin premium, sin browser)
