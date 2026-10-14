@@ -98,6 +98,11 @@ public class WinePrefixStatusViewModel : AViewModel<IWinePrefixStatusViewModel>,
         {
             WinetricksInstructions = null;
         }
+        else if (!_linuxCompat.WinePrefixDirectoryPath.DirectoryExists())
+        {
+            // A prefix just deleted: protontricks would fail until Steam creates it again
+            WinetricksInstructions = "El prefix de Proton todavía no existe. Lanzá el juego una vez desde Steam para que lo cree, cerralo y tocá \"Verificar de nuevo\"";
+        }
         else if (IsProtontricksInstalled && _protontricks is IProtontricksDependency protontricks && long.TryParse(_installation.LocatorResult.StoreIdentifier, out var appId))
         {
             // Native or Flatpak, whichever is installed: the copied command has to be the one that works here
