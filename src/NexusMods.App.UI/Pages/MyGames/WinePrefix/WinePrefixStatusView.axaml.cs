@@ -51,6 +51,9 @@ public partial class WinePrefixStatusView : ReactiveUserControl<IWinePrefixStatu
             this.WhenAnyValue(v => v.ViewModel!.Packages)
                 .Subscribe(packages =>
                 {
+                    // Empty panel would still take a Spacing gap in the parent StackPanel
+                    PackagesPanel.IsVisible = packages.Count > 0;
+                    ProtontricksRow.IsVisible = packages.Count > 0;
                     PackagesPanel.Children.Clear();
                     foreach (var package in packages)
                     {
