@@ -41,21 +41,8 @@
                                VerticalAlignment="Center" />
                 </StackPanel>
 
-                <!-- d3dcompiler_47 -->
-                <StackPanel Orientation="Horizontal" Spacing="8">
-                    <icons:UnifiedIcon x:Name="D3dCompilerIcon" Size="16" />
-                    <TextBlock x:Name="D3dCompilerText"
-                               Theme="{StaticResource BodyMDNormalTheme}"
-                               VerticalAlignment="Center" />
-                </StackPanel>
-
-                <!-- vcrun2022 -->
-                <StackPanel Orientation="Horizontal" Spacing="8">
-                    <icons:UnifiedIcon x:Name="VcRunIcon" Size="16" />
-                    <TextBlock x:Name="VcRunText"
-                               Theme="{StaticResource BodyMDNormalTheme}"
-                               VerticalAlignment="Center" />
-                </StackPanel>
+                <!-- Winetricks packages: one row per package the game declares -->
+                <StackPanel x:Name="PackagesPanel" Spacing="12" />
 
                 <!-- DLL Overrides -->
                 <StackPanel Orientation="Horizontal" Spacing="8">
