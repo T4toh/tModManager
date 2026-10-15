@@ -45,6 +45,8 @@ public abstract class ALegacyDatabaseTest
 {
     private readonly SignatureChecker _zipSignatureChecker = new(FileType.ZIP);
     private readonly ITestOutputHelper _helper;
+    // Everything a test host writes to disk lives here; TemporaryFileManager deletes it on dispose (bin/ grew to 35G from leaked FileHashService folders)
+    private readonly string _baseDirectory = $"Temp/Test-{Guid.NewGuid()}";
 
     protected ALegacyDatabaseTest(ITestOutputHelper helper)
     {
@@ -54,7 +56,6 @@ public abstract class ALegacyDatabaseTest
     protected virtual IServiceCollection AddServices(IServiceCollection services)
     {
         const KnownPath baseKnownPath = KnownPath.EntryDirectory;
-        var baseDirectory = $"NexusMods.UI.Tests.Tests-{Guid.NewGuid()}";
 
         var mock = Substitute.For<IGraphQlClient>();
         mock.QueryCollectionId(CollectionSlug.DefaultValue, CancellationToken.None).ReturnsForAnyArgs(callInfo =>
@@ -87,12 +88,12 @@ public abstract class ALegacyDatabaseTest
             // Keep the temp folder out of the user's real XDG_STATE_HOME: TemporaryFileManager deletes it on dispose
             .OverrideSettingsForTests<FileExtractorSettings>(settings => settings with
             {
-                TempFolderLocation = new ConfigurablePath(KnownPath.EntryDirectory, $"Temp-{Guid.NewGuid()}"),
+                TempFolderLocation = new ConfigurablePath(baseKnownPath, $"{_baseDirectory}/Temp"),
             })
             .AddNexusModsCollections()
             .OverrideSettingsForTests<FileHashesServiceSettings>(settings => settings with
             {
-                HashDatabaseLocation = new ConfigurablePath(baseKnownPath, $"{baseDirectory}/FileHashService"),
+                HashDatabaseLocation = new ConfigurablePath(baseKnownPath, $"{_baseDirectory}/FileHashService"),
             })
             .AddSingleton<ITestOutputHelperAccessor>(_ => new Accessor { Output = _helper })
             .AddSingleton(mock)
@@ -155,7 +156,7 @@ public abstract class ALegacyDatabaseTest
             isZip.Should().BeTrue("the database file should be a ZIP archive, you may need to pull the file from LFS (`git lfs pull`)");
         }
 
-        var basePath = FileSystem.Shared.GetKnownPath(KnownPath.EntryDirectory).Combine("Temp").Combine($"Test-{Guid.NewGuid()}");
+        var basePath = FileSystem.Shared.GetKnownPath(KnownPath.EntryDirectory).Combine(_baseDirectory);
         basePath.CreateDirectory();
         basePath.DirectoryExists().Should().BeTrue();
 
