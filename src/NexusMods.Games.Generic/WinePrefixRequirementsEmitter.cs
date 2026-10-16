@@ -14,18 +14,12 @@ namespace NexusMods.Games.Generic;
 /// </summary>
 public class WinePrefixRequirementsEmitter : ILoadoutDiagnosticEmitter
 {
-    public async IAsyncEnumerable<Diagnostic> Diagnose(Loadout.ReadOnly loadout, [EnumeratorCancellation] CancellationToken cancellationToken)
+    public IAsyncEnumerable<Diagnostic> Diagnose(Loadout.ReadOnly loadout, CancellationToken cancellationToken) =>
+        Diagnose(loadout.InstallationInstance, loadout.InstallationInstance.Game.WinePrefixRequirements, cancellationToken);
+
+    internal static async IAsyncEnumerable<Diagnostic> Diagnose(GameInstallation installation, WinePrefixRequirements? requirements, [EnumeratorCancellation] CancellationToken cancellationToken)
     {
-        var installation = loadout.InstallationInstance;
-        var requirements = installation.Game.WinePrefixRequirements;
         if (requirements is null) yield break;
-
-        await foreach (var diagnostic in Diagnose(installation, requirements, cancellationToken))
-            yield return diagnostic;
-    }
-
-    public static async IAsyncEnumerable<Diagnostic> Diagnose(GameInstallation installation, WinePrefixRequirements requirements, [EnumeratorCancellation] CancellationToken cancellationToken)
-    {
         await Task.Yield();
 
         var game = installation.Game.DisplayName;

@@ -10,4 +10,9 @@ namespace NexusMods.Sdk.Games;
 [PublicAPI]
 public sealed record WinePrefixRequirements(
     ImmutableArray<WineDllOverride> DllOverrides,
-    ImmutableArray<string> WinetricksPackages);
+    ImmutableArray<string> WinetricksPackages)
+{
+    // default(ImmutableArray) throws on Length and enumeration: read it as empty
+    public ImmutableArray<WineDllOverride> DllOverrides { get; init; } = DllOverrides.IsDefault ? [] : DllOverrides;
+    public ImmutableArray<string> WinetricksPackages { get; init; } = WinetricksPackages.IsDefault ? [] : WinetricksPackages;
+}
