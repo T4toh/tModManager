@@ -6,7 +6,7 @@ Todo lo mergeado hasta #87 está probado con el juego real (ronda del 2026-10-14
 
 **Próximo:**
 1. Bugs chicos que salieron de las pruebas (lista de abajo). Los menores de revisión de #73/#74/#75 se cerraron en PR #76 (2026-10-10).
-2. Piezas 7 (runner de herramientas Windows en el prefix) y 8 (archivos derivados) de "Piezas genéricas para el segundo juego". Las piezas 2 a 6 están hechas y probadas con el juego (PRs #73, #74, #75, #77, #79). La 7 arranca con spec y plan, idealmente con el juego a mano para probar `protontricks-launch`. Witcher 3 arranca cuando estén las piezas que necesita.
+2. Piezas 7 (runner de herramientas Windows en el prefix) y 8 (archivos derivados) de "Piezas genéricas para el segundo juego". Las piezas 2 a 6 están hechas y probadas con el juego (PRs #73, #74, #75, #77, #79). La 7 arranca con spec y plan, idealmente con el juego a mano para probar `protontricks-launch`. **Paso 0 de la 7, en la PC Linux:** que protontricks ande dentro de la jaula (`sandbox-run.sh` bindea escribible `~/.cache/protontricks` y lo que haga falta de los locks del Steam Linux Runtime; verificar con `--check` y con un apply con REDmods que despliegue sin error). Sin eso no se puede probar la 7 en la jaula y todo apply con REDmods adentro falla al final. Witcher 3 arranca cuando estén las piezas que necesita.
 
 ### Pruebas reales
 
