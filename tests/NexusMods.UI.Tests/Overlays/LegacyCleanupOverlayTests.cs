@@ -2,12 +2,14 @@ using System.Diagnostics;
 using FluentAssertions;
 using Microsoft.Extensions.Logging.Abstractions;
 using NexusMods.App.UI.Overlays;
+using NexusMods.App.UI.Windows;
 using NexusMods.DataModel.Storage;
 using NexusMods.Paths;
 using NexusMods.Sdk;
 using NexusMods.Sdk.Games;
 using NSubstitute;
 using R3;
+using WindowCloseReason = Avalonia.Controls.WindowCloseReason;
 
 namespace NexusMods.UI.Tests.Overlays;
 
@@ -191,6 +193,28 @@ public class LegacyCleanupOverlayTests
         storage.Received(1).RunDeepCleanWithoutSyncOnAllLoadoutsAsync(Arg.Any<CancellationToken>());
         storage.Received(2).DeleteProtonPrefixAsync(install, Arg.Any<CancellationToken>());
         storage.DidNotReceive().RunDeepCleanOnAllLoadoutsAsync(Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task ClosingTheWindow_IsCancelledOnlyWhileAStepRuns()
+    {
+        var moving = new TaskCompletionSource<int>();
+        var storage = Substitute.For<IStorageAnalyzer>();
+        storage.GetLegacyDownloadsAsync(Arg.Any<CancellationToken>()).Returns(Task.FromResult((0, Size.Zero)));
+        storage.MoveLegacyDownloadsAsync(Arg.Any<CancellationToken>()).Returns(moving.Task);
+        var vm = CreateVm(storage, () => null, () => { });
+        vm.CommandNext.Execute(Unit.Default);
+        MainWindowViewModel.ShouldCancelClose(vm, WindowCloseReason.WindowClosing).Should().BeFalse();
+
+        vm.CommandNext.Execute(Unit.Default);
+        vm.IsBusy.Value.Should().BeTrue();
+        MainWindowViewModel.ShouldCancelClose(vm, WindowCloseReason.WindowClosing).Should().BeTrue();
+        MainWindowViewModel.ShouldCancelClose(vm, WindowCloseReason.ApplicationShutdown).Should().BeFalse("the wizard's own restart and quit shut the app down");
+
+        moving.SetResult(0);
+        await vm.IsBusy.Where(static busy => !busy).FirstAsync().WaitAsync(TimeSpan.FromSeconds(10));
+        vm.Step.Value.Should().Be(3);
+        MainWindowViewModel.ShouldCancelClose(vm, WindowCloseReason.WindowClosing).Should().BeFalse();
     }
 
     [Fact]
