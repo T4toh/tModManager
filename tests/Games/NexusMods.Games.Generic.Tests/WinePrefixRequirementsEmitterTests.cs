@@ -43,7 +43,7 @@ public class WinePrefixRequirementsEmitterTests
         return prefix;
     }
 
-    private static async Task<List<Diagnostic>> Run(GameInstallation installation, WinePrefixRequirements requirements)
+    private static async Task<List<Diagnostic>> Run(GameInstallation installation, WinePrefixRequirements? requirements)
     {
         var result = new List<Diagnostic>();
         await foreach (var diagnostic in WinePrefixRequirementsEmitter.Diagnose(installation, requirements, CancellationToken.None))
@@ -55,6 +55,22 @@ public class WinePrefixRequirementsEmitterTests
     public async Task NothingWithoutAPrefix()
     {
         (await Run(Installation(linuxCompat: null), Requirements)).Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task NothingWhenTheGameDeclaresNoRequirements()
+    {
+        var prefix = Prefix([], []);
+        (await Run(Installation(prefix), requirements: null)).Should().BeEmpty();
+        await prefix.DidNotReceive().GetWineDllOverrides(Arg.Any<CancellationToken>());
+        await prefix.DidNotReceive().GetInstalledWinetricksComponents(Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task DefaultArraysCountAsEmpty()
+    {
+        var prefix = Prefix([], []);
+        (await Run(Installation(prefix), new WinePrefixRequirements(default, default))).Should().BeEmpty();
     }
 
     [Fact]

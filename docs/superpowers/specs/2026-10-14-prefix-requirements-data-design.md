@@ -79,9 +79,10 @@ WinePrefixRequirements? WinePrefixRequirements => null;
 - `IsD3dCompiler47Installed`/`IsVcRun2022Installed` se reemplazan por
   `IReadOnlyList<WinetricksPackageStatus> Packages` (record `Name`, `IsInstalled`), en el orden
   declarado. `HasIssues` usa `Packages.Any(p => !p.IsInstalled)`.
-- `WinePrefixStatusView.axaml`: las dos filas fijas pasan a un `ItemsControl` con la misma fila
-  (ícono + `"<paquete>: Instalado"` / `"<paquete>: Faltante"`). El ícono se elige en el template
-  según `IsInstalled`.
+- `WinePrefixStatusView.axaml`: las dos filas fijas pasan a un `StackPanel` vacío que el code-behind
+  llena con una fila por paquete (ícono + `"<paquete>: Instalado"` / `"<paquete>: Faltante"`), igual
+  que el resto de la vista elige sus íconos en code-behind. (Implementado así en PR #79; el borrador
+  decía `ItemsControl`.)
 - `StorageManagerPageViewModel`: el aviso de reinstalar sale de
   `installation.Game.WinePrefixRequirements?.WinetricksPackages` (sin requisitos, sin aviso).
 - `App.UI` deja de importar `NexusMods.Games.RedEngine` en esos dos archivos (otros usos siguen, se
