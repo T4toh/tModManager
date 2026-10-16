@@ -39,7 +39,7 @@ public class Cyberpunk2077Synchronizer : ALoadoutSynchronizer
     
     private readonly RedModDeployTool _redModTool;
     
-    private static bool IsVanillaContentPath(GamePath path)
+    internal static bool IsVanillaContentPath(GamePath path)
     {
         if (path.LocationId != LocationId.Game) return false;
         var pathStr = path.Path.ToString().Replace('\\', '/').ToLowerInvariant();

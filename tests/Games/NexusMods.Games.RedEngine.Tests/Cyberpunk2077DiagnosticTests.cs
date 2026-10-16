@@ -43,6 +43,38 @@ public class Cyberpunk2077DiagnosticTests(ITestOutputHelper outputHelper) : ACyb
     }
 
     [Fact]
+    public async Task ModFilesInTheGamesOwnArchiveFolders_AreReportedPerEnabledMod()
+    {
+        // The synchronizer never deploys archive/pc/* outside archive/pc/mod: the mod would look installed but do nothing
+        var loadout = await CreateLoadout();
+        using (var tx = Connection.BeginTransaction())
+        {
+            var wrong = AddEmptyGroup(tx, loadout, "WrongFolderMod");
+            AddFile(tx, loadout, wrong, new GamePath(LocationId.Game, "archive/pc/content/a.archive"));
+            AddFile(tx, loadout, wrong, new GamePath(LocationId.Game, "archive/pc/patch/b.archive"));
+            AddFile(tx, loadout, wrong, new GamePath(LocationId.Game, "archive/pc/mod/c.archive"));
+            var right = AddEmptyGroup(tx, loadout, "RightFolderMod");
+            AddFile(tx, loadout, right, new GamePath(LocationId.Game, "archive/pc/mod/d.archive"));
+            var disabled = AddEmptyGroup(tx, loadout, "DisabledMod");
+            AddFile(tx, loadout, disabled, new GamePath(LocationId.Game, "archive/pc/content/e.archive"));
+            tx.Add(disabled, LoadoutItem.Disabled, Null.Instance);
+            await tx.Commit();
+        }
+        Refresh(ref loadout);
+
+        var emitter = Game.DiagnosticEmitters.OfType<CoreModsDiagnosticEmitter>().Single();
+        var found = (await emitter.Diagnose(loadout, CancellationToken.None).ToListAsync())
+            .OfType<Diagnostic<Diagnostics.UndeployedVanillaContentFilesMessageData>>()
+            .Select(d => d.MessageData)
+            .ToList();
+
+        found.Should().ContainSingle();
+        found[0].ModName.Should().Be("WrongFolderMod");
+        found[0].Count.Should().Be(2);
+        found[0].Paths.Should().Be("archive/pc/content/a.archive`, `archive/pc/patch/b.archive");
+    }
+
+    [Fact]
     public void CyberpunkGameExposesPatternBasedDiagnostics()
     {
         Game.DiagnosticEmitters.Should().ContainSingle(e => e.GetType() == typeof(PatternBasedDependencyEmitter));
