@@ -201,7 +201,7 @@ public class LegacyCleanupOverlayTests
         var moving = new TaskCompletionSource<int>();
         var storage = Substitute.For<IStorageAnalyzer>();
         storage.GetLegacyDownloadsAsync(Arg.Any<CancellationToken>()).Returns(Task.FromResult((0, Size.Zero)));
-        storage.MoveLegacyDownloadsAsync(Arg.Any<CancellationToken>()).Returns(moving.Task);
+        storage.CopyLegacyDownloadsAsync(Arg.Any<CancellationToken>()).Returns(moving.Task);
         var vm = CreateVm(storage, () => null, () => { });
         vm.CommandNext.Execute(Unit.Default);
         MainWindowViewModel.ShouldCancelClose(vm, WindowCloseReason.WindowClosing).Should().BeFalse();
