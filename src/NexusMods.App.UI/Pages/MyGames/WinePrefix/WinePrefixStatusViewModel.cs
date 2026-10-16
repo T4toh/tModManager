@@ -100,8 +100,10 @@ public class WinePrefixStatusViewModel : AViewModel<IWinePrefixStatusViewModel>,
         }
         else if (!_linuxCompat.WinePrefixDirectoryPath.DirectoryExists())
         {
-            // A prefix just deleted: protontricks would fail until Steam creates it again
-            WinetricksInstructions = "El prefix de Proton todavía no existe. Lanzá el juego una vez desde Steam para que lo cree, cerralo y tocá \"Verificar de nuevo\"";
+            // A prefix just deleted: protontricks would fail until Steam (or Lutris, for a manual one) creates it again
+            WinetricksInstructions = _installation.LocatorResult.Store == GameStore.Steam
+                ? "El prefix de Proton todavía no existe. Lanzá el juego una vez desde Steam para que lo cree, cerralo y tocá \"Verificar de nuevo\""
+                : "El prefix de Wine no existe. Lanzá el juego una vez desde Lutris (o el launcher que uses) para que lo cree, cerralo y tocá \"Verificar de nuevo\"";
         }
         else if (IsProtontricksInstalled && _protontricks is IProtontricksDependency protontricks && long.TryParse(_installation.LocatorResult.StoreIdentifier, out var appId))
         {

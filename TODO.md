@@ -38,6 +38,7 @@ Todo lo mergeado hasta #87 está probado con el juego real (ronda del 2026-10-14
 
 Mergeado o en PR, compilado en Mac pero sin correr en la PC con el juego (en Mac la app no arranca y casi toda la suite falla por `LinuxInterop`). Borrar cada línea cuando quede probada.
 
+- [ ] **Prefix manual (Lutris) borrado:** agregar el juego a mano con su prefix de Lutris, gestionarlo y aplicar; con la app cerrada borrar (o renombrar) la carpeta del prefix, abrir la app, entrar al loadout y abrir la vista de cambios/aplicar: no crashea, aplicar no toca nada en el prefix y el panel Wine prefix de Mis juegos dice que falta el prefix y que se lance desde Lutris. Lanzar el juego desde Lutris, reiniciar la app y aplicar: todo normal
 - [ ] **Pieza 5, menores diferidos de la revisión (PR #77, 2026-10-11):** `SortOrderIntrinsicFile` compara texto decodificado, un BOM que agregue Notepad bajo Wine a `modlist.txt` no se detecta ni se reescribe (si REDmod se queja en la prueba real, comparar bytes); sin test para "original ya en la base borrado y recreado a mano → se pisa sin respaldo" ni "otro manager edita el archivo después de gestionar → se pisa" (ambos según spec: el loadout gana)
 
 ### Cómo probar con datos reales
@@ -412,7 +413,7 @@ Encontrado el 2026-09-24 en la eliminación de `.nx` (revisiones de implementaci
 
 ### Otros TODO relevantes en código
 
-- [ ] **Prefix manual (Lutris) borrado + reinicio:** `ManuallyAddedLocator` solo declara el prefix si la carpeta existe, así que la base queda con paths `WinePrefix` de una ubicación no declarada. Sync y unmanage fallan con mensaje claro (`EnsureDiskChangesStayInside`), pero `DiffTreeViewModel.ToAbsolutePath` puede tirar `KeyNotFoundException` en la UI. Declararlo por la ruta guardada exista o no, como hace `SteamLocator`
+- [x] **Prefix manual (Lutris) borrado + reinicio** (arreglado 2026-10-16): `ManuallyAddedLocator` solo declaraba el prefix si la carpeta existía, así que la base quedaba con paths `WinePrefix` de una ubicación no declarada y `DiffTreeViewModel.ToAbsolutePath` podía tirar `KeyNotFoundException`. Ahora lo declara por la ruta guardada exista o no, como `SteamLocator`; el sync ya ignora un prefix con lista blanca que no está en disco. El panel Wine prefix, sin `pfx/`, pide lanzarlo desde Lutris en vez de Steam
 - [ ] **Symlinks de archivo en la carpeta del juego:** el scan los lista y los hashea a través del link; un mod que los reemplace deshace el link (`LooseFileStore.ExtractFiles` lo borra antes de escribir) y el reset borra el archivo. El prefix ya lo rechaza (`EnsureDiskChangesStayInside`, solo ubicaciones con whitelist); extender a `Game` cuando se decida qué hacer con links legítimos
 - `NexusMods.Library/DownloadsService.cs:46` — restaurar descargas completadas desde storage al arrancar
 - `NexusMods.Networking.NexusWebApi/NexusModsLibrary.Collections.cs:237-259` — metadata de colección hardcodeada (`AdultContent`, `Summary`, `Author`)

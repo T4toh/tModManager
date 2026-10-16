@@ -42,4 +42,29 @@ public class GameWithoutNexusModsIdTests(ITestOutputHelper helper) : ACyberpunkI
         added.LocatorResult.Store.Should().Be(GameStore.ManuallyAdded);
         added.Game.Should().BeOfType<StubbedGame>();
     }
+
+    [Fact]
+    public async Task ManualPrefixStaysDeclaredWhenItsFolderIsGone()
+    {
+        // A Lutris prefix deleted by hand: the DB keeps WinePrefix paths, so the location must stay declared
+        var path = TemporaryFileManager.CreateFolder().Path;
+        var prefix = path.Combine("pfx");
+        using (var tx = Connection.BeginTransaction())
+        {
+            _ = new ManuallyAddedGame.New(tx)
+            {
+                Path = path.ToString(),
+                Version = "1.0.0.0",
+                GameId = StubbedGame.GameId,
+                WinePrefix = prefix.ToString(),
+            };
+            await tx.Commit();
+        }
+        GameRegistry.ClearCache();
+
+        var added = GameRegistry.LocateGameInstallations().First(g => g.LocatorResult.Path == path);
+
+        prefix.DirectoryExists().Should().BeFalse();
+        added.LocatorResult.LinuxCompatabilityDataProvider!.WinePrefixDirectoryPath.Should().Be(prefix);
+    }
 }
