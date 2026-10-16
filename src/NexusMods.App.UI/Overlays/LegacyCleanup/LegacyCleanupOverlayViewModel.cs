@@ -85,10 +85,10 @@ public class LegacyCleanupOverlayViewModel : AOverlayViewModel<ILegacyCleanupOve
                             var (count, size) = await storage.GetLegacyDownloadsAsync(cancellationToken);
                             LegacyDownloadsText.Value = count == 0
                                 ? "No hay descargas viejas para rescatar."
-                                : $"{count} archivos ({ByteSize.FromBytes(size.Value).Humanize("0.#")}) en NexusMods.App/Downloads. Se mueven a tModManager/Downloads.";
+                                : $"{count} archivos ({ByteSize.FromBytes(size.Value).Humanize("0.#")}) en NexusMods.App/Downloads. Se copian a tModManager/Downloads; los originales quedan donde están (si no usás la app oficial de Nexus, borralos vos después).";
                             break;
                         case 2:
-                            await storage.MoveLegacyDownloadsAsync(cancellationToken);
+                            await storage.CopyLegacyDownloadsAsync(cancellationToken);
                             break;
                         case 3:
                             if (!deepCleanDone)

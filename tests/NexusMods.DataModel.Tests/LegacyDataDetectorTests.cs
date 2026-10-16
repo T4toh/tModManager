@@ -227,7 +227,7 @@ public class LegacyDownloadsMoveTests(ITestOutputHelper helper) : ACyberpunkIsol
     }
 
     [Fact]
-    public async Task MoveLegacyDownloads_MovesAndKeepsNames()
+    public async Task CopyLegacyDownloads_CopiesKeepsNamesAndLeavesTheOriginals()
     {
         var analyzer = (StorageAnalyzer)ServiceProvider.GetRequiredService<IStorageAnalyzer>();
         var legacy = TemporaryFileManager.CreateFolder().Path;
@@ -235,17 +235,18 @@ public class LegacyDownloadsMoveTests(ITestOutputHelper helper) : ACyberpunkIsol
         await File.WriteAllTextAsync(legacy.Combine("B-2-0.7z").ToString(), "b");
         analyzer.LegacyDownloadsFolderProvider = () => legacy;
 
-        var moved = await analyzer.MoveLegacyDownloadsAsync(default);
+        var moved = await analyzer.CopyLegacyDownloadsAsync(default);
 
         moved.Should().Be(2);
-        legacy.EnumerateFiles("*", recursive: false).Should().BeEmpty();
+        // The official NexusMods.App may still use them: deleting them is the user's call
+        legacy.EnumerateFiles("*", recursive: false).Should().HaveCount(2);
         var dest = ServiceProvider.GetRequiredService<ISettingsManager>().Get<DownloadsSettings>().Folder.ToPath(FileSystem);
         dest.Combine("A-1-0.zip").FileExists.Should().BeTrue();
         dest.Combine("B-2-0.7z").FileExists.Should().BeTrue();
     }
 
     [Fact]
-    public async Task MoveLegacyDownloads_SameNameSameContent_DiscardsSource()
+    public async Task CopyLegacyDownloads_SameNameSameContent_ReusesTheExistingFile()
     {
         var analyzer = (StorageAnalyzer)ServiceProvider.GetRequiredService<IStorageAnalyzer>();
         var dest = ServiceProvider.GetRequiredService<ISettingsManager>().Get<DownloadsSettings>().Folder.ToPath(FileSystem);
@@ -256,15 +257,15 @@ public class LegacyDownloadsMoveTests(ITestOutputHelper helper) : ACyberpunkIsol
         await File.WriteAllTextAsync(legacy.Combine("X.zip").ToString(), "same content");
         analyzer.LegacyDownloadsFolderProvider = () => legacy;
 
-        var moved = await analyzer.MoveLegacyDownloadsAsync(default);
+        var moved = await analyzer.CopyLegacyDownloadsAsync(default);
 
         moved.Should().Be(1);
-        legacy.EnumerateFiles("*", recursive: false).Should().BeEmpty();
+        legacy.Combine("X.zip").FileExists.Should().BeTrue();
         dest.EnumerateFiles("*", recursive: false).Should().ContainSingle(f => f.FileName.ToString() == "X.zip");
     }
 
     [Fact]
-    public async Task MoveLegacyDownloads_SameNameDifferentContent_GetsSuffix()
+    public async Task CopyLegacyDownloads_SameNameDifferentContent_GetsSuffix()
     {
         var analyzer = (StorageAnalyzer)ServiceProvider.GetRequiredService<IStorageAnalyzer>();
         var dest = ServiceProvider.GetRequiredService<ISettingsManager>().Get<DownloadsSettings>().Folder.ToPath(FileSystem);
@@ -275,10 +276,10 @@ public class LegacyDownloadsMoveTests(ITestOutputHelper helper) : ACyberpunkIsol
         await File.WriteAllTextAsync(legacy.Combine("X.zip").ToString(), "different content");
         analyzer.LegacyDownloadsFolderProvider = () => legacy;
 
-        var moved = await analyzer.MoveLegacyDownloadsAsync(default);
+        var moved = await analyzer.CopyLegacyDownloadsAsync(default);
 
         moved.Should().Be(1);
-        legacy.EnumerateFiles("*", recursive: false).Should().BeEmpty();
+        legacy.Combine("X.zip").FileExists.Should().BeTrue();
         dest.Combine("X.zip").FileExists.Should().BeTrue();
         dest.Combine("X_1.zip").FileExists.Should().BeTrue();
         (await File.ReadAllTextAsync(dest.Combine("X.zip").ToString())).Should().Be("original content");
@@ -286,7 +287,7 @@ public class LegacyDownloadsMoveTests(ITestOutputHelper helper) : ACyberpunkIsol
     }
 
     [Fact]
-    public async Task MoveLegacyDownloads_SameFolderConfiguredDirectly_DeletesNothing()
+    public async Task CopyLegacyDownloads_SameFolderConfiguredDirectly_DoesNothing()
     {
         var analyzer = (StorageAnalyzer)ServiceProvider.GetRequiredService<IStorageAnalyzer>();
         var dest = ServiceProvider.GetRequiredService<ISettingsManager>().Get<DownloadsSettings>().Folder.ToPath(FileSystem);
@@ -294,12 +295,11 @@ public class LegacyDownloadsMoveTests(ITestOutputHelper helper) : ACyberpunkIsol
         await File.WriteAllTextAsync(dest.Combine("A-1-0.zip").ToString(), "a");
 
         // The legacy folder IS the current downloads folder (e.g. misconfiguration, or the user
-        // pointed both at the same place): there's nothing to move, and treating it as a move would
-        // delete the only copy of every file.
+        // pointed both at the same place): there's nothing to copy.
         analyzer.LegacyDownloadsFolderProvider = () => dest;
 
         var (count, _) = await analyzer.GetLegacyDownloadsAsync();
-        var moved = await analyzer.MoveLegacyDownloadsAsync(default);
+        var moved = await analyzer.CopyLegacyDownloadsAsync(default);
 
         count.Should().Be(0);
         moved.Should().Be(0);
@@ -307,7 +307,7 @@ public class LegacyDownloadsMoveTests(ITestOutputHelper helper) : ACyberpunkIsol
     }
 
     [Fact]
-    public async Task MoveLegacyDownloads_DestinationIsSymlinkToLegacyFolder_DeletesNothing()
+    public async Task CopyLegacyDownloads_DestinationIsSymlinkToLegacyFolder_DoesNothing()
     {
         var analyzer = (StorageAnalyzer)ServiceProvider.GetRequiredService<IStorageAnalyzer>();
         var legacy = TemporaryFileManager.CreateFolder().Path;
@@ -320,7 +320,7 @@ public class LegacyDownloadsMoveTests(ITestOutputHelper helper) : ACyberpunkIsol
         Directory.CreateSymbolicLink(dest.ToString(), legacy.ToString());
 
         var (count, _) = await analyzer.GetLegacyDownloadsAsync();
-        var moved = await analyzer.MoveLegacyDownloadsAsync(default);
+        var moved = await analyzer.CopyLegacyDownloadsAsync(default);
 
         count.Should().Be(0);
         moved.Should().Be(0);
@@ -328,7 +328,7 @@ public class LegacyDownloadsMoveTests(ITestOutputHelper helper) : ACyberpunkIsol
     }
 
     [Fact]
-    public async Task GetAndMoveLegacyDownloads_SkipPartialDownloads()
+    public async Task GetAndCopyLegacyDownloads_SkipPartialDownloads()
     {
         var analyzer = (StorageAnalyzer)ServiceProvider.GetRequiredService<IStorageAnalyzer>();
         var legacy = TemporaryFileManager.CreateFolder().Path;
@@ -338,12 +338,12 @@ public class LegacyDownloadsMoveTests(ITestOutputHelper helper) : ACyberpunkIsol
         analyzer.LegacyDownloadsFolderProvider = () => legacy;
 
         var (count, size) = await analyzer.GetLegacyDownloadsAsync();
-        var moved = await analyzer.MoveLegacyDownloadsAsync(default);
+        var moved = await analyzer.CopyLegacyDownloadsAsync(default);
 
         count.Should().Be(1);
         size.Value.Should().Be(1);
         moved.Should().Be(1);
-        partial.FileExists.Should().BeTrue("a half-written download must be left alone, not moved or deleted");
+        partial.FileExists.Should().BeTrue("a half-written download must be left alone, not copied or deleted");
         var dest = ServiceProvider.GetRequiredService<ISettingsManager>().Get<DownloadsSettings>().Folder.ToPath(FileSystem);
         dest.Combine("A-1-0.zip").FileExists.Should().BeTrue();
         dest.Combine(partial.FileName).FileExists.Should().BeFalse();
