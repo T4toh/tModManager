@@ -39,11 +39,10 @@ internal class ManuallyAddedLocator : IGameLocator
             ILinuxCompatabilityDataProvider? linuxCompatProvider = null;
             if (entity.Contains(ManuallyAddedGame.WinePrefix) && !string.IsNullOrWhiteSpace(entity.WinePrefix))
             {
+                // Declared by the stored path even when the folder is gone (deleted by hand, Lutris not launched yet),
+                // like SteamLocator: the DB keeps WinePrefix paths and every sync needs the location
                 var winePrefixPath = _fileSystem.FromUnsanitizedFullPath(entity.WinePrefix);
-                if (winePrefixPath.DirectoryExists())
-                {
-                    linuxCompatProvider = new ManualLinuxCompatabilityDataProvider(winePrefixPath, _serviceProvider.GetRequiredService<Microsoft.Extensions.Logging.ILogger<ManualLinuxCompatabilityDataProvider>>());
-                }
+                linuxCompatProvider = new ManualLinuxCompatabilityDataProvider(winePrefixPath, _serviceProvider.GetRequiredService<Microsoft.Extensions.Logging.ILogger<ManualLinuxCompatabilityDataProvider>>());
             }
 
             yield return new GameLocatorResult
