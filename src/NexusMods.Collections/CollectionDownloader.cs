@@ -880,9 +880,10 @@ public class CollectionDownloader
                             LibraryFile.ReadOnly libraryFile;
                             if (existingDatoms.Count == 0)
                             {
+                                // Read it from the db the add committed into: `db` predates the file and would throw on FileName
                                 var result = await _libraryService.AddLocalFile(currentFile);
                                 libraryFileId = result.Id;
-                                libraryFile = new LibraryFile.ReadOnly(db, result.Id);
+                                libraryFile = result.AsLibraryFile();
                             }
                             else
                             {
