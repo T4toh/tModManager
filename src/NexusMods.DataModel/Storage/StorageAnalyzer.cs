@@ -251,59 +251,31 @@ internal class StorageAnalyzer : IStorageAnalyzer
     }
 
     /// <inheritdoc />
-    public async Task<int> MoveLegacyDownloadsAsync(CancellationToken cancellationToken = default)
+    public async Task<int> CopyLegacyDownloadsAsync(CancellationToken cancellationToken = default)
     {
         var from = LegacyDownloadsFolderProvider();
         if (!from.DirectoryExists()) return 0;
 
         var to = _settingsManager.Get<DownloadsSettings>().Folder.ToPath(_fileSystem);
 
-        // Same physical folder (configured directly to the same path, or one is a symlink to the
-        // other): moving would just delete the only copy of every file. Do nothing.
+        // Same physical folder (configured directly to the same path, or one is a symlink to the other): nothing to copy
         if (RealPath.Resolve(from) == RealPath.Resolve(to))
         {
-            _logger.LogWarning("La carpeta de descargas antigua y la actual son la misma ({Path}); no se mueve nada", from);
+            _logger.LogWarning("La carpeta de descargas antigua y la actual son la misma ({Path}); no se copia nada", from);
             return 0;
         }
 
-        to.CreateDirectory();
-
-        var moved = 0;
+        // Copied, never moved: the official NexusMods.App may still use them, deleting them is the user's call.
+        // PlaceAsync reuses a file with the same name and content, so a retry after a failure (e.g. no space) resumes.
+        var copied = 0;
         // A name with backslashes is read back as separators and can alias a file outside `from`
         foreach (var file in from.EnumerateFiles("*", recursive: false).Where(f => !IsPartialDownload(f) && SafePath.IsStrictlyInside(from, f)).ToArray())
         {
-            var name = DownloadsFolder.SanitizeFileName(file.FileName.ToString());
-            var target = to.Combine(name);
-
-            // Cheap path: rename directly when nothing is in the way. Only falls back to a copy
-            // when the name clashes, or the move fails because source and destination are on
-            // different filesystems (cross-device rename isn't atomic-renameable).
-            if (!target.FileExists)
-            {
-                try
-                {
-                    File.Move(file.ToString(), target.ToString());
-                    moved++;
-                    continue;
-                }
-                catch (IOException)
-                {
-                    // Most likely source and destination are on different filesystems (rename can't
-                    // cross a device boundary). Fall through to the copy+delete path below, which
-                    // also correctly handles the rare race where something claimed `target` first.
-                }
-            }
-
-            var placed = await DownloadsFolder.PlaceAsync(file, to, name, cancellationToken);
-
-            // PlaceAsync may hand back the source file itself (e.g. a single aliased file even
-            // though the folders differ): never delete the only copy of a file.
-            if (RealPath.Resolve(placed) != RealPath.Resolve(file))
-                file.Delete();
-            moved++;
+            await DownloadsFolder.PlaceAsync(file, to, file.FileName.ToString(), cancellationToken);
+            copied++;
         }
 
-        return moved;
+        return copied;
     }
 
     /// <inheritdoc />

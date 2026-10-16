@@ -56,11 +56,11 @@ public interface IStorageAnalyzer
     Task<(int Count, Size Size)> GetLegacyDownloadsAsync(CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Mueve las descargas dejadas por el NexusMods.App original a la carpeta de descargas actual.
-    /// Mismo nombre y mismo contenido descarta el origen; mismo nombre y distinto contenido agrega
-    /// un sufijo. Devuelve la cantidad de archivos movidos.
+    /// Copia las descargas dejadas por el NexusMods.App original a la carpeta de descargas actual; los
+    /// originales quedan (la app oficial puede seguir usándolos). Mismo nombre y mismo contenido reusa el
+    /// archivo ya copiado; mismo nombre y distinto contenido agrega un sufijo. Devuelve la cantidad de archivos.
     /// </summary>
-    Task<int> MoveLegacyDownloadsAsync(CancellationToken cancellationToken = default);
+    Task<int> CopyLegacyDownloadsAsync(CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Borra el prefix de Proton de <paramref name="installation"/> (<c>steamapps/compatdata/&lt;appid&gt;</c>, la

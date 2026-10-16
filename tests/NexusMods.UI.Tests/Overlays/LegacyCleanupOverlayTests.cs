@@ -92,11 +92,11 @@ public class LegacyCleanupOverlayTests
         vm.CommandNext.Execute(Unit.Default);
         vm.Step.Value.Should().Be(2);
         vm.LegacyDownloadsText.Value.Should().StartWith("3 archivos (");
-        storage.DidNotReceive().MoveLegacyDownloadsAsync(Arg.Any<CancellationToken>());
+        storage.DidNotReceive().CopyLegacyDownloadsAsync(Arg.Any<CancellationToken>());
 
         vm.CommandNext.Execute(Unit.Default);
         vm.Step.Value.Should().Be(3);
-        storage.Received(1).MoveLegacyDownloadsAsync(Arg.Any<CancellationToken>());
+        storage.Received(1).CopyLegacyDownloadsAsync(Arg.Any<CancellationToken>());
         storage.DidNotReceive().RunDeepCleanWithoutSyncOnAllLoadoutsAsync(Arg.Any<CancellationToken>());
 
         vm.DeleteProtonPrefix.Value = true;
