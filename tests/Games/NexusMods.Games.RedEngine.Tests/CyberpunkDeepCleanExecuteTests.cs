@@ -1,6 +1,7 @@
 using FluentAssertions;
 using Microsoft.Extensions.DependencyInjection;
 using NexusMods.Abstractions.Loadouts;
+using NexusMods.DataModel.Storage;
 using NexusMods.Games.RedEngine.Cyberpunk2077;
 using NexusMods.Games.TestFramework;
 using NexusMods.Paths;
@@ -52,6 +53,45 @@ public class CyberpunkDeepCleanExecuteTests(ITestOutputHelper helper) : ACyberpu
         newBackup.Combine("archive/pc/mod/test.archive").FileExists.Should().BeTrue();
         LoadoutItem.FindByLoadout(Connection.Db, loadout).Should().NotContain(i => i.Name == "PluginMod");
         Snapshots(realBackups).Should().BeEquivalentTo(realBefore);
+    }
+
+    [Fact]
+    public async Task SuperClean_RunsWhenTheApplyBeforeItFails()
+    {
+        // Seen 2026-10-14: REDmod's deploy exited 1 at the end of the apply and Super Clean never started. A mod
+        // writing through a symlinked folder makes the same apply fail here.
+        try { await RunSuperCleanAfterFailedApply(); }
+        finally { if (_backups.DirectoryExists()) _backups.DeleteDirectoryNoFollow(); }
+    }
+
+    private async Task RunSuperCleanAfterFailedApply()
+    {
+        var tool = ServiceProvider.GetServices<ITool>().OfType<CyberpunkDeepCleanTool>().Single();
+        tool.BackupsRootProvider = () => _backups;
+
+        await LoadoutManager.ManageInstallation(GameInstallation);
+        await Synchronizer.ReindexState(GameInstallation);
+        var loadout = await Synchronizer.Synchronize(await CreateLoadout());
+
+        var gameRoot = GameInstallation.Locations[LocationId.Game].Path;
+        var link = gameRoot.Combine("bin/linked");
+        link.Parent.CreateDirectory();
+        File.CreateSymbolicLink(link.ToString(), TemporaryFileManager.CreateFolder().Path.ToString());
+        using (var tx = Connection.BeginTransaction())
+        {
+            await AddModAsync(tx, [(RelativePath)"bin/linked/mod.txt"], loadout, "LinkedMod");
+            await tx.Commit();
+        }
+        var leftover = gameRoot.Combine("archive/pc/mod/test.archive");
+        leftover.Parent.CreateDirectory();
+        await leftover.WriteAllTextAsync("mod");
+
+        await ServiceProvider.GetRequiredService<IStorageAnalyzer>().RunDeepCleanOnAllLoadoutsAsync();
+
+        leftover.FileExists.Should().BeFalse();
+        Snapshots(_backups).Should().ContainSingle()
+            .Which.Should().Match(s => _backups.Combine(s).Combine("archive/pc/mod/test.archive").FileExists);
+        LoadoutItem.FindByLoadout(Connection.Db, loadout).Should().NotContain(i => i.Name == "LinkedMod");
     }
 
     private static string[] Snapshots(AbsolutePath root) =>
