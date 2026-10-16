@@ -93,7 +93,8 @@ public partial class MainWindow : ReactiveWindow<MainWindowViewModel>
 
     protected override void OnClosing(WindowClosingEventArgs e)
     {
-        ViewModel?.OnClose();
+        if (ViewModel?.CancelClose(e.CloseReason) == true) e.Cancel = true;
+        else ViewModel?.OnClose();
         base.OnClosing(e);
     }
     

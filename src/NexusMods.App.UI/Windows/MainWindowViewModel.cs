@@ -370,7 +370,21 @@ public class MainWindowViewModel : AViewModel<IMainWindowViewModel>, IMainWindow
         // of the VM because the MainWindowViewModel gets disposed last, after its contents.
         _windowManager.SaveWindowState(this);
     }
-    
+
+    /// <summary>
+    /// Called by the View when the user closes the window: true (and a toast saying why) while a legacy cleanup step
+    /// runs, because cutting it in half leaves folders half moved. App shutdowns (the wizard's restart or quit) go through.
+    /// </summary>
+    internal bool CancelClose(Avalonia.Controls.WindowCloseReason reason)
+    {
+        if (!ShouldCancelClose(CurrentOverlay, reason)) return false;
+        _notificationService.ShowToast("Esperá a que termine el paso de la limpieza para cerrar la app.");
+        return true;
+    }
+
+    internal static bool ShouldCancelClose(IOverlayViewModel? overlay, Avalonia.Controls.WindowCloseReason reason) =>
+        reason == Avalonia.Controls.WindowCloseReason.WindowClosing && overlay is ILegacyCleanupOverlayViewModel { IsBusy.Value: true };
+
     public WindowId WindowId { get; } = WindowId.NewId();
 
     /// <inheritdoc/>
