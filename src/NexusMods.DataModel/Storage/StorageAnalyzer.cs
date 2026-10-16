@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Logging;
 using NexusMods.Abstractions.Loadouts;
+using NexusMods.Abstractions.Loadouts.Exceptions;
 using NexusMods.DataModel.LegacyData;
 using NexusMods.MnemonicDB.Abstractions;
 using NexusMods.MnemonicDB.Abstractions.TxFunctions;
@@ -23,6 +24,7 @@ internal class StorageAnalyzer : IStorageAnalyzer
     private readonly ISettingsManager _settingsManager;
     private readonly IFileSystem _fileSystem;
     private readonly IToolManager _toolManager;
+    private readonly ISynchronizerService _synchronizer;
     private readonly IJobMonitor _jobMonitor;
     private readonly ILogger<StorageAnalyzer> _logger;
     private readonly LooseFileStore _fileStore;
@@ -32,6 +34,7 @@ internal class StorageAnalyzer : IStorageAnalyzer
         ISettingsManager settingsManager,
         IFileSystem fileSystem,
         IToolManager toolManager,
+        ISynchronizerService synchronizer,
         IJobMonitor jobMonitor,
         ILogger<StorageAnalyzer> logger,
         LooseFileStore fileStore)
@@ -40,6 +43,7 @@ internal class StorageAnalyzer : IStorageAnalyzer
         _settingsManager = settingsManager;
         _fileSystem = fileSystem;
         _toolManager = toolManager;
+        _synchronizer = synchronizer;
         _jobMonitor = jobMonitor;
         _logger = logger;
         _fileStore = fileStore;
@@ -129,9 +133,24 @@ internal class StorageAnalyzer : IStorageAnalyzer
             }
             _logger.LogInformation("Running Deep Clean on loadout {Name}", loadout.Name);
             if (skipSync)
+            {
                 await tool.StartJob(loadout, _jobMonitor, cancellationToken);
-            else
-                await _toolManager.RunTool(tool, loadout, _jobMonitor, cancellationToken);
+                continue;
+            }
+
+            // Same steps as IToolManager.RunTool, but Super Clean is the way out of a broken state: an apply that
+            // fails before it (e.g. REDmod's deploy exiting 1) must not stop it, the mods on disk get moved either
+            // way. A running game still stops it.
+            try
+            {
+                await _synchronizer.Synchronize(loadout);
+            }
+            catch (Exception e) when (e is not (ExecutableInUseException or OperationCanceledException))
+            {
+                _logger.LogError(e, "Falló el apply previo a Super Clean en {Name}; se limpia igual", loadout.Name);
+            }
+            await tool.StartJob(loadout.Rebase(), _jobMonitor, cancellationToken);
+            await _synchronizer.Synchronize(loadout);
         }
     }
 
