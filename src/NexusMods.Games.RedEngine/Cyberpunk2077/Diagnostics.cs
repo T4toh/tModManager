@@ -281,4 +281,26 @@ The folder `r6/scripts` contains `.reds` files, but the compiler output in `r6/c
             .AddValue<string>("RedscriptLogPath")
         )
         .Finish();
+
+    [DiagnosticTemplate]
+    [UsedImplicitly]
+    internal static IDiagnosticTemplate UndeployedVanillaContentFiles = DiagnosticTemplateBuilder
+        .Start()
+        .WithId(new DiagnosticId(Source, number: 9))
+        .WithTitle("Mod files that are never deployed")
+        .WithSeverity(DiagnosticSeverity.Warning)
+        .WithSummary("Mod '{ModName}' has {Count} file(s) in the game's own archive folders that are never deployed.")
+        .WithDetails("""
+The mod **{ModName}** puts {Count} file(s) under `archive/pc/` outside `archive/pc/mod`, for example `{Paths}`. Those folders hold the game's own content (about 90 GB), so tModManager never writes, backs up or deletes anything there: the mod shows as installed, but these files never reach the game folder.
+
+### How to Resolve
+1. Check the mod's page: Cyberpunk 2077 loads mod archives from `archive/pc/mod`. If the mod is just packaged with the wrong folder, re-package or re-install it with its `.archive` files in `archive/pc/mod`.
+2. If the mod really replaces the game's own archives, it can't be managed by tModManager: remove it from the loadout.
+""")
+        .WithMessageData(messageBuilder => messageBuilder
+            .AddValue<string>("ModName")
+            .AddValue<int>("Count")
+            .AddValue<string>("Paths")
+        )
+        .Finish();
 }

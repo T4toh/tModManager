@@ -2,6 +2,7 @@ using System.Runtime.CompilerServices;
 using NexusMods.Abstractions.Diagnostics;
 using NexusMods.Abstractions.Diagnostics.Emitters;
 using NexusMods.Abstractions.Loadouts;
+using NexusMods.Abstractions.Loadouts.Extensions;
 using NexusMods.Paths;
 using NexusMods.Sdk.Games;
 using NexusMods.Sdk.Loadouts;
@@ -24,11 +25,21 @@ public class CoreModsDiagnosticEmitter : ILoadoutDiagnosticEmitter
         // 1. Check for redundant folder structures in the loadout
         var loadoutItems = LoadoutItem.FindByLoadout(loadout.Db, loadout).OfTypeLoadoutItemWithTargetPath();
         var checkedGroups = new HashSet<EntityId>();
+        var undeployed = new Dictionary<EntityId, (string ModName, List<string> Paths)>();
 
         foreach (var item in loadoutItems)
         {
             var targetPath = (GamePath)item.TargetPath;
             if (targetPath.LocationId != LocationId.Game) continue;
+
+            // The synchronizer never touches the game's own archive folders: say so instead of failing silently
+            var file = item.AsLoadoutItem();
+            if (Cyberpunk2077Synchronizer.IsVanillaContentPath(targetPath) && file.HasParent() && file.IsEnabled())
+            {
+                if (!undeployed.TryGetValue(file.Parent.Id, out var entry))
+                    undeployed[file.Parent.Id] = entry = (file.Parent.AsLoadoutItem().Name, []);
+                entry.Paths.Add(targetPath.Path.ToString());
+            }
 
             var pathString = targetPath.Path.ToString();
             var parts = pathString.Split('/', StringSplitOptions.RemoveEmptyEntries);
@@ -54,6 +65,9 @@ public class CoreModsDiagnosticEmitter : ILoadoutDiagnosticEmitter
                 }
             }
         }
+
+        foreach (var (modName, paths) in undeployed.Values)
+            yield return Diagnostics.CreateUndeployedVanillaContentFiles(modName, paths.Count, string.Join("`, `", paths.Order(StringComparer.Ordinal).Take(3)));
 
         // 2. Redscript compilation check
         // Check if there are any .reds files in the loadout that go to r6/scripts
