@@ -1,8 +1,10 @@
 using System.Security.Cryptography;
 using FluentAssertions;
 using Microsoft.Extensions.DependencyInjection;
+using NexusMods.Abstractions.NexusModsLibrary;
 using NexusMods.Abstractions.NexusModsLibrary.Models;
 using NexusMods.Abstractions.NexusWebApi.Types;
+using NexusMods.MnemonicDB.Abstractions;
 using NexusMods.Games.TestFramework;
 using NexusMods.Paths;
 using NexusMods.Sdk.Hashes;
@@ -63,5 +65,70 @@ public class RescanDownloadsTests(ITestOutputHelper helper) : ACyberpunkIsolated
         var matched = await downloader.RescanDownloads(CollectionRevisionMetadata.Load(result.Db, result[revision.Id]), CancellationToken.None);
 
         matched.Should().Be(1);
+    }
+
+    [Fact]
+    public async Task NexusDownloadOnDisk_IsLinkedOnTheFirstRescan()
+    {
+        // Seen 2026-10-16 after a reset: every match logged "Entity doesn't have attribute LibraryFile/FileName" because the
+        // file just added to the library was read through the db snapshot taken before the rescan. The second rescan worked.
+        var downloads = ServiceProvider.GetRequiredService<ISettingsManager>().Get<DownloadsSettings>().Folder.ToPath(FileSystem);
+        downloads.CreateDirectory();
+        var content = new byte[1234];
+        Random.Shared.NextBytes(content);
+        await downloads.Combine("nexus-mod.zip").WriteAllBytesAsync(content);
+
+        using var tx = Connection.BeginTransaction();
+        var collection = new CollectionMetadata.New(tx)
+        {
+            CollectionId = CollectionId.From(2),
+            Slug = CollectionSlug.From("nexus"),
+            Name = "Nexus",
+            GameId = NexusModsGameId.From(3333),
+            AuthorId = tx.TempId(),
+        };
+        var revision = new CollectionRevisionMetadata.New(tx)
+        {
+            RevisionId = RevisionId.From(2),
+            RevisionNumber = RevisionNumber.From(1),
+            CollectionId = collection.Id,
+        };
+        var modPage = new NexusModsModPageMetadata.New(tx)
+        {
+            Uid = ModUid.FromUlong(1),
+            Name = "Nexus Mod",
+            GameDomain = GameDomain.From("cyberpunk2077"),
+            UpdatedAt = DateTimeOffset.UtcNow,
+            DataUpdatedAt = DateTimeOffset.UtcNow,
+        };
+        var fileMetadata = new NexusModsFileMetadata.New(tx)
+        {
+            Uid = FileUid.FromUlong(1),
+            Name = "nexus-mod",
+            Version = "1.0",
+            UploadedAt = DateTimeOffset.UtcNow,
+            Size = Size.From((ulong)content.Length),
+            ModPageId = modPage.Id,
+        };
+        _ = new CollectionDownloadNexusMods.New(tx, out var downloadId)
+        {
+            CollectionDownload = new CollectionDownload.New(tx, downloadId)
+            {
+                CollectionRevisionId = revision.Id,
+                Name = "nexus-mod",
+                IsOptional = false,
+                ArrayIndex = 0,
+            },
+            FileUid = FileUid.FromUlong(1),
+            ModUid = ModUid.FromUlong(1),
+            FileMetadataId = fileMetadata.Id,
+        };
+        var result = await tx.Commit();
+
+        var downloader = ServiceProvider.GetRequiredService<CollectionDownloader>();
+        var matched = await downloader.RescanDownloads(CollectionRevisionMetadata.Load(result.Db, result[revision.Id]), CancellationToken.None);
+
+        matched.Should().Be(1);
+        Connection.Db.Datoms(NexusModsLibraryItem.FileMetadata, result[fileMetadata.Id]).Should().ContainSingle("the file on disk is now a library item linked to the Nexus file");
     }
 }
