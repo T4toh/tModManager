@@ -129,6 +129,9 @@ public class RescanDownloadsTests(ITestOutputHelper helper) : ACyberpunkIsolated
         var matched = await downloader.RescanDownloads(CollectionRevisionMetadata.Load(result.Db, result[revision.Id]), CancellationToken.None);
 
         matched.Should().Be(1);
-        Connection.Db.Datoms(NexusModsLibraryItem.FileMetadata, result[fileMetadata.Id]).Should().ContainSingle("the file on disk is now a library item linked to the Nexus file");
+        var linked = Connection.Db.Datoms(NexusModsLibraryItem.FileMetadata, result[fileMetadata.Id]).Should().ContainSingle("the file on disk is now a library item linked to the Nexus file").Subject;
+        // Seen 2026-10-19: the rescan added the file with AddLocalFile and left it a LocalFile too, so the local-file
+        // and the Nexus data providers both listed it and "All" showed twice the mods.
+        LocalFile.OriginalPath.TryGetValue(LibraryFile.Load(Connection.Db, linked.E), out _).Should().BeFalse("a file the collection recognises is a Nexus item, not a local file");
     }
 }
