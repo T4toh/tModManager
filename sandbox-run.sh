@@ -7,8 +7,8 @@
 #   ./sandbox-run.sh           launch the Release build inside the jail
 #   ./sandbox-run.sh --check   prove the jail: kept paths writable, everything else not (exit 1 otherwise)
 #
-# Steam stays outside: launching the game from the app does not work in here, and neither does "Instalar" in the
-# Wine prefix panel (protontricks writes ~/.cache and Steam Linux Runtime lock files; run that step outside).
+# Steam stays outside: launching the game from the app does not work in here. protontricks does (REDmod deploy,
+# "Instalar" in the Wine prefix panel): its cache and the Steam Linux Runtime dirs are writable, see below.
 set -euo pipefail
 command -v bwrap >/dev/null || { echo "Falta bubblewrap: sudo pacman -S bubblewrap"; exit 1; }
 
@@ -20,6 +20,9 @@ KEEP=(
   "$STEAM/common/Cyberpunk 2077"
   "$STEAM/compatdata/1091500"
 )
+# protontricks-launch (REDmod deploy) runs the Steam Linux Runtime, which locks <runtime>/files/.ref and
+# writes temp dirs under <runtime>/var. Steam reinstalls these on its own, so they get in whole.
+for d in "$STEAM"/common/SteamLinuxRuntime*; do KEEP+=("$d"); done
 APP=${APP:-$(dirname "$(realpath "$0")")/src/NexusMods.App/bin/Release/net10.0/tModManager}
 
 is_keep() { local k; for k in "${KEEP[@]}"; do [[ $1 == "$k" ]] && return 0; done; return 1; }
@@ -27,6 +30,10 @@ is_ancestor() { local k; for k in "${KEEP[@]}"; do [[ $k == "$1"/* ]] && return 
 
 args=(--ro-bind / / --dev-bind /dev /dev --proc /proc --bind /tmp /tmp
       --bind "/run/user/$UID" "/run/user/$UID" --bind "$L" "$L")
+# protontricks rebuilds ~/.cache/protontricks/proton/<proton>/bin on every run. Outside ~/.local, so bound by hand.
+mkdir -p "$HOME/.cache/protontricks"
+args+=(--bind "$HOME/.cache/protontricks" "$HOME/.cache/protontricks")
+KEEP+=("$HOME/.cache/protontricks")   # only so --check probes it
 protect() {
   local c
   shopt -s nullglob dotglob
