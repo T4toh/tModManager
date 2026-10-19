@@ -30,7 +30,7 @@ dotnet build -p:UseSystemExtractor=true  # Use system 7z for extraction
 cd src/NexusMods.App && pupnet -y -k AppImage -p DefineConstants=INSTALLATION_METHOD_APPIMAGE   # output: Deploy/OUT/
 ```
 
-Real-machine tests of destructive features: `./dev.sh` option 11 runs the Release build through `sandbox-run.sh` (bubblewrap: whole disk read-only except the app data, the CP2077 game dir and prefix 1091500; `--check` proves it) after a snapper snapshot of `/home`.
+Real-machine tests of destructive features: `./dev.sh` option 11 runs the Release build through `sandbox-run.sh` (bubblewrap: whole disk read-only except the app data, the CP2077 game dir and prefix 1091500, plus `~/.cache/protontricks` and the `SteamLinuxRuntime*` dirs so protontricks runs inside; `--check` proves it) after a snapper snapshot of `/home`.
 
 There is no CI (removed 2026-09-25); verification is local on Linux. `./dev.sh` options 3/4 build with `-p:TreatWarningsAsErrors=true`, then run each xUnit project with `dotnet test` and the two TUnit projects (`Sdk.Tests`, `Backend.Tests`) with `dotnet run`, sequentially. Never run `dotnet test` on the whole solution: it runs every project in parallel and nearly freezes the machine. There is no lint/format step; `.globalconfig` analyzer errors (below) plus warnings-as-errors are the gate. A full build currently produces **0 compiler warnings**; keep it that way (only `NU19xx` NuGet audit warnings from transitive packages remain).
 
