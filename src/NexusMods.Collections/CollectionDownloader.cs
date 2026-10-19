@@ -915,6 +915,9 @@ public class CollectionDownloader
                                 FileMetadataId = metadata.Id,
                                 ModPageMetadataId = metadata.ModPageId,
                             };
+                            // AddLocalFile made it a LocalFile; now that it is a Nexus item it must not stay one too,
+                            // or the local-file and the Nexus data providers both list it ("All" showed twice the mods)
+                            LocalFile.RetractFrom(tx, libraryFile);
                             await tx.Commit();
 
                             matched = true;

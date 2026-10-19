@@ -2,9 +2,13 @@ using FluentAssertions;
 using Microsoft.Extensions.DependencyInjection;
 using NexusMods.Games.TestFramework;
 using NexusMods.Hashing.xxHash3;
+using NexusMods.Abstractions.NexusModsLibrary;
+using NexusMods.Abstractions.NexusModsLibrary.Models;
+using NexusMods.Abstractions.NexusWebApi.Types;
 using NexusMods.Library;
 using NexusMods.Paths;
 using NexusMods.Sdk.Library;
+using NexusMods.Sdk.NexusModsApi;
 using NexusMods.Sdk.Settings;
 using Xunit;
 
@@ -102,6 +106,39 @@ public class LocalFileBackfillTests(ITestOutputHelper helper) : ACyberpunkIsolat
         copied.Should().Be(0);
         LibraryFile.DownloadPath.TryGetValue(LocalFile.Load(Connection.Db, local.Id).AsLibraryFile(), out _).Should().BeFalse();
         Downloads.DirectoryExists().Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task AlsoANexusItem_StopsBeingALocalFile()
+    {
+        // Rescans before 2026-10-19 left every recognised download as LocalFile + NexusModsLibraryItem (shown twice in "All").
+        Downloads.CreateDirectory();
+        var inside = Downloads.Combine("Both.zip");
+        File.WriteAllText(inside.ToString(), "x");
+        var local = await LibraryService.AddLocalFile(inside);
+        using (var tx = Connection.BeginTransaction())
+        {
+            var modPage = new NexusModsModPageMetadata.New(tx)
+            {
+                Uid = ModUid.FromUlong(1), Name = "Mod", GameDomain = GameDomain.From("cyberpunk2077"),
+                UpdatedAt = DateTimeOffset.UtcNow, DataUpdatedAt = DateTimeOffset.UtcNow,
+            };
+            var fileMetadata = new NexusModsFileMetadata.New(tx)
+            {
+                Uid = FileUid.FromUlong(1), Name = "Both", Version = "1", UploadedAt = DateTimeOffset.UtcNow, Size = Size.From(1), ModPageId = modPage.Id,
+            };
+            tx.Add(local.Id, NexusModsLibraryItem.FileMetadata, fileMetadata.Id);
+            tx.Add(local.Id, NexusModsLibraryItem.ModPageMetadata, modPage.Id);
+            await tx.Commit();
+        }
+
+        var copied = await ActivatorUtilities.CreateInstance<LocalFileBackfill>(ServiceProvider).RunAsync(default);
+
+        copied.Should().Be(0);
+        var file = LibraryFile.Load(Connection.Db, local.Id);
+        LocalFile.OriginalPath.TryGetValue(file, out _).Should().BeFalse();
+        NexusModsLibraryItem.FileMetadata.TryGetValue(file, out _).Should().BeTrue();
+        LibraryFile.DownloadPath.Get(file).ToString().Should().Be("Both.zip");
     }
 
     [Fact]

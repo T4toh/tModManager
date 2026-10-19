@@ -1,4 +1,5 @@
 using JetBrains.Annotations;
+using NexusMods.MnemonicDB.Abstractions;
 using NexusMods.MnemonicDB.Abstractions.Attributes;
 using NexusMods.MnemonicDB.Abstractions.Models;
 
@@ -32,4 +33,16 @@ public partial class LocalFile : IModelDefinition
     /// Page of the mod, not the direct download link. Optional.
     /// </summary>
     public static readonly UriAttribute PageUri = new(Namespace, nameof(PageUri)) { IsOptional = true };
+
+    /// <summary>
+    /// Makes <paramref name="file"/> stop being a local file (a source such as a collection rescan identified it).
+    /// The library file and its archive stay; only the attributes of this model go.
+    /// </summary>
+    public static void RetractFrom(ITransaction tx, LibraryFile.ReadOnly file)
+    {
+        if (OriginalPath.TryGetValue(file, out var path)) tx.Retract(file.Id, OriginalPath, path);
+        if (Version.TryGetValue(file, out var version)) tx.Retract(file.Id, Version, version);
+        if (Source.TryGetValue(file, out var source)) tx.Retract(file.Id, Source, source);
+        if (PageUri.TryGetValue(file, out var uri)) tx.Retract(file.Id, PageUri, uri);
+    }
 }

@@ -1,4 +1,5 @@
 using Microsoft.Extensions.Logging;
+using NexusMods.Abstractions.NexusModsLibrary;
 using NexusMods.Hashing.xxHash3;
 using NexusMods.MnemonicDB.Abstractions;
 using NexusMods.Paths;
@@ -8,8 +9,10 @@ using NexusMods.Sdk.Settings;
 namespace NexusMods.Library;
 
 /// <summary>
-/// One-time repair for local files registered before hand-added files were copied into Downloads:
-/// copies each one whose original still exists with the same content and records its DownloadPath.
+/// One-time repairs for local files. Files registered before hand-added files were copied into Downloads:
+/// copies each one whose original still exists with the same content and records its DownloadPath. Files a
+/// collection rescan stamped with Nexus metadata before 2026-10-19 while leaving them local files too (listed
+/// twice in the loadout and the library): drops the local-file attributes.
 /// Idempotent; a run that stops halfway finishes on the next start. Started from Program.cs once the
 /// database has been migrated, never as a hosted service (those start before the second-instance,
 /// reset and migration guards, and resolving IConnection there would open the database too early).
@@ -18,6 +21,15 @@ public sealed class LocalFileBackfill(IConnection connection, ISettingsManager s
 {
     public async Task<int> RunAsync(CancellationToken ct)
     {
+        var dual = LocalFile.All(connection.Db).Where(l => NexusModsLibraryItem.FileMetadata.TryGetValue(l.AsLibraryFile(), out _)).ToArray();
+        if (dual.Length > 0)
+        {
+            using var tx = connection.BeginTransaction();
+            foreach (var local in dual) LocalFile.RetractFrom(tx, local.AsLibraryFile());
+            await tx.Commit();
+            logger.LogInformation("{Count} archivos de la biblioteca eran locales y de Nexus a la vez: quedan solo como de Nexus", dual.Length);
+        }
+
         var downloads = settings.Get<DownloadsSettings>().Folder.ToPath(fileSystem);
         var copied = 0;
         foreach (var local in LocalFile.All(connection.Db).ToArray())
