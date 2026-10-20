@@ -78,6 +78,19 @@ public class GameToolRunnerTests : IDisposable
     }
 
     [Fact]
+    public async Task TheRealProtontricksCommandQuotesTheExeAndKeepsTheArguments()
+    {
+        // Review Focus 3: a game folder with a space and the -modlist backslashes reach protontricks-launch intact
+        var inner = Cli.Wrap(_exe.ToString()).WithArguments(["deploy", "-force", @"-modlist=C:\modlist.txt"], escape: true).WithWorkingDirectory(_exe.Parent.ToString());
+
+        var launch = await new ProtontricksNativeDependency(Substitute.For<IProcessRunner>()).MakeLaunchCommand(inner, 1091500);
+
+        launch.TargetFilePath.Should().Be("protontricks-launch");
+        launch.Arguments.Should().Be($"--appid 1091500 \"{_exe}\" deploy -force -modlist=C:\\modlist.txt");
+        launch.WorkingDirPath.Should().Be(_exe.Parent.ToString());
+    }
+
+    [Fact]
     public async Task SteamProtonWithoutProtontricksThrows()
     {
         _provider.Runtime = new WineRuntime.SteamProton(1091500);
@@ -105,6 +118,18 @@ public class GameToolRunnerTests : IDisposable
         command.EnvironmentVariables["WINEPREFIX"].Should().Be(_prefix.ToString());
         command.EnvironmentVariables["FOO"].Should().Be("bar");
         command.EnvironmentVariables["WINEDLLOVERRIDES"].Should().Be("winmm=n,b");
+        command.EnvironmentVariables["WINEDEBUG"].Should().Be("-all", "a whole play session of wine fixme: lines must not land in ProcessLogs");
+    }
+
+    [Fact]
+    public async Task ConfiguredWineDebugIsKept()
+    {
+        _provider.Runtime = new WineRuntime.Wine(_tmp.Combine("runners/wine/wine-ge"), ImmutableDictionary<string, string>.Empty.Add("WINEDEBUG", "+loaddll"));
+        var (runner, _, _, captured) = Make();
+
+        await runner.RunAsync(Installation(), _exe, []);
+
+        captured()!.EnvironmentVariables["WINEDEBUG"].Should().Be("+loaddll");
     }
 
     [Fact]

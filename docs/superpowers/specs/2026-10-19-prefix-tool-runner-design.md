@@ -108,6 +108,7 @@ WineRuntime? Runtime { get; }
   `system.env` del YAML más `WINEDLLOVERRIDES` armado desde `wine.overrides` del mismo YAML (es como
   Lutris lo pasa: variable de entorno, no registro). Lectura perezosa y cacheada: el YAML se lee la
   primera vez que alguien pide `Runtime`, no en `Locate`.
+- Ajustes de la revisión final (2026-10-19): el nivel intermedio de Lutris (`runners/wine.yml`: versión y env del runner, el juego gana; un `ge-proton` a nivel runner cuenta como "sin definir", como hace Lutris) se mezcla antes de resolver; `wine.version: system` es el `wine` del PATH; los builds se buscan en `runners/wine/`, `runners/proton/` y `Steam/compatibilitytools.d/`; el runner pone `WINEDEBUG=-all` salvo que el YAML lo defina (como Lutris); un Play sin runtime muestra un diálogo en vez de solo loguear.
 - Bug colateral que se arregla de paso: `GetWineDllOverrides` del provider manual devuelve el
   registro (`user.reg`) y **solo si está vacío** mira Lutris; con `vcrun2022` el registro nunca
   está vacío (`*msvcp140`, `*concrt140`, …), así que los `winmm`/`version` del YAML se perdían,

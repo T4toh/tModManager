@@ -71,40 +71,110 @@ public static class LutrisConfigReader
             Overrides: [..overrides]);
     }
 
-    /// <summary>The game config whose <c>game.prefix</c> is <paramref name="winePrefix"/> (trailing separator and case ignored), or null.</summary>
-    public static LutrisGameConfig? FindByPrefix(AbsolutePath lutrisDataDir, AbsolutePath winePrefix)
+    /// <summary>
+    /// The game config whose <c>game.prefix</c> is <paramref name="winePrefix"/> (<c>~</c> expanded, trailing separator and
+    /// case ignored), or null. Files are read in name order; a second match or an unreadable file is reported through
+    /// <paramref name="warn"/>.
+    /// </summary>
+    public static LutrisGameConfig? FindByPrefix(AbsolutePath lutrisDataDir, AbsolutePath winePrefix, Action<string>? warn = null)
     {
         var gamesDir = lutrisDataDir.Combine("games");
         if (!gamesDir.DirectoryExists()) return null;
         var wanted = Normalize(winePrefix.ToString());
+        var home = FileSystem.Shared.GetKnownPath(KnownPath.HomeDirectory).ToString();
 
-        foreach (var yml in gamesDir.EnumerateFiles("*.yml", recursive: false))
+        LutrisGameConfig? found = null;
+        foreach (var yml in gamesDir.EnumerateFiles("*.yml", recursive: false).OrderBy(f => f.FileName, StringComparer.Ordinal))
         {
             LutrisGameConfig config;
             try { config = Parse(File.ReadAllText(yml.ToString())); }
-            catch (Exception) { continue; }
-            if (config.Prefix is { } prefix && string.Equals(Normalize(prefix), wanted, StringComparison.OrdinalIgnoreCase))
-                return config;
+            catch (Exception e) { warn?.Invoke($"No se pudo leer la configuración de Lutris {yml}: {e.Message}"); continue; }
+            if (config.Prefix is not { } prefix) continue;
+            if (prefix.StartsWith("~/", StringComparison.Ordinal)) prefix = home + prefix[1..];
+            if (!string.Equals(Normalize(prefix), wanted, StringComparison.OrdinalIgnoreCase)) continue;
+            if (found is not null)
+            {
+                warn?.Invoke($"Más de una entrada de Lutris usa el prefix {winePrefix}; se usa la primera por nombre de archivo ({yml.FileName} se ignora)");
+                continue;
+            }
+            found = config;
         }
-        return null;
+        return found;
+    }
+
+    /// <summary>The Wine runner's own config (<c>runners/wine.yml</c>: default version and env for every game), or null.</summary>
+    public static LutrisGameConfig? ReadRunnerConfig(AbsolutePath lutrisDataDir)
+    {
+        var file = lutrisDataDir.Combine("runners/wine.yml");
+        if (!file.FileExists) return null;
+        try { return Parse(File.ReadAllText(file.ToString())); }
+        catch (Exception) { return null; }
     }
 
     /// <summary>
-    /// The runtime for <paramref name="config"/>: a Wine build (<c>bin/wine</c>) or a Proton build (<c>proton</c>) under
-    /// <c>runners/wine/&lt;version&gt;</c>. Null, with a warning, when the runner folder is missing or has neither.
+    /// What Lutris runs with: the game's values over the runner's. A runner-level <c>ge-proton</c> counts as unset,
+    /// as in Lutris (<c>read_version_from_config</c>). Prefix and exe always come from the game.
+    /// </summary>
+    public static LutrisGameConfig Merge(LutrisGameConfig? runner, LutrisGameConfig game)
+    {
+        if (runner is null) return game;
+        var runnerVersion = string.Equals(runner.WineVersion, DefaultRunner, StringComparison.OrdinalIgnoreCase) ? null : runner.WineVersion;
+        var overrides = runner.Overrides.ToList();
+        foreach (var o in game.Overrides)
+        {
+            overrides.RemoveAll(r => string.Equals(r.DllName, o.DllName, StringComparison.OrdinalIgnoreCase));
+            overrides.Add(o);
+        }
+        return new LutrisGameConfig(
+            Prefix: game.Prefix,
+            Exe: game.Exe,
+            WineVersion: game.WineVersion ?? runnerVersion,
+            Env: runner.Env.SetItems(game.Env),
+            Overrides: [..overrides]);
+    }
+
+    /// <summary>
+    /// The runtime for <paramref name="config"/>: <c>system</c> is the <c>wine</c> on PATH; otherwise a Wine build
+    /// (<c>bin/wine</c>) or a Proton build (<c>proton</c>) named <c>wine.version</c> under <c>runners/wine/</c>,
+    /// <c>runners/proton/</c> or Steam's <c>compatibilitytools.d/</c> (next to the lutris data dir). Null, with a
+    /// warning, when nothing matches.
     /// </summary>
     public static WineRuntime? ResolveRuntime(LutrisGameConfig config, AbsolutePath lutrisDataDir, Action<string>? warn = null)
     {
         var version = config.WineVersion ?? DefaultRunner;
-        var runnerDir = lutrisDataDir.Combine("runners/wine").Combine(version);
-        if (runnerDir.Combine("bin/wine").FileExists)
-            return new WineRuntime.Wine(runnerDir, BuildEnvironment(config));
-        if (runnerDir.Combine("proton").FileExists)
-            return new WineRuntime.ProtonViaUmu(runnerDir, BuildEnvironment(config));
+        if (string.Equals(version, "system", StringComparison.OrdinalIgnoreCase))
+        {
+            var systemWine = FindOnPath("wine");
+            if (systemWine is { } wine) return new WineRuntime.Wine(wine.Parent.Parent, BuildEnvironment(config));
+            warn?.Invoke("El juego usa el wine del sistema en Lutris, pero no hay wine en el PATH");
+            return null;
+        }
 
-        warn?.Invoke(runnerDir.DirectoryExists()
-            ? $"El runner de Lutris {runnerDir} no tiene bin/wine ni proton; la app no sabe cómo usarlo"
-            : $"No existe el runner de Lutris {runnerDir} (wine.version = {config.WineVersion ?? "sin definir, default " + DefaultRunner})");
+        AbsolutePath[] roots = [lutrisDataDir.Combine("runners/wine"), lutrisDataDir.Combine("runners/proton"), lutrisDataDir.Parent.Combine("Steam/compatibilitytools.d")];
+        foreach (var runnerDir in roots.Select(r => r.Combine(version)))
+        {
+            if (runnerDir.Combine("bin/wine").FileExists) return new WineRuntime.Wine(runnerDir, BuildEnvironment(config));
+            if (runnerDir.Combine("proton").FileExists) return new WineRuntime.ProtonViaUmu(runnerDir, BuildEnvironment(config));
+        }
+
+        var existing = roots.Select(r => r.Combine(version)).FirstOrDefault(d => d.DirectoryExists());
+        warn?.Invoke(existing != default
+            ? $"El runner de Lutris {existing} no tiene bin/wine ni proton; la app no sabe cómo usarlo"
+            : $"No se encontró el runner de Lutris \"{version}\" (wine.version {(config.WineVersion is null ? "sin definir, default " + DefaultRunner : "del juego o del runner")}) en {string.Join(", ", roots)}");
+        return null;
+    }
+
+    /// <summary>First <paramref name="name"/> found in the directories of <c>PATH</c>, or null.</summary>
+    public static AbsolutePath? FindOnPath(string name)
+    {
+        var fs = FileSystem.Shared;
+        foreach (var dir in (Environment.GetEnvironmentVariable("PATH") ?? "").Split(':', StringSplitOptions.RemoveEmptyEntries))
+        {
+            AbsolutePath candidate;
+            try { candidate = fs.FromUnsanitizedFullPath(dir).Combine(name); }
+            catch (Exception) { continue; }
+            if (candidate.FileExists) return candidate;
+        }
         return null;
     }
 

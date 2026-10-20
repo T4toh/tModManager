@@ -13,7 +13,7 @@ public class ManualLinuxCompatabilityDataProviderTests
         "winmm"="builtin"
         """;
 
-    private static (ManualLinuxCompatabilityDataProvider Provider, AbsolutePath Lutris) Setup(bool withLutrisConfig)
+    private static (ManualLinuxCompatabilityDataProvider Provider, AbsolutePath Lutris) Setup(bool withLutrisConfig, string? gameVersion = "wine-ge-8-26-x86_64")
     {
         var tmp = FileSystem.Shared.GetKnownPath(KnownPath.TempDirectory).Combine($"manual-provider-{Guid.NewGuid():N}");
         var prefix = tmp.Combine("pfx");
@@ -35,7 +35,7 @@ public class ManualLinuxCompatabilityDataProviderTests
                 wine:
                   overrides:
                     winmm: n,b
-                  version: wine-ge-8-26-x86_64
+                {(gameVersion is null ? "" : $"  version: {gameVersion}")}
                 """);
         }
 
@@ -57,6 +57,30 @@ public class ManualLinuxCompatabilityDataProviderTests
     {
         var (provider, _) = Setup(withLutrisConfig: false);
         await Assert.That(provider.Runtime).IsNull();
+    }
+
+    [Test]
+    public async Task AnUnreadableLutrisDirIsNoRuntimeNotAnException()
+    {
+        var tmp = FileSystem.Shared.GetKnownPath(KnownPath.TempDirectory).Combine($"manual-provider-{Guid.NewGuid():N}");
+        tmp.CreateDirectory();
+        var lutrisIsAFile = tmp.Combine("lutris");
+        File.WriteAllText(lutrisIsAFile.ToString(), "not a directory");
+        File.WriteAllText(tmp.Combine("games").ToString(), "");   // so lutris/games cannot be enumerated either
+        var provider = new ManualLinuxCompatabilityDataProvider(tmp.Combine("pfx"), lutrisIsAFile, NullLogger.Instance);
+
+        await Assert.That(provider.Runtime).IsNull();
+        await Assert.That((await provider.GetWineDllOverrides(CancellationToken.None)).IsEmpty).IsTrue();
+    }
+
+    [Test]
+    public async Task RuntimeFollowsTheRunnerLevelDefault()
+    {
+        var (provider, lutris) = Setup(withLutrisConfig: true, gameVersion: null);
+        File.WriteAllText(lutris.Combine("runners/wine.yml").ToString(), "wine:\n  version: wine-ge-8-26-x86_64\n");
+
+        var wine = await Assert.That(provider.Runtime).IsTypeOf<WineRuntime.Wine>();
+        await Assert.That(wine!.RunnerDirectory).IsEqualTo(lutris.Combine("runners/wine/wine-ge-8-26-x86_64"));
     }
 
     [Test]

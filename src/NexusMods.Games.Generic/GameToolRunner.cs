@@ -1,3 +1,4 @@
+using System.Collections.Immutable;
 using CliWrap;
 using Microsoft.Extensions.Logging;
 using NexusMods.Abstractions.Games;
@@ -56,10 +57,10 @@ public sealed class GameToolRunner : IWineToolRunner
             WineRuntime.SteamProton steam => await ThroughProtontricks(steam, executable, arguments, workingDir),
             WineRuntime.Wine wine => Cli.Wrap(wine.RunnerDirectory.Combine("bin/wine").ToString())
                 .WithArguments([executable.ToString(), ..arguments], escape: true)
-                .WithEnvironmentVariables(wine.Environment.SetItem("WINEPREFIX", prefix)!),
+                .WithEnvironmentVariables(WithWineDefaults(wine.Environment).SetItem("WINEPREFIX", prefix)!),
             WineRuntime.ProtonViaUmu proton => Cli.Wrap(FindUmuRun().ToString())
                 .WithArguments([executable.ToString(), ..arguments], escape: true)
-                .WithEnvironmentVariables(proton.Environment
+                .WithEnvironmentVariables(WithWineDefaults(proton.Environment)
                     .SetItem("WINEPREFIX", prefix)
                     .SetItem("PROTONPATH", proton.ProtonDirectory.ToString())
                     .SetItem("GAMEID", "umu-default")!),
@@ -80,16 +81,15 @@ public sealed class GameToolRunner : IWineToolRunner
         return await _protontricks.MakeLaunchCommand(inner, steam.AppId);
     }
 
+    /// <summary>Like Lutris: <c>WINEDEBUG=-all</c> unless the config sets it, or a whole play session of <c>fixme:</c> lines lands in ProcessLogs.</summary>
+    private static ImmutableDictionary<string, string> WithWineDefaults(ImmutableDictionary<string, string> env) =>
+        env.ContainsKey("WINEDEBUG") ? env : env.SetItem("WINEDEBUG", "-all");
+
     /// <summary><c>umu-run</c> from PATH, else the copy Lutris ships (<c>$XDG_DATA_HOME/lutris/runtime/umu/umu-run</c>).</summary>
     private static AbsolutePath FindUmuRun()
     {
-        var fs = FileSystem.Shared;
-        foreach (var dir in (Environment.GetEnvironmentVariable("PATH") ?? "").Split(':', StringSplitOptions.RemoveEmptyEntries))
-        {
-            var candidate = fs.FromUnsanitizedFullPath(dir).Combine("umu-run");
-            if (candidate.FileExists) return candidate;
-        }
-        var fromLutris = LutrisConfigReader.DefaultDataDirectory(fs).Combine("runtime/umu/umu-run");
+        if (LutrisConfigReader.FindOnPath("umu-run") is { } fromPath) return fromPath;
+        var fromLutris = LutrisConfigReader.DefaultDataDirectory(FileSystem.Shared).Combine("runtime/umu/umu-run");
         if (fromLutris.FileExists) return fromLutris;
         throw new WineRuntimeUnavailableException("No se encontró umu-run (ni en el PATH ni en el runtime de Lutris); hace falta para un runner de Proton fuera de Steam");
     }

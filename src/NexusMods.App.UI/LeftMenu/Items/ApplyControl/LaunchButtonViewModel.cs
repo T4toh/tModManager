@@ -87,6 +87,11 @@ public class LaunchButtonViewModel : AViewModel<ILaunchButtonViewModel>, ILaunch
         {
             await MessageBoxOkViewModel.ShowGameAlreadyRunningError(_serviceProvider, marker.Installation.Name);
         }
+        catch (WineRuntimeUnavailableException ex)
+        {
+            // A manually added game without a known Wine runtime: say so instead of a Play that does nothing
+            await MessageBoxOkViewModel.Show(_serviceProvider, "No se puede lanzar el juego", ex.Message);
+        }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error launching game");

@@ -94,10 +94,7 @@ public class RunGameTool<T> : IRunGameTool
             // natively on Linux cannot work, so without a runtime nothing is launched and the log says why.
             var runtime = locatorResult.LinuxCompatabilityDataProvider?.Runtime;
             if (_wineRunner is null || runtime is null)
-            {
-                _logger.LogError("No se puede lanzar {Game}: la instalación no tiene un entorno de Wine conocido (prefix configurado en Lutris)", _game.DisplayName);
-                return;
-            }
+                throw new WineRuntimeUnavailableException($"No se puede lanzar {_game.DisplayName}: la instalación no tiene un entorno de Wine conocido. Agregá el juego en Lutris con ese prefix (o revisá su runner) y volvé a intentar.");
             var result = await _wineRunner.RunAsync(loadout.InstallationInstance, program, commandLineArgs, program.Parent, logOutput: true, cancellationToken);
             if (result.ExitCode != 0)
                 _logger.LogWarning("{Game} terminó con código {ExitCode}", _game.DisplayName, result.ExitCode);

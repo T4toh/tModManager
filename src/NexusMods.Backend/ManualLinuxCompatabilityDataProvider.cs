@@ -11,6 +11,7 @@ public class ManualLinuxCompatabilityDataProvider : ILinuxCompatabilityDataProvi
     private readonly AbsolutePath _winePrefix;
     private readonly AbsolutePath _lutrisDataDir;
     private readonly ILogger _logger;
+    private readonly Lazy<LutrisGameConfig?> _lutrisConfig;
     private readonly Lazy<WineRuntime?> _runtime;
 
     public AbsolutePath WinePrefixDirectoryPath => _winePrefix;
@@ -24,21 +25,43 @@ public class ManualLinuxCompatabilityDataProvider : ILinuxCompatabilityDataProvi
         _winePrefix = winePrefix;
         _lutrisDataDir = lutrisDataDir;
         _logger = logger;
+        _lutrisConfig = new Lazy<LutrisGameConfig?>(ReadLutrisConfig);
         _runtime = new Lazy<WineRuntime?>(ResolveRuntime);
+    }
+
+    /// <summary>The game's Lutris config merged over the runner's, read once; null (never an exception) when there is none or it cannot be read.</summary>
+    private LutrisGameConfig? ReadLutrisConfig()
+    {
+        try
+        {
+            var game = LutrisConfigReader.FindByPrefix(_lutrisDataDir, _winePrefix, Warn);
+            if (game is null)
+            {
+                _logger.LogWarning("No hay configuración de Lutris para el prefix {Prefix}; la app no sabe cómo correr ejecutables ahí", _winePrefix);
+                return null;
+            }
+            return LutrisConfigReader.Merge(LutrisConfigReader.ReadRunnerConfig(_lutrisDataDir), game);
+        }
+        catch (Exception e)
+        {
+            _logger.LogWarning(e, "No se pudo leer la configuración de Lutris en {Dir}", _lutrisDataDir);
+            return null;
+        }
     }
 
     private WineRuntime? ResolveRuntime()
     {
-        var config = LutrisConfigReader.FindByPrefix(_lutrisDataDir, _winePrefix);
-        if (config is null)
+        var config = _lutrisConfig.Value;
+        if (config is null) return null;
+        try { return LutrisConfigReader.ResolveRuntime(config, _lutrisDataDir, Warn); }
+        catch (Exception e)
         {
-            _logger.LogWarning("No hay configuración de Lutris para el prefix {Prefix}; la app no sabe cómo correr ejecutables ahí", _winePrefix);
+            _logger.LogWarning(e, "No se pudo resolver el runner de Lutris para el prefix {Prefix}", _winePrefix);
             return null;
         }
-        return LutrisConfigReader.ResolveRuntime(config, _lutrisDataDir, message => _logger.LogWarning("{Message}", message));
     }
 
-    private LutrisGameConfig? LutrisConfig => LutrisConfigReader.FindByPrefix(_lutrisDataDir, _winePrefix);
+    private void Warn(string message) => _logger.LogWarning("{Message}", message);
 
     public async ValueTask<ImmutableHashSet<string>> GetInstalledWinetricksComponents(CancellationToken cancellationToken = default)
     {
@@ -71,7 +94,7 @@ public class ManualLinuxCompatabilityDataProvider : ILinuxCompatabilityDataProvi
         // The registry (winecfg/regedit; vcrun2022 fills it with *msvcp140 etc.) plus what Lutris passes as
         // WINEDLLOVERRIDES from its YAML. Lutris wins per DLL: its value is the one the game actually runs with.
         var result = (await GetWineDllOverridesFromRegistry(cancellationToken)).ToList();
-        foreach (var fromLutris in LutrisConfig?.Overrides ?? [])
+        foreach (var fromLutris in _lutrisConfig.Value?.Overrides ?? [])
         {
             result.RemoveAll(o => string.Equals(o.DllName, fromLutris.DllName, StringComparison.OrdinalIgnoreCase));
             result.Add(fromLutris);
