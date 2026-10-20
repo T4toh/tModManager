@@ -156,12 +156,15 @@ public static class WineParser
     }
 
     /// <summary>
-    /// Parses the DLL overrides out of a registry string (e.g. `user.reg`).
+    /// Parses the DLL overrides out of a registry string (e.g. `user.reg`). Wine writes the key with doubled backslashes
+    /// (<c>[Software\\Wine\\DllOverrides]</c>) and word-form values (<c>"native"</c>, <c>"native,builtin"</c>, <c>""</c>).
     /// </summary>
     public static ImmutableArray<WineDllOverride> ParseDllOverridesFromRegistry(string content)
     {
-        const string sectionHeader = "[Software\\Wine\\DllOverrides]";
-        var sectionStart = content.IndexOf(sectionHeader, StringComparison.OrdinalIgnoreCase);
+        const string doubledHeader = "[Software\\\\Wine\\\\DllOverrides]";
+        const string singleHeader = "[Software\\Wine\\DllOverrides]";
+        var sectionStart = content.IndexOf(doubledHeader, StringComparison.OrdinalIgnoreCase);
+        if (sectionStart == -1) sectionStart = content.IndexOf(singleHeader, StringComparison.OrdinalIgnoreCase);
         if (sectionStart == -1) return [];
 
         var results = new List<WineDllOverride>();
@@ -174,17 +177,29 @@ public static class WineParser
             var line = content.AsSpan(sectionStart)[lineRange].Trim();
             if (line.Length == 0) continue;
             if (line.StartsWith("[")) break; // Start of next section
+            if (line.StartsWith("#") || line.StartsWith(";")) continue; // #time=..., comments
 
             var eqIndex = line.IndexOf('=');
             if (eqIndex == -1) continue;
 
-            var key = line[..eqIndex].Trim('"').ToString();
-            var value = line[(eqIndex + 1)..].Trim('"');
-
-            var dllOverrideTypes = GetOverrideTypes(value);
-            results.Add(new WineDllOverride(key, dllOverrideTypes));
+            var key = line[..eqIndex].Trim().Trim('"').ToString();
+            var value = line[(eqIndex + 1)..].Trim().Trim('"');
+            results.Add(new WineDllOverride(key, ParseRegistryTypes(value)));
         }
 
         return [..results];
+    }
+
+    private static ImmutableArray<WineDllOverrideType> ParseRegistryTypes(ReadOnlySpan<char> value)
+    {
+        if (value.IsEmpty) return WineDllOverride.Disabled;
+        var types = new List<WineDllOverrideType>(2);
+        foreach (var range in value.Split(','))
+        {
+            var type = value[range].Trim();
+            if (type.Equals("native", StringComparison.OrdinalIgnoreCase) || type.Equals("n", StringComparison.OrdinalIgnoreCase)) types.Add(WineDllOverrideType.Native);
+            else if (type.Equals("builtin", StringComparison.OrdinalIgnoreCase) || type.Equals("b", StringComparison.OrdinalIgnoreCase)) types.Add(WineDllOverrideType.BuiltIn);
+        }
+        return types.Count == 0 ? WineDllOverride.Disabled : [..types];
     }
 }
