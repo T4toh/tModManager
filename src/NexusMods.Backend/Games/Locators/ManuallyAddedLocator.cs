@@ -4,6 +4,7 @@ using JetBrains.Annotations;
 using Microsoft.Extensions.DependencyInjection;
 using NexusMods.MnemonicDB.Abstractions;
 using NexusMods.Paths;
+using NexusMods.Sdk;
 using NexusMods.Sdk.Games;
 using NexusMods.Sdk.NexusModsApi;
 
@@ -42,7 +43,7 @@ internal class ManuallyAddedLocator : IGameLocator
                 // Declared by the stored path even when the folder is gone (deleted by hand, Lutris not launched yet),
                 // like SteamLocator: the DB keeps WinePrefix paths and every sync needs the location
                 var winePrefixPath = _fileSystem.FromUnsanitizedFullPath(entity.WinePrefix);
-                linuxCompatProvider = new ManualLinuxCompatabilityDataProvider(winePrefixPath, _serviceProvider.GetRequiredService<Microsoft.Extensions.Logging.ILogger<ManualLinuxCompatabilityDataProvider>>());
+                linuxCompatProvider = new ManualLinuxCompatabilityDataProvider(winePrefixPath, LutrisConfigReader.DefaultDataDirectory(_fileSystem), _serviceProvider.GetRequiredService<Microsoft.Extensions.Logging.ILogger<ManualLinuxCompatabilityDataProvider>>());
             }
 
             yield return new GameLocatorResult

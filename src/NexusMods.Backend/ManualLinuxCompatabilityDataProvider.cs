@@ -9,17 +9,36 @@ namespace NexusMods.Backend;
 public class ManualLinuxCompatabilityDataProvider : ILinuxCompatabilityDataProvider
 {
     private readonly AbsolutePath _winePrefix;
+    private readonly AbsolutePath _lutrisDataDir;
     private readonly ILogger _logger;
+    private readonly Lazy<WineRuntime?> _runtime;
 
     public AbsolutePath WinePrefixDirectoryPath => _winePrefix;
 
-    public WineRuntime? Runtime => null;
+    /// <summary>Resolved from the Lutris game config for this prefix the first time it is asked for; null when there is none.</summary>
+    public WineRuntime? Runtime => _runtime.Value;
 
-    public ManualLinuxCompatabilityDataProvider(AbsolutePath winePrefix, ILogger logger)
+    /// <param name="lutrisDataDir">Lutris data dir (<c>$XDG_DATA_HOME/lutris</c>); see <see cref="LutrisConfigReader.DefaultDataDirectory"/>.</param>
+    public ManualLinuxCompatabilityDataProvider(AbsolutePath winePrefix, AbsolutePath lutrisDataDir, ILogger logger)
     {
         _winePrefix = winePrefix;
+        _lutrisDataDir = lutrisDataDir;
         _logger = logger;
+        _runtime = new Lazy<WineRuntime?>(ResolveRuntime);
     }
+
+    private WineRuntime? ResolveRuntime()
+    {
+        var config = LutrisConfigReader.FindByPrefix(_lutrisDataDir, _winePrefix);
+        if (config is null)
+        {
+            _logger.LogWarning("No hay configuración de Lutris para el prefix {Prefix}; la app no sabe cómo correr ejecutables ahí", _winePrefix);
+            return null;
+        }
+        return LutrisConfigReader.ResolveRuntime(config, _lutrisDataDir, message => _logger.LogWarning("{Message}", message));
+    }
+
+    private LutrisGameConfig? LutrisConfig => LutrisConfigReader.FindByPrefix(_lutrisDataDir, _winePrefix);
 
     public async ValueTask<ImmutableHashSet<string>> GetInstalledWinetricksComponents(CancellationToken cancellationToken = default)
     {
@@ -49,14 +68,15 @@ public class ManualLinuxCompatabilityDataProvider : ILinuxCompatabilityDataProvi
 
     public async ValueTask<ImmutableArray<WineDllOverride>> GetWineDllOverrides(CancellationToken cancellationToken = default)
     {
-        // First, check the wine registry (set via winecfg or regedit)
-        var fromRegistry = await GetWineDllOverridesFromRegistry(cancellationToken);
-        if (!fromRegistry.IsEmpty) return fromRegistry;
-
-        // Fall back to Lutris game config YAMLs — Lutris sets WINEDLLOVERRIDES as an environment variable,
-        // not in the registry, so the registry check above returns nothing for Lutris-managed games.
-        var fromLutris = WineParser.ParseDllOverridesFromLutrisConfigs(_winePrefix.ToString());
-        return fromLutris;
+        // The registry (winecfg/regedit; vcrun2022 fills it with *msvcp140 etc.) plus what Lutris passes as
+        // WINEDLLOVERRIDES from its YAML. Lutris wins per DLL: its value is the one the game actually runs with.
+        var result = (await GetWineDllOverridesFromRegistry(cancellationToken)).ToList();
+        foreach (var fromLutris in LutrisConfig?.Overrides ?? [])
+        {
+            result.RemoveAll(o => string.Equals(o.DllName, fromLutris.DllName, StringComparison.OrdinalIgnoreCase));
+            result.Add(fromLutris);
+        }
+        return [..result];
     }
 
     private async ValueTask<ImmutableArray<WineDllOverride>> GetWineDllOverridesFromRegistry(CancellationToken cancellationToken)
