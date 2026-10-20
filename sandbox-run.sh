@@ -6,6 +6,9 @@
 #
 #   ./sandbox-run.sh           launch the Release build inside the jail
 #   ./sandbox-run.sh --check   prove the jail: kept paths writable, everything else not (exit 1 otherwise)
+#   SANDBOX_EXTRA_RW=/ruta/copia:/ruta/pfx:$HOME/.local/share/umu ./sandbox-run.sh
+#                              extra writable paths (colon-separated, created if missing): a reflink copy of the
+#                              game, a Lutris prefix, umu's runtime download. --check probes them too.
 #
 # Steam stays outside: launching the game from the app does not work in here. protontricks does (REDmod deploy,
 # "Instalar" in the Wine prefix panel): its cache and the Steam Linux Runtime dirs are writable, see below.
@@ -34,6 +37,15 @@ args=(--ro-bind / / --dev-bind /dev /dev --proc /proc --bind /tmp /tmp
 mkdir -p "$HOME/.cache/protontricks"
 args+=(--bind "$HOME/.cache/protontricks" "$HOME/.cache/protontricks")
 KEEP+=("$HOME/.cache/protontricks")   # only so --check probes it
+# Extra writable paths for a test (manual install with a Lutris prefix). Under ~/.local they are already writable
+# through the $L bind and only need to be kept out of protect(); anywhere else they need their own bind.
+IFS=: read -ra EXTRA_RW <<< "${SANDBOX_EXTRA_RW:-}"
+for p in "${EXTRA_RW[@]}"; do
+  [[ -n $p ]] || continue
+  mkdir -p "$p"
+  KEEP+=("$p")
+  [[ $p == "$L"/* ]] || args+=(--bind "$p" "$p")
+done
 protect() {
   local c
   shopt -s nullglob dotglob
