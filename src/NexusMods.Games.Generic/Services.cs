@@ -1,4 +1,5 @@
 using Microsoft.Extensions.DependencyInjection;
+using NexusMods.Abstractions.Games;
 using NexusMods.Games.Generic.Dependencies;
 using NexusMods.Games.Generic.FileAnalyzers;
 using NexusMods.Paths;
@@ -12,6 +13,7 @@ public static class Services
     {
         services.AddSingleton<IniAnalysisData>();
         services.AddSingleton<GameToolRunner>();
+        services.AddSingleton<IWineToolRunner>(provider => provider.GetRequiredService<GameToolRunner>());
 
         if (OSInformation.Shared.IsLinux)
         {
@@ -19,6 +21,7 @@ public static class Services
             services.AddSingleton<ProtontricksFlatpakDependency>();
             services.AddSingleton<AggregateProtontricksDependency>();
             services.AddSingleton<IRuntimeDependency, AggregateProtontricksDependency>();
+            services.AddSingleton<IProtontricksDependency>(provider => provider.GetRequiredService<AggregateProtontricksDependency>());
         }
 
         return services;
