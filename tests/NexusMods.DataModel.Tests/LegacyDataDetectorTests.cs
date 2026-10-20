@@ -432,6 +432,7 @@ public class LegacyDownloadsMoveTests(ITestOutputHelper helper) : ACyberpunkIsol
     private class PrefixAt(AbsolutePath winePrefix) : ILinuxCompatabilityDataProvider
     {
         public AbsolutePath WinePrefixDirectoryPath => winePrefix;
+        public WineRuntime? Runtime => null;
         public ValueTask<ImmutableArray<WineDllOverride>> GetWineDllOverrides(CancellationToken cancellationToken) => ValueTask.FromResult(ImmutableArray<WineDllOverride>.Empty);
         public ValueTask<ImmutableHashSet<string>> GetInstalledWinetricksComponents(CancellationToken cancellationToken) => ValueTask.FromResult(ImmutableHashSet<string>.Empty);
     }

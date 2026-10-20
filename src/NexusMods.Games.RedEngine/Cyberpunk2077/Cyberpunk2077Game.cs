@@ -125,12 +125,15 @@ public class Cyberpunk2077Game : IGame, IGameData<Cyberpunk2077Game>, IDisposabl
 
     /// <summary>
     /// Proton runs every game as <c>steamuser</c>; a Wine/Lutris prefix uses the real user name. Before the first
-    /// launch neither folder exists and the Proton name is assumed.
+    /// launch neither folder exists and the Proton name is assumed. GE-Proton through umu on a Lutris prefix makes
+    /// <c>steamuser</c> a symlink to the real user: the real folder wins, because a path under a symlink is one the
+    /// synchronizer refuses to manage.
     /// </summary>
     private static string WineUserName(AbsolutePath prefix)
     {
         var users = prefix.Combine("drive_c/users");
-        if (users.Combine("steamuser").DirectoryExists()) return "steamuser";
+        var steamuser = users.Combine("steamuser");
+        if (steamuser.DirectoryExists() && !SafePath.IsSymlink(steamuser)) return "steamuser";
         var current = Environment.UserName;
         return users.Combine(current).DirectoryExists() ? current : "steamuser";
     }

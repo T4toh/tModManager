@@ -1,9 +1,7 @@
-using System.Reflection;
-using CliWrap;
 using Microsoft.Extensions.Logging;
+using NexusMods.Abstractions.Games;
 using NexusMods.Abstractions.Loadouts;
-using NexusMods.Games.Generic;
-using NexusMods.Paths;
+using NexusMods.Sdk;
 using NexusMods.Sdk.Games;
 using NexusMods.Sdk.Jobs;
 using NexusMods.Sdk.Loadouts;
@@ -12,38 +10,43 @@ using static NexusMods.Games.RedEngine.Constants;
 
 namespace NexusMods.Games.RedEngine;
 
+/// <summary>
+/// Runs <c>redMod.exe deploy</c> in the installation's Wine runtime (<see cref="IWineToolRunner"/>) after the apply
+/// wrote <c>modlist.txt</c>. Without a runtime there is nothing to deploy with and the apply goes on; with one, a
+/// failed deploy fails the apply on purpose (otherwise the game runs with REDmods that were never deployed).
+/// </summary>
 public class RedModDeployTool : ITool
 {
-    private readonly GameToolRunner _toolRunner;
-    private readonly TemporaryFileManager _temporaryFileManager;
+    private readonly IWineToolRunner _runner;
     private readonly ILogger _logger;
 
-    public RedModDeployTool(GameToolRunner toolRunner, TemporaryFileManager temporaryFileManager, ILogger<RedModDeployTool> logger)
+    public RedModDeployTool(IWineToolRunner runner, ILogger<RedModDeployTool> logger)
     {
+        _runner = runner;
         _logger = logger;
-        _toolRunner = toolRunner;
-        _temporaryFileManager = temporaryFileManager;
     }
     
     public IEnumerable<GameId> GameIds => [Cyberpunk2077.Cyberpunk2077Game.GameId];
 
     public async Task Execute(Loadout.ReadOnly loadout, CancellationToken cancellationToken)
     {
-        var deployFolder = loadout.InstallationInstance.Locations.ToAbsolutePath(RedModDeployFolder);
+        var installation = loadout.InstallationInstance;
+        var deployFolder = installation.Locations.ToAbsolutePath(RedModDeployFolder);
 
-        if (loadout.Installation.Store != GameStore.Steam)
+        var provider = installation.LocatorResult.LinuxCompatabilityDataProvider;
+        if (provider?.Runtime is null)
         {
-            _logger.LogWarning("Skip running redmod, it's only supported for Steam on Linux at the moment");
+            _logger.LogWarning("Esta instalación no tiene un entorno de Wine conocido (Steam con protontricks, o un prefix de Lutris); no se corre el deploy de REDmod");
             return;
         }
         // The apply wrote the load order (RedModSortOrderVariety as ISortOrderFile) before this tool runs.
         // No file means no prefix, or the file is a symlink the app refuses to write: nothing to deploy with.
-        if (!loadout.InstallationInstance.Locations.TryGetValue(RedModListPath.LocationId, out _))
+        if (!installation.Locations.TryGetValue(RedModListPath.LocationId, out _))
         {
             _logger.LogWarning("Sin prefix de Wine no hay {Path}; no se corre el deploy de REDmod", RedModListPath);
             return;
         }
-        var modList = loadout.InstallationInstance.Locations.ToAbsolutePath(RedModListPath);
+        var modList = installation.Locations.ToAbsolutePath(RedModListPath);
         if (!modList.FileExists)
         {
             _logger.LogWarning("No existe {Path}; no se corre el deploy de REDmod", modList);
@@ -58,9 +61,11 @@ public class RedModDeployTool : ITool
         // Note (halgari): When we change the redmod order, we need to force redmod to re-run. This is due to a bug in redmod
         // not recognizing order as a change in the mod configuration. If that bug ever gets fixed (does an order check) then
         // we can resolve this by removing the -force flag.
-        await using var batchPath = await ExtractTemporaryDeployScript();
-        var command = Cli.Wrap(batchPath.ToString()).WithArguments(["deploy", "-force", "-modlist=C:\\modlist.txt"], escape: true);
-        await _toolRunner.ExecuteAsync(loadout, command, true, cancellationToken);
+        var exe = installation.Locations.ToAbsolutePath(RedModPath);
+        var modListForWindows = WinePaths.ToWindowsPath(modList, provider.WinePrefixDirectoryPath);
+        var result = await _runner.RunAsync(installation, exe, ["deploy", "-force", $"-modlist={modListForWindows}"], cancellationToken: cancellationToken);
+        if (result.ExitCode != 0)
+            throw new InvalidOperationException($"El deploy de REDmod terminó con código {result.ExitCode}; revisá Logs/ProcessLogs");
     }
 
     public string Name => "RedMod Deploy";
@@ -72,20 +77,5 @@ public class RedModDeployTool : ITool
             await Execute(loadout, cancellationToken);
             return Unit.Default;
         });
-    }
-
-    private async Task<TemporaryPath> ExtractTemporaryDeployScript()
-    {
-        var assembly = Assembly.GetExecutingAssembly();
-        var resourceName = "deploy_redmod.bat";
-
-        await using var stream = assembly.GetManifestResourceStream(resourceName);
-        if (stream == null)
-            throw new InvalidOperationException($"Resource {resourceName} not found in assembly.");
-
-        using var reader = new StreamReader(stream);
-        var file = _temporaryFileManager.CreateFile((Extension?)".bat");
-        await file.Path.WriteAllTextAsync(await reader.ReadToEndAsync());
-        return file;
     }
 }

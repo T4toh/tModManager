@@ -92,7 +92,7 @@ These are custom features not present in upstream:
 
 7. **App isolation**: Custom app ID, independent data directory, independent NXM protocol handler. Downloads: `tModManager/Downloads` (`DownloadsSettings`), own folder, no longer shared with the official app.
 
-8. **Wine/Lutris support** (`WineParser.cs`, `WinePrefixRequirementsEmitter.cs`): Parses Lutris YAML configs, detects DLL overrides, reads winetricks.log.
+8. **Wine/Lutris support** (`WineParser.cs`, `LutrisConfigReader.cs`, `WinePrefixRequirementsEmitter.cs`): Parses Lutris YAML configs (prefix, runner, env, DLL overrides), reads `user.reg` and winetricks.log. Each installation carries a `WineRuntime` (`ILinuxCompatabilityDataProvider.Runtime`, resolved by the locator: Steam → `SteamProton(appId)`; manual → the Lutris game whose `game.prefix` matches, merged over `runners/wine.yml` like Lutris does, `Wine` for a wine build or `ProtonViaUmu` for a Proton build found under `runners/wine|proton` or Steam's `compatibilitytools.d`, `null` when unknown). `IWineToolRunner` (`GameToolRunner`, `Games.Generic`) runs any exe in that runtime (`protontricks-launch`, Lutris `bin/wine`, or `umu-run`); `RedModDeployTool` and the manual-install "play" use it. The runner never validates exit codes; callers do.
 
 9. **Manual game locator** (`ManuallyAddedLocator.cs`): User can specify game path and Wine prefix manually.
 

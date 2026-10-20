@@ -119,127 +119,19 @@ public static class WineParser
     }
 
     /// <summary>
-    /// Attempts to find and parse WINEDLLOVERRIDES from Lutris game configuration YAML files.
-    /// Lutris stores DLL overrides under <c>wine.overrides</c> in its YAML, not in the wine registry,
-    /// so <see cref="ParseDllOverridesFromRegistry"/> returns nothing for Lutris-managed games.
+    /// DLL overrides of the Lutris game whose <c>game.prefix</c> is <paramref name="winePrefixPath"/>. Lutris keeps them
+    /// in its YAML (<c>wine.overrides</c> / <c>system.env.WINEDLLOVERRIDES</c>), not in the prefix registry.
     /// </summary>
-    /// <param name="winePrefixPath">The wine prefix path to match against (<c>game.prefix</c> in the Lutris YAML).</param>
     public static ImmutableArray<WineDllOverride> ParseDllOverridesFromLutrisConfigs(string winePrefixPath)
     {
-        // Lutris stores game configs under XDG_DATA_HOME (not XDG_CONFIG_HOME)
-        var xdgData = Environment.GetEnvironmentVariable("XDG_DATA_HOME")
-            ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".local", "share");
-        var lutrisGamesDir = Path.Combine(xdgData, "lutris", "games");
-
-        if (!Directory.Exists(lutrisGamesDir)) return [];
-
-        foreach (var ymlFile in Directory.EnumerateFiles(lutrisGamesDir, "*.yml", SearchOption.TopDirectoryOnly))
-        {
-            try
-            {
-                var content = File.ReadAllText(ymlFile);
-
-                // The wine prefix is stored as 'prefix: /path' under the 'game:' section.
-                // A simple string-contains is enough to identify the matching config.
-                if (!content.Contains(winePrefixPath, StringComparison.OrdinalIgnoreCase)) continue;
-
-                var result = ParseDllOverridesFromLutrisYaml(content);
-                if (!result.IsEmpty) return result;
-            }
-            catch
-            {
-                // ignore parse errors for individual config files
-            }
-        }
-
-        return [];
+        var fs = FileSystem.Shared;
+        return LutrisConfigReader.FindByPrefix(LutrisConfigReader.DefaultDataDirectory(fs), fs.FromUnsanitizedFullPath(winePrefixPath))?.Overrides ?? [];
     }
+
+    /// <summary>DLL overrides declared in a Lutris game YAML (see <see cref="LutrisConfigReader.Parse"/>).</summary>
+    public static ImmutableArray<WineDllOverride> ParseDllOverridesFromLutrisYaml(string yamlContent) => LutrisConfigReader.Parse(yamlContent).Overrides;
 
     /// <summary>
-    /// Parses DLL overrides from a Lutris game YAML config string.
-    /// Handles two locations:
-    /// <list type="number">
-    ///   <item><c>wine.overrides</c> — set via Runner options → DLL overrides UI (e.g. <c>winmm: n,b</c>)</item>
-    ///   <item><c>system.env.WINEDLLOVERRIDES</c> — set via System options → Environment variables</item>
-    /// </list>
-    /// </summary>
-    public static ImmutableArray<WineDllOverride> ParseDllOverridesFromLutrisYaml(string yamlContent)
-    {
-        // --- Method 1: wine.overrides section (Lutris DLL overrides UI) ---
-        // Expected YAML shape:
-        //   wine:
-        //     overrides:
-        //       winmm: n,b
-        //       version: n,b
-        var fromWineOverrides = ParseLutrisWineOverridesSection(yamlContent);
-        if (!fromWineOverrides.IsEmpty) return fromWineOverrides;
-
-        // --- Method 2: WINEDLLOVERRIDES env var in system.env section ---
-        // Expected YAML shape:
-        //   system:
-        //     env:
-        //       WINEDLLOVERRIDES: "winmm=n,b;version=n,b"
-        foreach (var lineRange in yamlContent.AsSpan().Split('\n'))
-        {
-            var trimmed = yamlContent.AsSpan()[lineRange].Trim();
-            if (!trimmed.StartsWith("WINEDLLOVERRIDES:", StringComparison.OrdinalIgnoreCase)) continue;
-
-            var value = trimmed["WINEDLLOVERRIDES:".Length..].Trim();
-            if (value.Length >= 2 && value[0] == '"' && value[^1] == '"') value = value[1..^1];
-            else if (value.Length >= 2 && value[0] == '\'' && value[^1] == '\'') value = value[1..^1];
-
-            var result = ParseEnvironmentVariable(value);
-            if (!result.IsEmpty) return result;
-        }
-
-        return [];
-    }
-
-    // Parses the 'wine.overrides' YAML section.
-    // Each entry is '    dllname: n,b' (2-space indent relative to 'overrides:').
-    private static ImmutableArray<WineDllOverride> ParseLutrisWineOverridesSection(string yamlContent)
-    {
-        // Find 'wine:' section, then 'overrides:' within it
-        var wineIdx = yamlContent.IndexOf("\nwine:", StringComparison.OrdinalIgnoreCase);
-        if (wineIdx == -1) return [];
-
-        var overridesIdx = yamlContent.IndexOf("overrides:", wineIdx, StringComparison.OrdinalIgnoreCase);
-        if (overridesIdx == -1) return [];
-
-        var results = new List<WineDllOverride>();
-
-        foreach (var lineRange in yamlContent.AsSpan(overridesIdx).Split('\n'))
-        {
-            var line = yamlContent.AsSpan(overridesIdx)[lineRange];
-            if (line.IsEmpty) continue;
-
-            // Stop when we hit a line that is not deeper-indented (new top-level key)
-            var trimmed = line.TrimStart();
-            if (trimmed.IsEmpty) continue;
-            var indent = line.Length - trimmed.Length;
-            if (indent == 0 && results.Count > 0) break; // back to root level
-
-            // Skip the 'overrides:' header line itself
-            if (trimmed.StartsWith("overrides:", StringComparison.OrdinalIgnoreCase)) continue;
-
-            // Each override entry: '    dllname: types'  where types = 'n,b' or 'native,builtin'
-            var colonIdx = trimmed.IndexOf(':');
-            if (colonIdx == -1) continue;
-
-            var dllName = trimmed[..colonIdx].Trim().ToString();
-            var typesSpan = trimmed[(colonIdx + 1)..].Trim();
-
-            // Reuse ParseEnvironmentVariable by constructing 'dllname=types'
-            var fakeEnvEntry = string.Concat(dllName, "=", typesSpan);
-
-            var parsed = ParseEnvironmentVariable(fakeEnvEntry);
-            results.AddRange(parsed);
-        }
-
-        return [..results];
-    }
-
-/// <summary>
     /// Gets the DLL overrides section.
     /// </summary>
     public static ReadOnlySpan<char> GetWineDllOverridesSection(ReadOnlySpan<char> input)
@@ -264,12 +156,15 @@ public static class WineParser
     }
 
     /// <summary>
-    /// Parses the DLL overrides out of a registry string (e.g. `user.reg`).
+    /// Parses the DLL overrides out of a registry string (e.g. `user.reg`). Wine writes the key with doubled backslashes
+    /// (<c>[Software\\Wine\\DllOverrides]</c>) and word-form values (<c>"native"</c>, <c>"native,builtin"</c>, <c>""</c>).
     /// </summary>
     public static ImmutableArray<WineDllOverride> ParseDllOverridesFromRegistry(string content)
     {
-        const string sectionHeader = "[Software\\Wine\\DllOverrides]";
-        var sectionStart = content.IndexOf(sectionHeader, StringComparison.OrdinalIgnoreCase);
+        const string doubledHeader = "[Software\\\\Wine\\\\DllOverrides]";
+        const string singleHeader = "[Software\\Wine\\DllOverrides]";
+        var sectionStart = content.IndexOf(doubledHeader, StringComparison.OrdinalIgnoreCase);
+        if (sectionStart == -1) sectionStart = content.IndexOf(singleHeader, StringComparison.OrdinalIgnoreCase);
         if (sectionStart == -1) return [];
 
         var results = new List<WineDllOverride>();
@@ -282,17 +177,29 @@ public static class WineParser
             var line = content.AsSpan(sectionStart)[lineRange].Trim();
             if (line.Length == 0) continue;
             if (line.StartsWith("[")) break; // Start of next section
+            if (line.StartsWith("#") || line.StartsWith(";")) continue; // #time=..., comments
 
             var eqIndex = line.IndexOf('=');
             if (eqIndex == -1) continue;
 
-            var key = line[..eqIndex].Trim('"').ToString();
-            var value = line[(eqIndex + 1)..].Trim('"');
-
-            var dllOverrideTypes = GetOverrideTypes(value);
-            results.Add(new WineDllOverride(key, dllOverrideTypes));
+            var key = line[..eqIndex].Trim().Trim('"').ToString();
+            var value = line[(eqIndex + 1)..].Trim().Trim('"');
+            results.Add(new WineDllOverride(key, ParseRegistryTypes(value)));
         }
 
         return [..results];
+    }
+
+    private static ImmutableArray<WineDllOverrideType> ParseRegistryTypes(ReadOnlySpan<char> value)
+    {
+        if (value.IsEmpty) return WineDllOverride.Disabled;
+        var types = new List<WineDllOverrideType>(2);
+        foreach (var range in value.Split(','))
+        {
+            var type = value[range].Trim();
+            if (type.Equals("native", StringComparison.OrdinalIgnoreCase) || type.Equals("n", StringComparison.OrdinalIgnoreCase)) types.Add(WineDllOverrideType.Native);
+            else if (type.Equals("builtin", StringComparison.OrdinalIgnoreCase) || type.Equals("b", StringComparison.OrdinalIgnoreCase)) types.Add(WineDllOverrideType.BuiltIn);
+        }
+        return types.Count == 0 ? WineDllOverride.Disabled : [..types];
     }
 }
