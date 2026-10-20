@@ -1,6 +1,6 @@
 # Runner de herramientas Windows en el prefix (pieza 7)
 
-Fecha: 2026-10-19 · Estado: implementado en la rama `feat/prefix-tool-runner` (2026-10-19), tests verdes en Linux; pendiente de prueba con el juego (ver "Para probar en Linux" en TODO.md)
+Fecha: 2026-10-19 · Estado: implementado en la PR #98 (2026-10-19), tests verdes en Linux; pendiente de prueba con el juego (ver "Para probar en Linux" en TODO.md)
 
 ## Objetivo
 
