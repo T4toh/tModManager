@@ -12,6 +12,9 @@ public sealed class StubbedLinuxCompatabilityDataProvider(AbsolutePath winePrefi
 {
     public AbsolutePath WinePrefixDirectoryPath => winePrefix;
 
+    /// <summary>Null by default; a test sets it to give the stub installation a way to run executables.</summary>
+    public WineRuntime? Runtime { get; set; }
+
     public ValueTask<ImmutableArray<WineDllOverride>> GetWineDllOverrides(CancellationToken cancellationToken)
         => ValueTask.FromResult(ImmutableArray<WineDllOverride>.Empty);
 

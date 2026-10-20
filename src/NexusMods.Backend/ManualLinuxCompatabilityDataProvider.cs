@@ -13,6 +13,8 @@ public class ManualLinuxCompatabilityDataProvider : ILinuxCompatabilityDataProvi
 
     public AbsolutePath WinePrefixDirectoryPath => _winePrefix;
 
+    public WineRuntime? Runtime => null;
+
     public ManualLinuxCompatabilityDataProvider(AbsolutePath winePrefix, ILogger logger)
     {
         _winePrefix = winePrefix;

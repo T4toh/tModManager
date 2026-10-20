@@ -115,10 +115,13 @@ internal class SteamLocator : IGameLocator
 
         public AbsolutePath WinePrefixDirectoryPath { get; }
 
+        public WineRuntime? Runtime { get; }
+
         public LinuxCompatibilityDataProvider(SteamGame steamGame, AbsolutePath winePrefixDirectoryPath)
         {
             _steamGame = steamGame;
             WinePrefixDirectoryPath = winePrefixDirectoryPath;
+            Runtime = new WineRuntime.SteamProton(steamGame.AppId.Value);
         }
 
         public ValueTask<ImmutableHashSet<string>> GetInstalledWinetricksComponents(CancellationToken cancellationToken)

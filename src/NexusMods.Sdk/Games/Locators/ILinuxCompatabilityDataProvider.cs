@@ -13,6 +13,12 @@ public interface ILinuxCompatabilityDataProvider
     AbsolutePath WinePrefixDirectoryPath { get; }
 
     /// <summary>
+    /// How to run a Windows executable in this prefix; null when unknown (no Lutris config for the prefix,
+    /// unsupported runner). Resolved by the locator, like the prefix itself.
+    /// </summary>
+    WineRuntime? Runtime { get; }
+
+    /// <summary>
     /// Gets all WINE DLL overrides.
     /// </summary>
     ValueTask<ImmutableArray<WineDllOverride>> GetWineDllOverrides(CancellationToken cancellationToken);
