@@ -5,7 +5,6 @@ using NexusMods.Games.Generic.Dependencies;
 using NexusMods.Paths;
 using NexusMods.Sdk;
 using NexusMods.Sdk.Games;
-using NexusMods.Sdk.Loadouts;
 
 namespace NexusMods.Games.Generic;
 
@@ -93,14 +92,5 @@ public sealed class GameToolRunner : IWineToolRunner
         var fromLutris = LutrisConfigReader.DefaultDataDirectory(fs).Combine("runtime/umu/umu-run");
         if (fromLutris.FileExists) return fromLutris;
         throw new WineRuntimeUnavailableException("No se encontró umu-run (ni en el PATH ni en el runtime de Lutris); hace falta para un runner de Proton fuera de Steam");
-    }
-
-    /// <summary>Old entry point, kept until <c>RedModDeployTool</c> moves to <see cref="RunAsync"/>.</summary>
-    public async Task<CommandResult> ExecuteAsync(Loadout.ReadOnly loadout, Command command, bool logProcessOutput = true, CancellationToken cancellationToken = default)
-    {
-        var install = loadout.InstallationInstance;
-        if (FileSystem.Shared.OS.IsLinux && install.LocatorResult.Store == GameStore.Steam && _protontricks is not null)
-            command = await _protontricks.MakeLaunchCommand(command, uint.Parse(install.LocatorResult.StoreIdentifier));
-        return await _processRunner.RunAsync(command, logProcessOutput, cancellationToken: cancellationToken);
     }
 }
