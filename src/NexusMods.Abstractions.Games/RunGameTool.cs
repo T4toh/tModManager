@@ -28,6 +28,7 @@ public class RunGameTool<T> : IRunGameTool
     private readonly T _game;
     private readonly IProcessRunner _processRunner;
     private readonly IOSInterop _osInterop;
+    private readonly IWineToolRunner? _wineRunner;
 
     /// <summary>
     /// Whether this tool should be started through the shell instead of directly.
@@ -44,6 +45,7 @@ public class RunGameTool<T> : IRunGameTool
         _logger = serviceProvider.GetRequiredService<ILogger<RunGameTool<T>>>();
         _processRunner = serviceProvider.GetRequiredService<IProcessRunner>();
         _osInterop = serviceProvider.GetRequiredService<IOSInterop>();
+        _wineRunner = serviceProvider.GetService<IWineToolRunner>();
     }
 
     /// <inheritdoc />
@@ -60,18 +62,6 @@ public class RunGameTool<T> : IRunGameTool
         
         var program = await GetGamePath(loadout);
         var primaryFile = loadout.InstallationInstance.Locations.ToAbsolutePath(_game.GetPrimaryFile(loadout.InstallationInstance));
-
-        if (OSInformation.Shared.IsLinux && program.Equals(primaryFile))
-        {
-            var locatorResult = loadout.InstallationInstance.LocatorResult;
-            if (locatorResult.Store == GameStore.Steam)
-            {
-                await RunThroughSteam(locatorResult.StoreIdentifier, cancellationToken, commandLineArgs);
-                return;
-            }
-
-
-        }
 
         var names = new HashSet<string>
         {
@@ -90,8 +80,29 @@ public class RunGameTool<T> : IRunGameTool
         // notice that SkyrimSE.exe is running and wait for that to exit.
 
         var existing = FindMatchingProcesses(names).Select(p => p.Id).ToHashSet();
-            
-        if (UseShell)
+
+        if (OSInformation.Shared.IsLinux && program.Equals(primaryFile))
+        {
+            var locatorResult = loadout.InstallationInstance.LocatorResult;
+            if (locatorResult.Store == GameStore.Steam)
+            {
+                await RunThroughSteam(locatorResult.StoreIdentifier, cancellationToken, commandLineArgs);
+                return;
+            }
+
+            // A manually added Windows game: the exe only runs inside its Wine runtime (Lutris prefix). Running it
+            // natively on Linux cannot work, so without a runtime nothing is launched and the log says why.
+            var runtime = locatorResult.LinuxCompatabilityDataProvider?.Runtime;
+            if (_wineRunner is null || runtime is null)
+            {
+                _logger.LogError("No se puede lanzar {Game}: la instalación no tiene un entorno de Wine conocido (prefix configurado en Lutris)", _game.DisplayName);
+                return;
+            }
+            var result = await _wineRunner.RunAsync(loadout.InstallationInstance, program, commandLineArgs, program.Parent, logOutput: true, cancellationToken);
+            if (result.ExitCode != 0)
+                _logger.LogWarning("{Game} terminó con código {ExitCode}", _game.DisplayName, result.ExitCode);
+        }
+        else if (UseShell)
         {
             _logger.LogInformation("Running {Program} through shell", program);
             await RunWithShell(cancellationToken, program);
