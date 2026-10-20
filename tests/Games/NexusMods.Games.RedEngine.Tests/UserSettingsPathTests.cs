@@ -30,6 +30,19 @@ public class UserSettingsPathTests
     }
 
     [Fact]
+    public void SteamuserIsASymlinkToTheRealUser_UsesTheRealUser()
+    {
+        // GE-Proton through umu on a Lutris prefix: drive_c/users/steamuser -> <user>. The symlinked path is one the
+        // synchronizer refuses to manage, so the real folder is the one that counts.
+        var prefix = TempPrefix();
+        var users = prefix.Combine("drive_c/users");
+        users.Combine(Environment.UserName).CreateDirectory();
+        File.CreateSymbolicLink(users.Combine("steamuser").ToString(), Environment.UserName);
+
+        Cyberpunk2077Game.UserSettingsPath(prefix).ToString().Should().Be($"drive_c/users/{Environment.UserName}" + Suffix);
+    }
+
+    [Fact]
     public void BothFolders_SteamuserWins()
     {
         var prefix = TempPrefix();
