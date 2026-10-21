@@ -24,6 +24,14 @@ public partial class WinePrefixStatusView : ReactiveUserControl<IWinePrefixStatu
                 .Subscribe(visible => IsVisible = visible)
                 .DisposeWith(d);
 
+            this.WhenAnyValue(v => v.ViewModel!.Title)
+                .BindTo(this, v => v.HeaderText.Text)
+                .DisposeWith(d);
+
+            this.WhenAnyValue(v => v.ViewModel!.GamePath)
+                .Subscribe(path => ToolTip.SetTip(HeaderText, path))
+                .DisposeWith(d);
+
             this.WhenAnyValue(v => v.ViewModel!.IsExpanded)
                 .BindTo(this, v => v.WinePrefixExpander.IsExpanded)
                 .DisposeWith(d);

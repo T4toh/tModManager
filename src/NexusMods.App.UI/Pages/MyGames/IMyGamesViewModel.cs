@@ -17,5 +17,6 @@ public interface IMyGamesViewModel : IPageViewModelInterface
 
     public ReadOnlyObservableCollection<IGameWidgetViewModel> InstalledGames { get; }
 
-    public IWinePrefixStatusViewModel? WinePrefixStatus { get; }
+    /// <summary>One panel per installation whose game declares prefix requirements.</summary>
+    public ReadOnlyObservableCollection<IWinePrefixStatusViewModel> WinePrefixStatuses { get; }
 }

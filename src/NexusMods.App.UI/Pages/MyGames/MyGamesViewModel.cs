@@ -80,7 +80,8 @@ public class MyGamesViewModel : APageViewModel<IMyGamesViewModel>, IMyGamesViewM
     public ReactiveCommand<Unit, Unit> AddGameManuallyCommand { get; }
     public ReactiveCommand<Unit, Unit> RefreshGamesCommand { get; }
     public ReadOnlyObservableCollection<IGameWidgetViewModel> InstalledGames => _installedGames;
-    public IWinePrefixStatusViewModel? WinePrefixStatus { get; private set; }
+    private ReadOnlyObservableCollection<IWinePrefixStatusViewModel> _winePrefixStatuses = new([]);
+    public ReadOnlyObservableCollection<IWinePrefixStatusViewModel> WinePrefixStatuses => _winePrefixStatuses;
 
     public MyGamesViewModel(
         IWindowManager windowManager,
@@ -418,29 +419,18 @@ public class MyGamesViewModel : APageViewModel<IMyGamesViewModel>, IMyGamesViewM
                     .SubscribeWithErrorLogging()
                     .DisposeWith(d);
 
-                // Wine prefix status panel for the game whose requirements it checks
-                // We observe the source list directly to update this
+                // Wine prefix panel per installation whose game declares requirements: with Steam and a manual
+                // install of the same game, each prefix has its own state
+                var runtimeDeps = serviceProvider.GetServices<IRuntimeDependency>().ToArray();
+                var processRunner = serviceProvider.GetRequiredService<IProcessRunner>();
                 _sourceList.Connect()
-                    .ToCollection()
-                    .Select(list => list.FirstOrDefault(installation => WinePrefixStatusViewModel.AppliesTo(installation.Game)))
-                    .Subscribe(firstInstallation =>
-                    {
-                        if (firstInstallation is not null)
-                        {
-                            var runtimeDeps = serviceProvider.GetServices<IRuntimeDependency>();
-                            WinePrefixStatus = new WinePrefixStatusViewModel(firstInstallation, runtimeDeps, serviceProvider.GetRequiredService<IProcessRunner>());
-                            // We need to notify property changed for WinePrefixStatus but since it's a property without INPC support (simple property),
-                            // and the view binds to it via viewmodel, we might need RaisePropertyChanged.
-                            // But MyGamesViewModel is an APageViewModel which inherits ReactiveObject.
-                            this.RaisePropertyChanged(nameof(WinePrefixStatus));
-                        }
-                        else
-                        {
-                            WinePrefixStatus = null;
-                            this.RaisePropertyChanged(nameof(WinePrefixStatus));
-                        }
-                    })
+                    .Filter(installation => WinePrefixStatusViewModel.AppliesTo(installation.Game))
+                    .Transform(IWinePrefixStatusViewModel (installation) => new WinePrefixStatusViewModel(installation, runtimeDeps, processRunner))
+                    .OnUI()
+                    .Bind(out _winePrefixStatuses)
+                    .SubscribeWithErrorLogging()
                     .DisposeWith(d);
+                this.RaisePropertyChanged(nameof(WinePrefixStatuses));
             }
         );
     }
