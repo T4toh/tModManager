@@ -1,6 +1,7 @@
 using FluentAssertions;
 using Microsoft.Extensions.DependencyInjection;
 using NexusMods.Abstractions.Loadouts;
+using NexusMods.Abstractions.Loadouts.Synchronizers;
 using NexusMods.DataModel.Storage;
 using NexusMods.Games.RedEngine.Cyberpunk2077;
 using NexusMods.Games.TestFramework;
@@ -38,9 +39,13 @@ public class CyberpunkDeepCleanExecuteTests(ITestOutputHelper helper) : ACyberpu
         var modFile = GameInstallation.Locations[LocationId.Game].Path.Combine("archive/pc/mod/test.archive");
         modFile.Parent.CreateDirectory();
         await modFile.WriteAllTextAsync("mod");
+        var log = new GamePath(LocationId.Game, "r6/logs/redscript_rCURRENT.log");
+        GameInstallation.Locations.ToAbsolutePath(log).Parent.CreateDirectory();
+        await GameInstallation.Locations.ToAbsolutePath(log).WriteAllTextAsync("log");
         using (var tx = Connection.BeginTransaction())
         {
             AddEmptyGroup(tx, loadout, "PluginMod");
+            AddFile(tx, loadout, LoadoutItemGroupId.From(LoadoutOverrides.GetOrCreate(tx, loadout).Value), log);
             await tx.Commit();
         }
 
@@ -52,6 +57,9 @@ public class CyberpunkDeepCleanExecuteTests(ITestOutputHelper helper) : ACyberpu
         var newBackup = _backups.Combine(snapshots.Single(s => s != "20210101_000000"));
         newBackup.Combine("archive/pc/mod/test.archive").FileExists.Should().BeTrue();
         LoadoutItem.FindByLoadout(Connection.Db, loadout).Should().NotContain(i => i.Name == "PluginMod");
+        // The game's log went to the backup with r6/logs: its External Change must not stay behind
+        LoadoutItem.FindByLoadout(Connection.Db, loadout).OfTypeLoadoutItemWithTargetPath()
+            .Should().NotContain(f => (GamePath)f.TargetPath == log);
         Snapshots(realBackups).Should().BeEquivalentTo(realBefore);
     }
 

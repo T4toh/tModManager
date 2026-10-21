@@ -129,7 +129,7 @@ public class CyberpunkDeepCleanTool : ITool
     /// Moves <paramref name="from"/> into the backup. Returns false only when the move failed (e.g. no space left or
     /// permission denied), so the caller can stop before forgetting mods that were not backed up.
     /// </summary>
-    private bool MoveToBackup(AbsolutePath gameRoot, AbsolutePath from, AbsolutePath to, ref bool backupCreated, AbsolutePath backupDir)
+    private bool MoveToBackup(AbsolutePath gameRoot, AbsolutePath from, AbsolutePath to, ref bool backupCreated, AbsolutePath backupDir, List<RelativePath> gone)
     {
         if (!from.DirectoryExists() && !from.FileExists) return true;
 
@@ -158,6 +158,7 @@ public class CyberpunkDeepCleanTool : ITool
                 System.IO.File.Move(from.ToString(), to.ToString());
 
             _logger.LogInformation("Moved {Path} to backup", from);
+            gone.Add(from.RelativeTo(gameRoot));
             return true;
         }
         catch (Exception ex)
@@ -223,15 +224,17 @@ public class CyberpunkDeepCleanTool : ITool
         var backupCreated = false;
 
         var failedMoves = 0;
+        // What left the game folder, moved or deleted: External Changes under it point at nothing afterwards
+        var gone = new List<RelativePath>();
         foreach (var relativePath in PathsToMove)
         {
             var rel = RelativePath.FromUnsanitizedInput(relativePath);
-            if (!MoveToBackup(gamePath, gamePath.Combine(rel), backupDir.Combine(rel), ref backupCreated, backupDir)) failedMoves++;
+            if (!MoveToBackup(gamePath, gamePath.Combine(rel), backupDir.Combine(rel), ref backupCreated, backupDir, gone)) failedMoves++;
         }
 
         foreach (var rel in LooseModFilesToMove(gamePath, loadout.Installation, _logger))
         {
-            if (!MoveToBackup(gamePath, gamePath.Combine(rel), backupDir.Combine(rel), ref backupCreated, backupDir)) failedMoves++;
+            if (!MoveToBackup(gamePath, gamePath.Combine(rel), backupDir.Combine(rel), ref backupCreated, backupDir, gone)) failedMoves++;
         }
 
         // Removing the mods from the database below would make the next apply delete the files that could not be
@@ -253,11 +256,13 @@ public class CyberpunkDeepCleanTool : ITool
                 if (fullPath.DirectoryExists())
                 {
                     fullPath.DeleteDirectoryNoFollow();
+                    gone.Add(RelativePath.FromUnsanitizedInput(relativePath));
                     _logger.LogInformation("Deleted directory {Path}", relativePath);
                 }
                 else if (fullPath.FileExists)
                 {
                     fullPath.Delete();
+                    gone.Add(RelativePath.FromUnsanitizedInput(relativePath));
                     _logger.LogInformation("Deleted file {Path}", relativePath);
                 }
             }
@@ -282,7 +287,7 @@ public class CyberpunkDeepCleanTool : ITool
         // Library items and archives are preserved so mods can be re-installed without re-downloading.
         try
         {
-            await RemoveModGroups(_connection, loadout.LoadoutId, _logger);
+            await RemoveModGroups(_connection, loadout.LoadoutId, gone, _logger);
         }
         catch (Exception ex)
         {
@@ -298,20 +303,35 @@ public class CyberpunkDeepCleanTool : ITool
     /// <summary>
     /// Deletes every top-level group of the loadout (mods, Nexus collections and their nested groups and files),
     /// except the overrides group and the editable collections ("My Mods"), which are emptied instead: the library
-    /// installs into an editable collection and needs one to exist.
+    /// installs into an editable collection and needs one to exist. From the overrides group only the files under
+    /// <paramref name="gone"/> (game-folder paths the clean moved or deleted) go.
     /// </summary>
-    internal static async Task RemoveModGroups(IConnection connection, LoadoutId loadoutId, ILogger logger)
+    internal static async Task RemoveModGroups(IConnection connection, LoadoutId loadoutId, IReadOnlyCollection<RelativePath> gone, ILogger logger)
     {
         var db = connection.Db;
         using var tx = connection.BeginTransaction();
         var removedCount = 0;
+        var removedOverrides = 0;
 
         foreach (var item in LoadoutItem.FindByLoadout(db, loadoutId).OfTypeLoadoutItemGroup())
         {
             if (item.AsLoadoutItem().Contains(LoadoutItem.Parent)) continue; // nested groups go with their parent
 
-            // The overrides group tracks vanilla game files that shouldn't be removed
-            if (new[] { item }.OfTypeLoadoutOverridesGroup().Any()) continue;
+            // The overrides group tracks vanilla game files that shouldn't be removed, but its entries for files the
+            // clean took away (CET logs, red4ext/config.ini...) would point at nothing: every sync would warn they
+            // can't be extracted
+            if (new[] { item }.OfTypeLoadoutOverridesGroup().Any())
+            {
+                foreach (var file in LoadoutItem.FindByParent(db, item.Id).OfTypeLoadoutItemWithTargetPath())
+                {
+                    var target = (GamePath)file.TargetPath;
+                    if (target.LocationId != LocationId.Game) continue;
+                    if (!gone.Any(path => target.Path == path || target.Path.InFolder(path))) continue;
+                    tx.Delete(file.Id, recursive: true);
+                    removedOverrides++;
+                }
+                continue;
+            }
 
             if (item.TryGetAsCollectionGroup(out var collection) && !collection.IsReadOnly)
             {
@@ -327,10 +347,10 @@ public class CyberpunkDeepCleanTool : ITool
             removedCount++;
         }
 
-        if (removedCount > 0)
+        if (removedCount > 0 || removedOverrides > 0)
         {
             await tx.Commit();
-            logger.LogInformation("Removed {Count} mod group(s) from the loadout database", removedCount);
+            logger.LogInformation("Removed {Count} mod group(s) and {Overrides} External Change(s) of moved files from the loadout database", removedCount, removedOverrides);
         }
         else
         {
