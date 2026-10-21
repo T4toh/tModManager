@@ -25,6 +25,8 @@ public class WinePrefixStatusViewModel : AViewModel<IWinePrefixStatusViewModel>,
     private Command? _installCommand;
 
     [Reactive] public bool IsVisible { get; set; }
+    public string Title { get; }
+    public string GamePath { get; }
     [Reactive] public bool IsExpanded { get; set; }
     [Reactive] public bool HasIssues { get; set; }
     [Reactive] public bool IsProtontricksInstalled { get; set; }
@@ -48,6 +50,8 @@ public class WinePrefixStatusViewModel : AViewModel<IWinePrefixStatusViewModel>,
         _installation = installation;
         _requirements = installation.Game.WinePrefixRequirements ?? new WinePrefixRequirements([], []);
         _linuxCompat = installation.LocatorResult.LinuxCompatabilityDataProvider;
+        Title = $"Requisitos del prefijo Wine · {installation.LocatorResult.Store.Value}";
+        GamePath = installation.Locations[LocationId.Game].Path.ToString();
         _protontricks = runtimeDependencies
             .FirstOrDefault(d => d.DisplayName == "Protontricks");
 

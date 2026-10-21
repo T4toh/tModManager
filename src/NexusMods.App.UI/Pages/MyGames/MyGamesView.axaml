@@ -12,6 +12,7 @@
     xmlns:resources="clr-namespace:NexusMods.App.UI.Resources"
     xmlns:myGames="clr-namespace:NexusMods.App.UI.Pages.MyGames"
     xmlns:gameWidget="clr-namespace:NexusMods.App.UI.Controls.GameWidget"
+    xmlns:winePrefix="clr-namespace:NexusMods.App.UI.Pages.MyGames.WinePrefix"
     xmlns:controls="clr-namespace:NexusMods.App.UI.Controls"
     xmlns:icons="clr-namespace:NexusMods.UI.Sdk.Icons;assembly=NexusMods.UI.Sdk"
     xmlns:panels="clr-namespace:Avalonia.Labs.Panels;assembly=Avalonia.Labs.Panels"
@@ -106,8 +107,19 @@
                 </StackPanel>
             </Border>
 
-            <!-- Wine Prefix Status Panel -->
-            <reactiveUi:ViewModelViewHost x:Name="WinePrefixPanel" />
+            <!-- Wine prefix panels, one per installation -->
+            <ItemsControl x:Name="WinePrefixPanels">
+                <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate>
+                        <StackPanel Spacing="16" />
+                    </ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate DataType="winePrefix:IWinePrefixStatusViewModel">
+                        <reactiveUi:ViewModelViewHost ViewModel="{CompiledBinding .}" />
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
 
         </StackPanel>
 
