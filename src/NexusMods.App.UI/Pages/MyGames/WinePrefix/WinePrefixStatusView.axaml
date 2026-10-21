@@ -25,7 +25,6 @@
                 <StackPanel Orientation="Horizontal" Spacing="8">
                     <icons:UnifiedIcon x:Name="StatusIcon" Size="20" />
                     <TextBlock x:Name="HeaderText"
-                               Text="Requisitos del prefijo Wine"
                                Theme="{StaticResource HeadingXSSemiTheme}"
                                VerticalAlignment="Center" />
                 </StackPanel>
