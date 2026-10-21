@@ -228,7 +228,8 @@ public static class LoadoutManagementVerbs
         var db = conn.Db;
         await Loadout.All(db)
             .Where(x => x.IsVisible())
-            .Select(list => (list.LoadoutId, list.Name, list.Installation.Name, list.GameVersion, list.Installation.Store, LoadoutItem.FindByLoadout(db, list.Id)))
+            // The id as `-l` takes it (hex, no prefix), short enough not to wrap
+            .Select(list => (list.Id.Value.ToString("x"), list.Name, list.Installation.Name, list.GameVersion, list.Installation.Store, LoadoutItem.FindByLoadout(db, list.Id).Count))
             .RenderTable(renderer, "Id", "Name", "Game", "Version", "Store", "Items");
         return 0;
     }

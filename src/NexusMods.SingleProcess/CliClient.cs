@@ -14,9 +14,10 @@ public class CliClient(ILogger<CliClient> logger, SyncFile syncFile, IServicePro
 {
 
     /// <summary>
-    /// Starts the client process, connecting to the main process and running the console response loop
+    /// Starts the client process, connecting to the main process and running the console response loop.
+    /// Returns the command's exit code.
     /// </summary>
-    public async Task ExecuteCommand(string[] args, IAnsiConsole? console = null)
+    public async Task<int> ExecuteCommand(string[] args, IAnsiConsole? console = null)
     {
         var (process, port) = syncFile.GetSyncInfo();
         if (process is null)
@@ -34,7 +35,7 @@ public class CliClient(ILogger<CliClient> logger, SyncFile syncFile, IServicePro
             await using var stream = client.GetStream();
 
             logger.LogDebug("Connected to main process {ProcessId} on port {Port}", process.Id, port);
-            await RunTillCloseAsync(new ConsoleSettings
+            return await RunTillCloseAsync(new ConsoleSettings
             {
                 Arguments = args,
                 Renderer = new SpectreRenderer(console ?? AnsiConsole.Console),
@@ -47,16 +48,20 @@ public class CliClient(ILogger<CliClient> logger, SyncFile syncFile, IServicePro
         }
     }
 
-    private async Task RunTillCloseAsync(ConsoleSettings proxy, NetworkStream stream)
+    private async Task<int> RunTillCloseAsync(ConsoleSettings proxy, NetworkStream stream)
     {
+        var adaptor = new ClientRendererAdaptor(stream, proxy.Renderer, provider, proxy.Arguments);
         try
         {
-            var adaptor = new ClientRendererAdaptor(stream, proxy.Renderer, provider, proxy.Arguments);
             await adaptor.RunningTask;
         }
         catch (IOException ex)
         {
             logger.LogDebug(ex, "Client disconnected");
         }
+
+        if (adaptor.ExitCode is { } code) return code;
+        logger.LogWarning("The main process closed the connection without an exit code");
+        return 1;
     }
 }

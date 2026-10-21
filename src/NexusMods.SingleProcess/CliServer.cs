@@ -3,6 +3,7 @@ using System.Net;
 using System.Net.Sockets;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using NexusMods.Abstractions.Cli;
 using NexusMods.Sdk.Settings;
 using NexusMods.ProxyConsole;
 using NexusMods.SingleProcess.Exceptions;
@@ -113,7 +114,19 @@ public sealed class CliServer : IHostedService, IDisposable
             var stream = client.GetStream();
 
             var (arguments, renderer) = await ProxiedRenderer.Create(_serviceProvider, stream);
-            await _configurator.RunAsync(arguments ?? [], renderer, Token);
+            int exitCode;
+            try
+            {
+                exitCode = await _configurator.RunAsync(arguments ?? [], renderer, Token);
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                // Without this the client sees nothing and exits 0, and the error ends up as an unobserved task exception
+                _logger.LogError(ex, "Error running CLI command `{Arguments}`", string.Join(" ", arguments ?? []));
+                await renderer.TextLine("Error: {0}", ex.Message);
+                exitCode = 1;
+            }
+            await renderer.ExitAsync(exitCode);
         }
         finally
         {

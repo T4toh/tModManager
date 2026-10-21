@@ -298,8 +298,9 @@ public class Program
 
         try
         {
-            // Run the heartbeat command to check if the process is responsive
-            var commandTask = client.ExecuteCommand([StatusVerbs.HeartbeatCommand], AnsiConsole.Console);
+            // Run the heartbeat command to check if the process is responsive; its output is not for the user
+            var silent = AnsiConsole.Create(new AnsiConsoleSettings { Out = new AnsiConsoleOutput(TextWriter.Null) });
+            var commandTask = client.ExecuteCommand([StatusVerbs.HeartbeatCommand], silent);
             
             // Wait for the command to complete or the timeout to expire
             await commandTask.WaitAsync(cts.Token);
@@ -318,8 +319,7 @@ public class Program
         var syncFile = services.GetRequiredService<SyncFile>();
         try
         {
-            await client.ExecuteCommand(startupMode.Args, AnsiConsole.Console);
-            return 0;
+            return await client.ExecuteCommand(startupMode.Args, AnsiConsole.Console);
         }
         catch (NoMainProcessStarted)
         {
@@ -354,8 +354,7 @@ public class Program
                 }
             }
 
-            await client.ExecuteCommand(startupMode.Args, AnsiConsole.Console);
-            return 0;
+            return await client.ExecuteCommand(startupMode.Args, AnsiConsole.Console);
         }
     }
 
