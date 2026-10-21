@@ -1,6 +1,7 @@
 using FluentAssertions;
 using Microsoft.Extensions.Logging.Abstractions;
 using NexusMods.Abstractions.Loadouts;
+using NexusMods.Abstractions.Loadouts.Synchronizers;
 using NexusMods.Games.RedEngine.Cyberpunk2077;
 using NexusMods.Games.TestFramework;
 using NexusMods.Paths;
@@ -33,7 +34,7 @@ public class CyberpunkDeepCleanDbTests(ITestOutputHelper helper) : ACyberpunkIso
             await tx.Commit();
         }
 
-        await CyberpunkDeepCleanTool.RemoveModGroups(Connection, loadout.LoadoutId, NullLogger.Instance);
+        await CyberpunkDeepCleanTool.RemoveModGroups(Connection, loadout.LoadoutId, [], NullLogger.Instance);
 
         loadout = Refresh(loadout);
         loadout.MutableCollections().Select(c => c.CollectionId).Should().Equal(myMods.Value);
@@ -42,6 +43,32 @@ public class CyberpunkDeepCleanDbTests(ITestOutputHelper helper) : ACyberpunkIso
             .Where(g => !new[] { g }.OfTypeLoadoutOverridesGroup().Any())
             .Select(g => g.AsLoadoutItem().Name);
         remaining.Should().Equal("My Mods");
+    }
+
+    [Fact]
+    public async Task RemoveModGroups_DropsExternalChangesOfWhatTheCleanTookAway()
+    {
+        var loadout = await CreateLoadout();
+        using (var tx = Connection.BeginTransaction())
+        {
+            var overrides = LoadoutItemGroupId.From(LoadoutOverrides.GetOrCreate(tx, loadout).Value);
+            AddFile(tx, loadout.LoadoutId, overrides, new GamePath(LocationId.Game, "bin/x64/plugins/cyber_engine_tweaks/cyber_engine_tweaks.log"));
+            AddFile(tx, loadout.LoadoutId, overrides, new GamePath(LocationId.Game, "bin/x64/winmm.dll"));
+            AddFile(tx, loadout.LoadoutId, overrides, new GamePath(LocationId.Game, "bin/x64/plugins_readme.txt"));
+            AddFile(tx, loadout.LoadoutId, overrides, new GamePath(LocationId.Game, "engine/config/platform/pc/user.ini"));
+            AddFile(tx, loadout.LoadoutId, overrides, new GamePath(LocationId.Saves, "bin/x64/plugins/save.dat"));
+            await tx.Commit();
+        }
+
+        await CyberpunkDeepCleanTool.RemoveModGroups(Connection, loadout.LoadoutId, ["bin/x64/plugins", "bin/x64/winmm.dll"], NullLogger.Instance);
+
+        var left = LoadoutOverridesGroup.FindByOverridesFor(Connection.Db, loadout.Id)
+            .SelectMany(group => LoadoutItem.FindByParent(Connection.Db, group.Id).OfTypeLoadoutItemWithTargetPath())
+            .Select(file => ((GamePath)file.TargetPath).ToString());
+        left.Should().BeEquivalentTo(
+            new GamePath(LocationId.Game, "bin/x64/plugins_readme.txt").ToString(),
+            new GamePath(LocationId.Game, "engine/config/platform/pc/user.ini").ToString(),
+            new GamePath(LocationId.Saves, "bin/x64/plugins/save.dat").ToString());
     }
 
     private AbsolutePath GameRoot => GameInstallation.Locations[LocationId.Game].Path;
