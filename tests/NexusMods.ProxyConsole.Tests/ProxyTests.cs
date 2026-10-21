@@ -7,6 +7,15 @@ namespace NexusMods.ProxyConsole.Tests;
 public class ProxyTests(IServiceProvider provider) : AProxyConsoleTest(provider)
 {
     [Fact]
+    public async Task ExitCodeReachesTheClient()
+    {
+        await Server.ExitAsync(3);
+        await Client.RunningTask.WaitAsync(TimeSpan.FromSeconds(5));
+
+        Client.ExitCode.Should().Be(3);
+    }
+
+    [Fact]
     public async Task CanRenderTest()
     {
         await Server.RenderAsync(new Text {Template = "Hello World!"});

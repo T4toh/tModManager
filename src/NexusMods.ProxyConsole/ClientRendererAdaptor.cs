@@ -37,6 +37,11 @@ public class ClientRendererAdaptor
     /// </summary>
     public Task RunningTask => _task;
 
+    /// <summary>
+    /// The exit code the server sent, or null if the connection ended without one.
+    /// </summary>
+    public int? ExitCode { get; private set; }
+
     private async Task ForwardCommands()
     {
         while(true)
@@ -59,6 +64,9 @@ public class ClientRendererAdaptor
                             Arguments = _args
                         });
                         break;
+                    case Exit exit:
+                        ExitCode = exit.Code;
+                        return;
 
                     default:
                         throw new ArgumentOutOfRangeException(nameof(msg));

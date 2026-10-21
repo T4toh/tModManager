@@ -22,7 +22,7 @@ public class ProxiedRenderer : IRenderer
     /// <param name="provider"></param>
     /// <param name="duplexStream"></param>
     /// <returns></returns>
-    public static async Task<(string[]? Arguments, IRenderer Renderer)> Create(IServiceProvider provider, Stream duplexStream)
+    public static async Task<(string[]? Arguments, ProxiedRenderer Renderer)> Create(IServiceProvider provider, Stream duplexStream)
     {
         var renderer = new ProxiedRenderer(new Serializer(duplexStream, provider.GetRequiredService<IEnumerable<IRenderableDefinition>>()));
         var arguments = await renderer._serializer.SendAndReceiveAsync<ProgramArgumentsResponse, ProgramArgumentsRequest>(new ProgramArgumentsRequest());
@@ -44,5 +44,13 @@ public class ProxiedRenderer : IRenderer
     public async ValueTask ClearAsync()
     {
         await _serializer.SendAsync(new Clear());
+    }
+
+    /// <summary>
+    /// Tells the client the command finished with the given exit code.
+    /// </summary>
+    public async ValueTask ExitAsync(int code)
+    {
+        await _serializer.SendAsync(new Exit { Code = code });
     }
 }
