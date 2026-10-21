@@ -10,8 +10,9 @@ public class AProxyConsoleTest : IAsyncLifetime
     private Stream _serverStream;
     protected readonly LoggingRenderer LoggingRenderer = new();
     private ClientRendererAdaptor? _client;
-    protected IRenderer Server => _server!;
-    private IRenderer? _server;
+    protected ClientRendererAdaptor Client => _client!;
+    protected ProxiedRenderer Server => _server!;
+    private ProxiedRenderer? _server;
     private readonly IServiceProvider _provider;
 
     protected AProxyConsoleTest(IServiceProvider provider)

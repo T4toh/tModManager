@@ -19,6 +19,7 @@ using NexusMods.Sdk.Settings;
 using NexusMods.SingleProcess;
 using NexusMods.StandardGameLocators;
 using NexusMods.StandardGameLocators.TestHelpers;
+using NexusMods.StandardGameLocators.TestHelpers.StubbedGames;
 using Xunit.DependencyInjection.Logging;
 using NexusMods.Sdk.FileExtractor;
 
@@ -64,6 +65,7 @@ public class Startup
                 .AddLoadoutAbstractions()
                 .AddSerializationAbstractions()
                 .AddGames()
+                .AddGame<StubbedGame>()
                 .AddGameServices()
                 .AddOSInterop()
                 .AddRuntimeDependencies()
