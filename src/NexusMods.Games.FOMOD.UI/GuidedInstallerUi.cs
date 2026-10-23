@@ -55,17 +55,19 @@ public sealed class GuidedInstallerUi : IGuidedInstaller
         IGuidedInstallerWindowViewModel windowViewModel,
         GuidedInstallerUi state)
     {
-        state._window = new GuidedInstallerWindow
+        // Captured locally: CleanupInstaller nulls _window before the subscription below is disposed.
+        var createdWindow = new GuidedInstallerWindow
         {
             ViewModel = windowViewModel
         };
+        state._window = createdWindow;
 
-        state._window.Show();
+        createdWindow.Show();
 
         Observable
             .FromEventPattern(
-                addHandler => state._window.Closed += addHandler,
-                removeHandler => state._window.Closed -= removeHandler
+                addHandler => createdWindow.Closed += addHandler,
+                removeHandler => createdWindow.Closed -= removeHandler
             )
             .SubscribeWithErrorLogging(eventPattern =>
             {
