@@ -25,7 +25,6 @@ namespace NexusMods.Games.FOMOD;
 
 public class FomodXmlInstaller : ALibraryArchiveInstaller
 {
-    private readonly ICoreDelegates _delegates;
     private readonly XmlScriptType _scriptType = new();
     private readonly ILogger<FomodXmlInstaller> _logger;
     private readonly GamePath _fomodInstallationPath;
@@ -52,7 +51,6 @@ public class FomodXmlInstaller : ALibraryArchiveInstaller
         _logger = logger;
         _fomodInstallationPath = fomodInstallationPath;
 
-        _delegates = serviceProvider.GetRequiredService<ICoreDelegates>();
         _temporaryFileManager = serviceProvider.GetRequiredService<TemporaryFileManager>();
         _fileSystem = serviceProvider.GetRequiredService<IFileSystem>();
         _fileStore = serviceProvider.GetRequiredService<IFileStore>();
@@ -102,7 +100,10 @@ public class FomodXmlInstaller : ALibraryArchiveInstaller
         await mod.InitializeWithoutLoadingScript();
 
         // NOTE(erri120): The FOMOD library calls us, so this is the only way we can pass data along.
-        var installerDelegates = _delegates as InstallerDelegates;
+        // A fresh set per run: this installer lives as long as the game, and a collection's preset choices used to
+        // stay on shared delegates, answering every later FOMOD of the session instead of opening the window.
+        var delegates = ServiceProvider.GetRequiredService<ICoreDelegates>();
+        var installerDelegates = delegates as InstallerDelegates;
         if (installerDelegates is not null)
         {
             if (options is not null)
@@ -111,6 +112,7 @@ public class FomodXmlInstaller : ALibraryArchiveInstaller
                 // something different: we will create a new guided installer that will simply emit the user choices based on the
                 // provided options.
                 var installer = new PresetGuidedInstaller(options);
+                installerDelegates.UiDelegates.Dispose();
                 installerDelegates.UiDelegates = new UiDelegates(ServiceProvider.GetRequiredService<ILogger<UiDelegates>>(), installer);
             }
 
@@ -119,14 +121,19 @@ public class FomodXmlInstaller : ALibraryArchiveInstaller
 
         var rawScript = await LoadScript(xmlFile.AsLibraryFile().Hash, cancellationToken);
 
-        var executor = _scriptType.CreateExecutor(mod, _delegates);
+        var executor = _scriptType.CreateExecutor(mod, delegates);
         var installScript = _scriptType.LoadScript(rawScript, true);
         FixScript(installScript, fomodArchiveFiles, _logger);
 
-        var instructions = await executor.Execute(installScript, "", null);
-
-        // NOTE(err120): Reset the previously provided data
-        if (installerDelegates is not null) installerDelegates.UiDelegates.CurrentFomodArchiveFiles = fomodArchiveFiles;
+        IList<Instruction> instructions;
+        try
+        {
+            instructions = await executor.Execute(installScript, "", null);
+        }
+        finally
+        {
+            installerDelegates?.UiDelegates.Dispose();
+        }
 
         var errors = instructions.Where(instruction => instruction.type == "error").ToArray();
         if (errors.Length != 0) throw new Exception(string.Join("; ", errors.Select(err => err.source)));
