@@ -57,7 +57,7 @@ public class GameWidgetViewModel : AViewModel<IGameWidgetViewModel>, IGameWidget
                         {
                             var fromDisk = gameRegistry.TryGetMetadata(installation, out var metadata)
                                 && GameInstallMetadata.BaselineFromDisk.TryGetValue(metadata, out var value) && value;
-                            return fromDisk ? "Versión desconocida: originales tomados del disco" : Language.GameWidget_VersionUnknown;
+                            return fromDisk ? "Version: Unknown, originals taken from disk" : Language.GameWidget_VersionUnknown;
                         }
                         return $"Version: {vanityVersion.Value}";
                     })
