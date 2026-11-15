@@ -55,6 +55,11 @@ public partial class CollectionDownloadView : ReactiveUserControl<ICollectionDow
                 this.BindCommand(ViewModel, vm => vm.CommandRescanDownloads, view => view.ButtonRescanDownloads)
                     .DisposeWith(d);
 
+                this.BindCommand(ViewModel, vm => vm.CommandCheckDownloadSession, view => view.ButtonCheckDownloadSession)
+                    .DisposeWith(d);
+                this.OneWayBind(ViewModel, vm => vm.HasNoDownloadSession.Value, view => view.ButtonCheckDownloadSession.IsVisible)
+                    .DisposeWith(d);
+
                 this.BindCommand(ViewModel, vm => vm.CommandCopyModList, view => view.ButtonCopyModList)
                     .DisposeWith(d);
 

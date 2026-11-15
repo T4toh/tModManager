@@ -67,6 +67,8 @@ public class CollectionDownloadDesignViewModel : APageViewModel<ICollectionDownl
     public ReactiveCommand<Unit> CommandInstallRequiredItems { get; } = new ReactiveCommand();
     public ReactiveCommand<Unit> CommandUpdateCollection { get; } = new ReactiveCommand();
     public ReactiveCommand<Unit> CommandRescanDownloads { get; } = new ReactiveCommand();
+    public ReactiveCommand<Unit> CommandCheckDownloadSession { get; } = new ReactiveCommand();
+    public BindableReactiveProperty<bool> HasNoDownloadSession { get; } = new(value: false);
 
     public ReactiveCommand<Unit> CommandViewOnNexusMods { get; } = new ReactiveCommand();
     public ReactiveCommand<Unit> CommandOpenJsonFile { get; } = new ReactiveCommand();

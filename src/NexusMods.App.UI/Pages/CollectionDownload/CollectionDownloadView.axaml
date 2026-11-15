@@ -69,6 +69,14 @@
                                          Fill="Strong"
                                          LeftIcon="{x:Static icons:IconValues.Refresh}"
                                          ShowIcon="Left" />
+                <controls:StandardButton IsVisible="False" x:Name="ButtonCheckDownloadSession"
+                                         Text="Comprobar sesión"
+                                         ToolTip.Tip="No hay sesión de nexusmods.com en Firefox: iniciá sesión ahí y tocá para volver a comprobar"
+                                         Size="Toolbar"
+                                         Type="Primary"
+                                         Fill="Weak"
+                                         LeftIcon="{x:Static icons:IconValues.Refresh}"
+                                         ShowIcon="Left" />
                 <spinner:Spinner IsVisible="False" Height="20" Width="20" x:Name="Spinner" />
                 <controls:StandardButton x:Name="ButtonDownloadRequiredItems"
                                          Text="{x:Static resources:Language.CollectionDownloadViewModel_DownloadRequired}"

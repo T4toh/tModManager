@@ -114,6 +114,16 @@ public interface ICollectionDownloadViewModel : IPageViewModelInterface
     ReactiveCommand<Unit> CommandUpdateCollection { get; }
     ReactiveCommand<Unit> CommandRescanDownloads { get; }
 
+    /// <summary>
+    /// Asks Nexus again whether batch downloads can work (non-premium needs a nexusmods.com session in Firefox).
+    /// </summary>
+    ReactiveCommand<Unit> CommandCheckDownloadSession { get; }
+
+    /// <summary>
+    /// The last check found no nexusmods.com session in Firefox; the batch download buttons stay disabled.
+    /// </summary>
+    BindableReactiveProperty<bool> HasNoDownloadSession { get; }
+
     ReactiveCommand<Unit> CommandViewOnNexusMods { get; }
     ReactiveCommand<Unit> CommandOpenJsonFile { get; }
     ReactiveCommand<Unit> CommandDeleteAllDownloads { get; }

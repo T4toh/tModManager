@@ -203,8 +203,8 @@ public class NexusApiClient : INexusApiClient
         var cookies = FirefoxCookieReader.TryGetNexusModsCookieHeader(_logger);
         if (cookies is null)
         {
-            _logger.LogDebug("No Firefox session cookies available for file {FileId} — cannot generate direct download URL", fileId);
-            return null;
+            _logger.LogWarning("No hay cookies de nexusmods.com en Firefox (archivo {FileId}): iniciá sesión en nexusmods.com en Firefox", fileId);
+            throw new NexusWebsiteSessionRequiredException();
         }
 
         // NOTE: .NET's HttpClient has a different TLS fingerprint than Firefox, and Cloudflare's bot detection
@@ -216,57 +216,54 @@ public class NexusApiClient : INexusApiClient
 
         _logger.LogDebug("Website GenerateDownloadUrl response for file {FileId}: {Response}", fileId, jsonResponse);
 
-        System.Text.Json.JsonDocument webJson;
         try
         {
-            webJson = System.Text.Json.JsonDocument.Parse(jsonResponse);
+            var uri = ParseGenerateDownloadUrlResponse(jsonResponse);
+            if (uri is null)
+                _logger.LogWarning("No se pudo sacar el link de descarga del archivo {FileId} (página de desafío de Cloudflare u otra respuesta)", fileId);
+            return uri;
+        }
+        catch (NexusWebsiteSessionRequiredException)
+        {
+            _logger.LogWarning("Nexus Mods devolvió una lista vacía para el archivo {FileId}: la sesión de nexusmods.com en Firefox no está iniciada o venció", fileId);
+            throw;
+        }
+    }
+
+    /// <summary>
+    /// Reads the CDN URL out of a GenerateDownloadUrl response: <c>{"url":"..."}</c> for free/supporter users,
+    /// a mirror list <c>[{"name":"...","URI":"..."}]</c> for premium. <c>[]</c> is what an anonymous session gets
+    /// and throws <see cref="NexusWebsiteSessionRequiredException"/>; anything else (Cloudflare's challenge page) is null.
+    /// </summary>
+    internal static Uri? ParseGenerateDownloadUrlResponse(string json)
+    {
+        System.Text.Json.JsonDocument doc;
+        try
+        {
+            doc = System.Text.Json.JsonDocument.Parse(json);
         }
         catch (System.Text.Json.JsonException)
         {
-            // Cloudflare returned an HTML challenge page instead of JSON — treat as a transient failure.
-            _logger.LogWarning("Cloudflare sigue devolviendo su página de desafío para el archivo {FileId} después de reintentar; no se pudo generar el link de descarga", fileId);
             return null;
         }
 
-        using (webJson)
+        using (doc)
         {
-        var root = webJson.RootElement;
-
-        // Response for free/supporter users: {"url":"https://files.nexus-cdn.com/..."}
-        // Response for premium users (mirror list): [{"name":"...","URI":"https://..."},...]
-        if (root.ValueKind == System.Text.Json.JsonValueKind.Array && root.GetArrayLength() > 0)
-        {
-            var first = root[0];
-            if (first.TryGetProperty("URI", out var uriEl) || first.TryGetProperty("url", out uriEl))
+            var root = doc.RootElement;
+            if (root.ValueKind == System.Text.Json.JsonValueKind.Array)
             {
-                var urlString = uriEl.GetString();
-                if (Uri.TryCreate(urlString, UriKind.Absolute, out var cdnUri))
-                    return cdnUri;
+                if (root.GetArrayLength() == 0) throw new NexusWebsiteSessionRequiredException();
+                root = root[0];
             }
-        }
-        else if (root.ValueKind == System.Text.Json.JsonValueKind.Array && root.GetArrayLength() == 0)
-        {
-            // Nexus Mods returns [] when the session cookies are expired or the account lacks download permission.
-            // The user needs to log in to nexusmods.com in Firefox to refresh the session.
-            _logger.LogWarning(
-                "Nexus Mods returned an empty download list for file {FileId} — Firefox session cookies may be expired. " +
-                "Please log in to nexusmods.com in Firefox and try again.",
-                fileId);
+
+            if (root.ValueKind == System.Text.Json.JsonValueKind.Object
+                && (root.TryGetProperty("URI", out var urlEl) || root.TryGetProperty("url", out urlEl))
+                && urlEl.ValueKind == System.Text.Json.JsonValueKind.String
+                && Uri.TryCreate(urlEl.GetString(), UriKind.Absolute, out var cdnUri))
+                return cdnUri;
+
             return null;
         }
-        else if (root.ValueKind == System.Text.Json.JsonValueKind.Object)
-        {
-            if (root.TryGetProperty("url", out var urlEl) || root.TryGetProperty("URI", out urlEl))
-            {
-                var urlString = urlEl.GetString();
-                if (Uri.TryCreate(urlString, UriKind.Absolute, out var cdnUri))
-                    return cdnUri;
-            }
-        }
-
-        _logger.LogDebug("Could not extract CDN URL from GenerateDownloadUrl response for file {FileId}", fileId);
-        return null;
-        } // end using webJson
     }
 
     /// <summary>
