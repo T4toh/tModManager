@@ -221,6 +221,10 @@ public class CollectionDownloader
             {
                 throw; // propagate cancellation — don't open browser, don't swallow
             }
+            catch (NexusWebsiteSessionRequiredException) when (!openBrowserOnFailure)
+            {
+                throw; // no session: every other file in the batch would fail the same way
+            }
             catch (Exception ex)
             {
                 _logger.LogDebug(ex, "Direct download failed for file {FileId}", download.FileUid.FileId);
@@ -235,6 +239,39 @@ public class CollectionDownloader
             {
                 _logger.LogWarning("Direct download failed for file {FileId} in batch mode — skipping (retry by clicking Download All again)", download.FileUid.FileId);
             }
+        }
+    }
+
+    /// <summary>
+    /// Whether a batch download can work now. Premium goes through the API; everyone else needs a nexusmods.com
+    /// session in Firefox, checked by asking the website for the link of one of the revision's files.
+    /// Only a missing session says no: not being logged in to the app is left to the login prompt, and a
+    /// transient failure (Cloudflare, network) doesn't block the buttons.
+    /// </summary>
+    public async Task<bool> HasDownloadSessionAsync(CollectionRevisionMetadata.ReadOnly revision, CancellationToken cancellationToken)
+    {
+        var userInfo = await _loginManager.GetUserInfoAsync(cancellationToken);
+        if (userInfo is null || userInfo.UserRole is UserRole.Premium) return true;
+
+        var probe = revision.Downloads
+            .Select(download => download.TryGetAsCollectionDownloadNexusMods(out var nexus) ? nexus : (CollectionDownloadNexusMods.ReadOnly?)null)
+            .FirstOrDefault(download => download is not null);
+        if (probe is null) return true;
+
+        try
+        {
+            await _serviceProvider.GetRequiredService<INexusApiClient>()
+                .GenerateDirectDownloadUrlAsync(probe.Value.FileUid.FileId, probe.Value.FileUid.GameId, cancellationToken);
+            return true;
+        }
+        catch (NexusWebsiteSessionRequiredException)
+        {
+            return false;
+        }
+        catch (Exception e) when (e is not OperationCanceledException)
+        {
+            _logger.LogDebug(e, "No se pudo comprobar la sesión de nexusmods.com; se deja descargar");
+            return true;
         }
     }
 

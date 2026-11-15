@@ -122,29 +122,36 @@ public sealed class CollectionDownloadViewModel : APageViewModel<ICollectionDown
 
         var canInstall = R3.Observable.Return(_targetLoadout.HasValue);
 
-        CommandDownloadRequiredItems = R3.Observable.CombineLatest(_isDownloadingRequiredItems, _canDownloadRequiredItems, static (isDownloading, canDownload) => !isDownloading && canDownload)
+        CommandCheckDownloadSession = new ReactiveCommand<Unit>(
+            executeAsync: async (_, cancellationToken) =>
+            {
+                var hasSession = await collectionDownloader.HasDownloadSessionAsync(_revision, cancellationToken);
+                _hasDownloadSession.OnNext(hasSession);
+                _noDownloadSession.OnNext(!hasSession);
+            },
+            awaitOperation: AwaitOperation.Drop,
+            configureAwait: false
+        );
+
+        CommandDownloadRequiredItems = R3.Observable.CombineLatest(_isDownloadingRequiredItems, _canDownloadRequiredItems, _hasDownloadSession, static (isDownloading, canDownload, hasSession) => !isDownloading && canDownload && hasSession)
             .ToReactiveCommand<Unit>(
                 executeAsync: async (_, cancellationToken) =>
                 {
                     if (!await loginManager.EnsureLoggedIn("Download Collection", cancellationToken)) return;
 
                     await RescanBeforeDownload(collectionDownloader, cancellationToken);
-                    await collectionDownloader.DownloadItems(_revision, itemType: CollectionDownloader.ItemType.Required, db: connection.Db,
-                        cancellationToken: cancellationToken
-                    );
+                    await DownloadUnlessSessionLost(collectionDownloader, CollectionDownloader.ItemType.Required, connection, cancellationToken);
                 },
                 awaitOperation: AwaitOperation.Drop,
                 configureAwait: false
             );
 
-        CommandDownloadOptionalItems = R3.Observable.CombineLatest(_isDownloadingOptionalItems, _canDownloadOptionalItems, static (isDownloading, canDownload) => !isDownloading && canDownload)
+        CommandDownloadOptionalItems = R3.Observable.CombineLatest(_isDownloadingOptionalItems, _canDownloadOptionalItems, _hasDownloadSession, static (isDownloading, canDownload, hasSession) => !isDownloading && canDownload && hasSession)
             .ToReactiveCommand<Unit>(
                 executeAsync: async (_, cancellationToken) =>
                 {
                     await RescanBeforeDownload(collectionDownloader, cancellationToken);
-                    await collectionDownloader.DownloadItems(_revision, itemType: CollectionDownloader.ItemType.Optional, db: connection.Db,
-                        cancellationToken: cancellationToken
-                    );
+                    await DownloadUnlessSessionLost(collectionDownloader, CollectionDownloader.ItemType.Optional, connection, cancellationToken);
                 },
                 awaitOperation: AwaitOperation.Drop,
                 configureAwait: false
@@ -389,6 +396,13 @@ public sealed class CollectionDownloadViewModel : APageViewModel<ICollectionDown
                 IsLoading = true;
 
                 TreeDataGridAdapter.Activate().AddTo(disposables);
+
+                // Non-premium batch downloads need a nexusmods.com session in Firefox: check before enabling the buttons
+                _noDownloadSession
+                    .ObserveOnUIThreadDispatcher()
+                    .Subscribe(noSession => HasNoDownloadSession.Value = noSession)
+                    .AddTo(disposables);
+                CommandCheckDownloadSession.Execute(Unit.Default);
 
                 // Clear loading once the adapter's data source is ready
                 TreeDataGridAdapter.IsSourceEmpty
@@ -696,6 +710,9 @@ public sealed class CollectionDownloadViewModel : APageViewModel<ICollectionDown
     private readonly BehaviorSubject<bool> _canDownloadOptionalItems = new(initialValue: false);
     private readonly BehaviorSubject<bool> _isDownloadingRequiredItems = new(initialValue: false);
     private readonly BehaviorSubject<bool> _isDownloadingOptionalItems = new(initialValue: false);
+    // Two subjects: while the first check runs the buttons are off but "Comprobar sesión" isn't shown yet
+    private readonly BehaviorSubject<bool> _hasDownloadSession = new(initialValue: false);
+    private readonly BehaviorSubject<bool> _noDownloadSession = new(initialValue: false);
     public BindableReactiveProperty<bool> IsDownloading { get; }
 
     private readonly BehaviorSubject<bool> _canInstallRequiredItems = new(initialValue: false);
@@ -717,6 +734,23 @@ public sealed class CollectionDownloadViewModel : APageViewModel<ICollectionDown
             _isRescanning.OnNext(false);
         }
     }
+
+    private async ValueTask DownloadUnlessSessionLost(CollectionDownloader collectionDownloader, CollectionDownloader.ItemType itemType, IConnection connection, CancellationToken cancellationToken)
+    {
+        try
+        {
+            await collectionDownloader.DownloadItems(_revision, itemType: itemType, db: connection.Db, cancellationToken: cancellationToken);
+        }
+        catch (NexusWebsiteSessionRequiredException)
+        {
+            // The batch stopped at the first file: disable the buttons until the session is checked again
+            _hasDownloadSession.OnNext(false);
+            _noDownloadSession.OnNext(true);
+            _notificationService.ShowToast(NoDownloadSessionMessage, ToastNotificationVariant.Failure);
+        }
+    }
+
+    private const string NoDownloadSessionMessage = "No hay sesión de nexusmods.com en Firefox. Iniciá sesión ahí y tocá \"Comprobar sesión\".";
 
     public BindableReactiveProperty<bool> IsUpdateAvailable { get; }
     public BindableReactiveProperty<Optional<RevisionNumber>> NewestRevisionNumber { get; } = new();
@@ -758,6 +792,8 @@ public sealed class CollectionDownloadViewModel : APageViewModel<ICollectionDown
     public ReactiveCommand<Unit> CommandInstallOptionalItems { get; }
     public ReactiveCommand<Unit> CommandUpdateCollection { get; }
     public ReactiveCommand<Unit> CommandRescanDownloads { get; }
+    public ReactiveCommand<Unit> CommandCheckDownloadSession { get; }
+    public BindableReactiveProperty<bool> HasNoDownloadSession { get; } = new(value: false);
 
     public ReactiveCommand<Unit> CommandViewOnNexusMods { get; }
     public ReactiveCommand<Unit> CommandOpenJsonFile { get; }

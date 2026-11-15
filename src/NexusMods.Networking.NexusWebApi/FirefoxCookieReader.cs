@@ -12,7 +12,7 @@ internal static class FirefoxCookieReader
     private const string LibSqlite = "libsqlite3.so.0";
     private const int SQLITE_OK = 0;
     private const int SQLITE_ROW = 100;
-    private const int SQLITE_OPEN_READONLY = 1;
+    private const int SQLITE_OPEN_READWRITE = 2;
 
     [DllImport(LibSqlite, EntryPoint = "sqlite3_open_v2")]
     private static extern int Open(string filename, out IntPtr db, int flags, IntPtr vfs);
@@ -47,17 +47,7 @@ internal static class FirefoxCookieReader
                 return null;
             }
 
-            // Copy to a temp path to avoid SQLite locking issues when Firefox is open
-            var tempPath = Path.Combine(Path.GetTempPath(), $"nm_ff_cookies_{Guid.NewGuid():N}.sqlite");
-            try
-            {
-                File.Copy(cookiesPath, tempPath, overwrite: true);
-                return ReadCookies(tempPath, logger);
-            }
-            finally
-            {
-                try { File.Delete(tempPath); } catch { /* ignore cleanup failures */ }
-            }
+            return ReadCookieHeader(cookiesPath, logger);
         }
         catch (Exception ex)
         {
@@ -66,9 +56,35 @@ internal static class FirefoxCookieReader
         }
     }
 
+    /// <summary>
+    /// Reads the nexusmods.com cookies from a copy of <paramref name="cookiesPath"/>, so Firefox's lock doesn't get in the way.
+    /// The <c>-wal</c> file is copied too: Firefox keeps recent writes there (a fresh login) until it checkpoints, often only
+    /// on exit, and the main file alone wouldn't have them.
+    /// </summary>
+    internal static string? ReadCookieHeader(string cookiesPath, ILogger logger)
+    {
+        var tempPath = Path.Combine(Path.GetTempPath(), $"nm_ff_cookies_{Guid.NewGuid():N}.sqlite");
+        try
+        {
+            // ponytail: the two copies aren't atomic; SQLite drops WAL frames that don't checksum, so a write racing the copy only loses that write
+            File.Copy(cookiesPath, tempPath, overwrite: true);
+            if (File.Exists(cookiesPath + "-wal"))
+                File.Copy(cookiesPath + "-wal", tempPath + "-wal", overwrite: true);
+            return ReadCookies(tempPath, logger);
+        }
+        finally
+        {
+            foreach (var path in new[] { tempPath, tempPath + "-wal", tempPath + "-shm" })
+            {
+                try { File.Delete(path); } catch { /* ignore cleanup failures */ }
+            }
+        }
+    }
+
     private static string? ReadCookies(string dbPath, ILogger logger)
     {
-        if (Open(dbPath, out var db, SQLITE_OPEN_READONLY, IntPtr.Zero) != SQLITE_OK)
+        // Read-write: replaying the copied WAL needs a -shm next to it. Only ever our temp copy.
+        if (Open(dbPath, out var db, SQLITE_OPEN_READWRITE, IntPtr.Zero) != SQLITE_OK)
         {
             logger.LogDebug("Could not open Firefox cookies.sqlite");
             return null;
