@@ -125,9 +125,11 @@ public sealed class CollectionDownloadViewModel : APageViewModel<ICollectionDown
         CommandCheckDownloadSession = new ReactiveCommand<Unit>(
             executeAsync: async (_, cancellationToken) =>
             {
-                var hasSession = await collectionDownloader.HasDownloadSessionAsync(_revision, cancellationToken);
-                _hasDownloadSession.OnNext(hasSession);
-                _noDownloadSession.OnNext(!hasSession);
+                // Clicked by hand: say the result, or the button looks dead while the session is still missing
+                var hasSession = await CheckDownloadSession(collectionDownloader, cancellationToken);
+                _notificationService.ShowToast(
+                    hasSession ? "Sesión de nexusmods.com OK: ya podés descargar" : "Sigue sin haber sesión de nexusmods.com en Firefox",
+                    hasSession ? ToastNotificationVariant.Success : ToastNotificationVariant.Failure);
             },
             awaitOperation: AwaitOperation.Drop,
             configureAwait: false
@@ -402,7 +404,9 @@ public sealed class CollectionDownloadViewModel : APageViewModel<ICollectionDown
                     .ObserveOnUIThreadDispatcher()
                     .Subscribe(noSession => HasNoDownloadSession.Value = noSession)
                     .AddTo(disposables);
-                CommandCheckDownloadSession.Execute(Unit.Default);
+                R3.Observable.FromAsync(cancellationToken => CheckDownloadSession(collectionDownloader, cancellationToken))
+                    .Subscribe()
+                    .AddTo(disposables);
 
                 // Clear loading once the adapter's data source is ready
                 TreeDataGridAdapter.IsSourceEmpty
@@ -733,6 +737,14 @@ public sealed class CollectionDownloadViewModel : APageViewModel<ICollectionDown
         {
             _isRescanning.OnNext(false);
         }
+    }
+
+    private async ValueTask<bool> CheckDownloadSession(CollectionDownloader collectionDownloader, CancellationToken cancellationToken)
+    {
+        var hasSession = await collectionDownloader.HasDownloadSessionAsync(_revision, cancellationToken);
+        _hasDownloadSession.OnNext(hasSession);
+        _noDownloadSession.OnNext(!hasSession);
+        return hasSession;
     }
 
     private async ValueTask DownloadUnlessSessionLost(CollectionDownloader collectionDownloader, CollectionDownloader.ItemType itemType, IConnection connection, CancellationToken cancellationToken)
