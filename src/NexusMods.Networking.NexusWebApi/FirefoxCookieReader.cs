@@ -63,13 +63,15 @@ internal static class FirefoxCookieReader
     /// </summary>
     internal static string? ReadCookieHeader(string cookiesPath, ILogger logger)
     {
-        var tempPath = Path.Combine(Path.GetTempPath(), $"nm_ff_cookies_{Guid.NewGuid():N}.sqlite");
+        // The copies hold the session cookie: a private directory (0700 on Unix) keeps other local users out
+        var tempDir = Directory.CreateTempSubdirectory("nm_ff_cookies_");
+        var tempPath = Path.Combine(tempDir.FullName, "cookies.sqlite");
         try
         {
             // ponytail: the two copies aren't atomic; SQLite drops WAL frames that don't checksum, so a write racing the copy only loses that write
-            File.Copy(cookiesPath, tempPath, overwrite: true);
+            File.Copy(cookiesPath, tempPath);
             if (File.Exists(cookiesPath + "-wal"))
-                File.Copy(cookiesPath + "-wal", tempPath + "-wal", overwrite: true);
+                File.Copy(cookiesPath + "-wal", tempPath + "-wal");
             return ReadCookies(tempPath, logger);
         }
         finally
@@ -78,6 +80,7 @@ internal static class FirefoxCookieReader
             {
                 try { File.Delete(path); } catch { /* ignore cleanup failures */ }
             }
+            try { tempDir.Delete(recursive: false); } catch { /* ignore cleanup failures */ }
         }
     }
 
